@@ -104,8 +104,9 @@ flowchart LR
 
 - **Cloudflare Workers + D1 + R2.** Vanilla JavaScript in the browser, no framework and no build step.
 - **An MCP server** at `/mcp`, so any AI agent can read the human's feedback (`next_work`, `get_feedback`), revise, and answer. The wizard and the agent work on the same artifacts.
+- **Connecting a video generation model.** Make an AI actor (`POST /api/actors` with `{"name":"videobot","kind":"ai","role":"agent"}`; the token is shown once), then point any MCP client at `https://<your-worker>/mcp` with `Authorization: Bearer <token>`. The model calls `list_clips`, then `get_clip` (prompt, negative prompt, length, shape, start and end pictures, references, stage controls, each with a url it can fetch with the same token; `get_media` returns a picture inline), makes the clip, and calls `submit_take` with a `url`, `data_base64` or `uri` (25 MB max). The take waits for the human on the Pack page; the model can never approve its own work.
 - **Accounts.** Email and password (salted PBKDF2), sessions in HttpOnly cookies, a header check on every change, guess limits, and an invite code so a public page cannot spend the studio's credits. Each account sees only its own productions and has a small fixed budget it cannot raise.
-- **61 tests** (`npm test`, no network and no key needed): the state machine, accounts, the wizard actions with Meta stood in, the export pack (including a real `unzip -t`), and the stage maths.
+- **71 tests** (`npm test`, no network and no key needed): the state machine, accounts, the wizard actions with Meta stood in, the export pack (including a real `unzip -t`), and the stage maths.
 
 ## Run it
 

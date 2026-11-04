@@ -79,3 +79,10 @@ test('cookie sign-in works for media reads only; comments flow over http and mcp
 test('actors cannot be created by the actor table without a valid role', async () => {
   await assert.rejects(createActor(env.DB, { name: 'x', kind: 'human', role: 'agent' }), /humans cannot be agent/);
 });
+
+test('mcp: a client that cannot sign in is told how; the browser preflight needs no token', async () => {
+  const pre = await worker.fetch(new Request('https://x.test/mcp', { method: 'OPTIONS' }));
+  assert.equal(pre.status, 204); assert.match(pre.headers.get('access-control-allow-headers'), /authorization/i);
+  const no = await worker.fetch(new Request('https://x.test/mcp', { method: 'POST', body: '{}' }));
+  assert.equal(no.status, 401); assert.match(no.headers.get('www-authenticate'), /Bearer/); assert.equal((await no.json()).error.code, -32001);
+});

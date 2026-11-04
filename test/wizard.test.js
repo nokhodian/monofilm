@@ -149,3 +149,33 @@ test('scene lengths stay between the bounds fixed on the Start page', async () =
   assert.deepEqual(sceneBounds({ sceneMin: 10, sceneMax: 5 }), [10, 10]);
   assert.deepEqual([clampScene(1, { sceneMin: 5, sceneMax: 12 }), clampScene(99, { sceneMin: 5, sceneMax: 12 }), clampScene(8, { sceneMin: 5, sceneMax: 12 })], [5, 12, 8]);
 });
+
+test('a video model connects over MCP: list clips, read one, fetch its picture, bring a take back for review', async () => {
+  const { handleMcp } = await import('../src/mcp.js'), t = await setup(), f = stand(), bot = { id: 'v1', name: 'videobot', kind: 'ai', role: 'agent' };
+  await W.readStory(t.env, t.db, human, t.id, f); await ok(t, REFS.reading); await ok(t, R.cast('ines')); await ok(t, R.place('cathedral-scaffold'));
+  await W.draftScenes(t.env, t.db, human, t.id, f); await ok(t, REFS.look); await ok(t, 'scene:the-beam');
+  await W.makeFrame(t.env, t.db, human, t.id, { scene: 'the-beam', which: 'start' }, f);
+  const kf = await S.getArtifact(t.db, t.id, 'keyframe:the-beam-c1-start'); await S.propose(t.db, human, t.id, { ref: kf.ref, data: { ...kf.data, chosen: kf.assets[0].id }, parent: 'shot:the-beam-c1', deps: [REFS.look], auto_approve: true }); // the person chooses the picture
+  const files = new Map([[`${t.id}/clip.mp4`, new Uint8Array([1, 2, 3])]]);
+  const env = { ...t.env, MEDIA: { ...t.R2, head: async (k) => (k.endsWith('.png') || k.includes('keyframe') ? { size: PNG.length, httpMetadata: { contentType: 'image/png' } } : null), get: async () => ({ arrayBuffer: async () => PNG }), put: async (k, b, o) => { files.set(k, b); } } };
+  const post = (body, extra = {}) => handleMcp(new Request('https://mf.test/mcp', { method: 'POST', body: JSON.stringify(body), ...extra }), env, bot, async () => new Response(new Uint8Array([9, 9]), { headers: { 'content-type': 'video/mp4' } }));
+  const call = async (name, args) => { const r = await (await post({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: { production: t.id, ...args } } })).json(); return r.result; };
+  const init = await (await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } })).json();
+  assert.equal(init.result.protocolVersion, '2025-06-18');
+  const batch = await (await post([{ jsonrpc: '2.0', id: 1, method: 'ping' }, { jsonrpc: '2.0', method: 'notifications/initialized' }, { jsonrpc: '2.0', id: 2, method: 'prompts/list' }])).json();
+  assert.deepEqual(batch.map((x) => x.id), [1, 2]);
+  assert.equal((await post('{nope')).status, 400);
+  const list = (await call('list_clips', {})).structuredContent.items;
+  assert.deepEqual(list.filter((c) => c.scene === 'the-beam').map((c) => [c.clip, c.of, c.seconds, c.start_picture, c.end_picture]), [[1, 2, 6, true, false], [2, 2, 6, false, false]]);
+  const clip = (await call('get_clip', { scene: 'the-beam', clip: 1 })).structuredContent;
+  assert.match(clip.prompt, /Dialogue/); assert.equal(clip.aspect, '9:16'); assert.match(clip.start_picture.url, /^https:\/\/mf\.test\/api\/p\/.+\/media\//);
+  assert.equal((await call('get_clip', { scene: 'the-beam', clip: 9 })).isError, true);
+  assert.equal((await call('get_clip', { scene: 'the-beam' })).isError, undefined);
+  const img = await call('get_media', { uri: clip.start_picture.uri }); assert.equal(img.content[0].type, 'image');
+  assert.equal((await call('submit_take', { scene: 'the-beam' })).isError, true, 'clip is required');
+  const r = (await call('submit_take', { scene: 'the-beam', clip: 1, url: 'https://gen.test/a.mp4', note: 'first try' })).structuredContent;
+  assert.equal(r.ref, 'take:the-beam-c1-a'); assert.match(r.uri, new RegExp(`^media/${t.id}/take-`));
+  const take = await S.getArtifact(t.db, t.id, r.ref); assert.deepEqual([take.status, take.author, take.assets.length, take.assets[0].provenance.generator], ['proposed', 'videobot', 1, 'videobot']);
+  assert.equal((await call('submit_take', { scene: 'the-beam', clip: 1, url: 'http://gen.test/a.mp4' })).isError, true, 'https only');
+  assert.equal((await call('get_clip', { scene: 'the-beam', clip: 1 })).structuredContent.takes[0].status, 'proposed');
+});

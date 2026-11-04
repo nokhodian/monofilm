@@ -7,6 +7,7 @@ import { checkCut } from '../public/js/checks.js';
 import { loadStage, validateStage, stageInput } from './stage.js';
 import { composePrompt } from '../public/js/stage-math.js';
 import { checkAdherence } from './adherence.js';
+import { VIDEO_TOOLS } from './mcp-video.js';
 
 const str = { type: 'string' }, obj = { type: 'object' };
 const prod = { production: { ...str, description: 'production id' } };
@@ -49,31 +50,58 @@ export const TOOLS = [
   T('call_tool', 'Run a generation tool for an artifact. The estimated cost is checked against the budget first; the output is stored as an asset.',
     { ...prod, tool: str, ref: str, input: obj }, ['production', 'tool', 'ref'], (c, a) => callTool(c.db, c.env, c.actor, a.production, a, c.fetch)),
 ];
+TOOLS.push(...VIDEO_TOOLS); // the tools for a video generation model, after the studio's own
 
 const rpcOk = (id, result) => ({ jsonrpc: '2.0', id, result });
 const rpcErr = (id, code, message) => ({ jsonrpc: '2.0', id, error: { code, message } });
+const VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+export const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'authorization, content-type, accept, mcp-protocol-version, mcp-session-id', 'access-control-max-age': '86400' };
+const reply = (body, status = 200, extra = {}) => { const r = json(body, status); for (const [k, v] of Object.entries({ ...CORS, ...extra })) r.headers.set(k, v); return r; };
 
-export async function handleMcp(req, env, actor, fetchImpl = fetch) {
-  if (req.method !== 'POST') return new Response('POST JSON-RPC to /mcp', { status: 405, headers: { allow: 'POST' } });
-  const msg = parseJson(await req.text(), null);
-  if (!msg || msg.jsonrpc !== '2.0' || typeof msg.method !== 'string') return json(rpcErr(null, -32600, 'invalid request'), 400);
-  if (msg.id === undefined) return new Response(null, { status: 202 }); // notification
-  const ctx = { db: env.DB, env, actor, fetch: fetchImpl };
+// What a client needs before it can connect: answer the browser preflight, and say how to sign in when there is no valid token.
+export const mcpPreflight = () => new Response(null, { status: 204, headers: CORS });
+export const mcpUnauthorized = () => reply(rpcErr(null, -32001, 'A bearer token is required. Send "Authorization: Bearer <token>" with an actor token from the studio.'), 401, { 'www-authenticate': 'Bearer realm="monofilm"' });
+
+async function one(msg, ctx) {
+  if (!msg || msg.jsonrpc !== '2.0' || typeof msg.method !== 'string') return rpcErr(msg && msg.id !== undefined ? msg.id : null, -32600, 'invalid request');
+  if (msg.id === undefined || msg.id === null) return null; // notification: no answer
   switch (msg.method) {
-    case 'initialize': return json(rpcOk(msg.id, { protocolVersion: '2025-03-26', capabilities: { tools: {} }, serverInfo: { name: 'monofilm', version: '1' }, instructions: 'Call next_work first: it lists human feedback (type feedback), things sent back, stale work, then the next gap. Read get_canon before proposing. For feedback, revise the artifact and propose it with addresses:[comment_id], or reply with comment explaining why not; the human sees a before/after diff and approving closes the thread. Humans also edit cuts, shots, canon and the grade themselves (see changes); work from their version. Feedback may carry a drawing (attachment, a file in media/) and framing numbers in its body; read both. Verdicts continuity and anachronism are risk flags with a reason; anchor img:<id> says which image, fails:<list> what looks wrong. Run check_cut on a storyline before proposing changes to it. Propose artifacts for human approval; never assume approval.' }));
-    case 'ping': return json(rpcOk(msg.id, {}));
-    case 'tools/list': return json(rpcOk(msg.id, { tools: TOOLS.map(({ run, ...t }) => t) }));
+    case 'initialize': { const want = msg.params && msg.params.protocolVersion; return rpcOk(msg.id, { protocolVersion: VERSIONS.includes(want) ? want : VERSIONS[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'monofilm', version: '1' },
+      instructions: 'Call next_work first: it lists human feedback (type feedback), things sent back, stale work, then the next gap. Read get_canon before proposing. For feedback, revise the artifact and propose it with addresses:[comment_id], or reply with comment explaining why not; the human sees a before/after diff and approving closes the thread. Humans also edit cuts, shots, canon and the grade themselves (see changes); work from their version. Feedback may carry a drawing (attachment, a file in media/) and framing numbers in its body; read both. Verdicts continuity and anachronism are risk flags with a reason; anchor img:<id> says which image, fails:<list> what looks wrong. Run check_cut on a storyline before proposing changes to it. Propose artifacts for human approval; never assume approval. If you make video: list_clips, then get_clip for the prompt, start and end pictures and references (fetch urls with this same bearer token, or get_media for a picture), make the clip, then submit_take; the human reviews it and picks the take.' }); }
+    case 'ping': return rpcOk(msg.id, {});
+    case 'tools/list': return rpcOk(msg.id, { tools: TOOLS.map(({ run, ...t }) => t) });
+    case 'resources/list': return rpcOk(msg.id, { resources: [] });
+    case 'resources/templates/list': return rpcOk(msg.id, { resourceTemplates: [] });
+    case 'prompts/list': return rpcOk(msg.id, { prompts: [] });
     case 'tools/call': {
-      const tool = TOOLS.find((t) => t.name === msg.params?.name);
-      if (!tool) return json(rpcErr(msg.id, -32602, 'unknown tool'));
+      const tool = TOOLS.find((t) => t.name === (msg.params && msg.params.name));
+      if (!tool) return rpcErr(msg.id, -32602, `unknown tool ${msg.params && msg.params.name}`);
+      const args = (msg.params && msg.params.arguments) || {}, missing = (tool.inputSchema.required || []).filter((k) => args[k] === undefined || args[k] === null || args[k] === '');
+      if (missing.length) return rpcOk(msg.id, { isError: true, content: [{ type: 'text', text: `missing ${missing.join(', ')}` }] });
       try {
-        const out = await tool.run(ctx, msg.params.arguments || {});
-        return json(rpcOk(msg.id, { content: [{ type: 'text', text: JSON.stringify(out) }], structuredContent: Array.isArray(out) ? { items: out } : out }));
+        const out = await tool.run(ctx, args);
+        if (out && Array.isArray(out.__content)) return rpcOk(msg.id, { content: out.__content });
+        return rpcOk(msg.id, { content: [{ type: 'text', text: JSON.stringify(out) }], structuredContent: Array.isArray(out) ? { items: out } : out });
       } catch (e) {
-        if (!(e instanceof HttpError)) throw e;
-        return json(rpcOk(msg.id, { isError: true, content: [{ type: 'text', text: `${e.status}: ${e.message}` }] }));
+        if (!(e instanceof HttpError)) console.error(e);
+        return rpcOk(msg.id, { isError: true, content: [{ type: 'text', text: e instanceof HttpError ? `${e.status}: ${e.message}` : 'internal error' }] });
       }
     }
-    default: return json(rpcErr(msg.id, -32601, 'method not found'));
+    default: return rpcErr(msg.id, -32601, `method not found: ${msg.method}`);
   }
+}
+
+export async function handleMcp(req, env, actor, fetchImpl = fetch) {
+  if (req.method === 'OPTIONS') return mcpPreflight();
+  if (req.method !== 'POST') return new Response('POST JSON-RPC to /mcp', { status: 405, headers: { allow: 'POST, OPTIONS', ...CORS } });
+  const msg = parseJson(await req.text(), undefined);
+  if (msg === undefined || msg === null || typeof msg !== 'object') return reply(rpcErr(null, -32700, 'parse error: send one JSON-RPC message or a batch'), 400);
+  const ctx = { db: env.DB, env, actor, fetch: fetchImpl, origin: new URL(req.url).origin };
+  if (Array.isArray(msg)) {
+    if (!msg.length) return reply(rpcErr(null, -32600, 'empty batch'), 400);
+    const out = (await Promise.all(msg.map((m) => one(m, ctx)))).filter(Boolean);
+    return out.length ? reply(out) : new Response(null, { status: 202, headers: CORS });
+  }
+  const out = await one(msg, ctx);
+  return out ? reply(out, out.error && out.error.code === -32600 ? 400 : 200) : new Response(null, { status: 202, headers: CORS });
 }
