@@ -31,7 +31,7 @@ async function render(reload = true) {
   let html;
   try {
     if (reload || !st.d) { await load(); st.budget = await api(P('/budget')).catch(() => null); st.lastEvent = st.d.events.length ? st.d.events[st.d.events.length - 1].id : 0; }
-    document.body.classList.toggle('wzmode', v === 'w');
+    document.body.classList.toggle('wzmode', v === 'w' || v === 'stage');
     html = await ({ w: vWizard, overview: vOverview, story: vStory, look: vLook, voices: vVoices, staging: vStaging, stage: () => vStage(arg), script: () => vScript(arg), sound: vSound, captions: () => vCaptions(arg), board: vBoard, cuts: vCuts, cut: () => vCut(arg), shots: vShots, shot: () => vShot(arg), cast: vCast, feedback: vInbox, approvals: vApprovals, credits: vLedger, ledger: vLedger, tools: vTools }[v] || vOverview)();
   } catch (e) { html = `<div class="empty">${esc(e.message)}</div>`; }
   if (my !== seq) return;
