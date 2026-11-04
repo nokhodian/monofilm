@@ -35,6 +35,7 @@ function flush() {
   });
   return S1.chain;
 }
+export const flushStory = () => flush(); // Roll camera saves the story before it starts
 function startLive() {
   const r = $('#wz-readout'); if (!r) return;
   const has = hasInput(), go = $('#wz-go'), why = $('#wz-why');
@@ -55,6 +56,7 @@ function htmlStart(ctx) {
   <div class="files">${files.length ? files.map((m) => `<span class="fchip"><span class="fk">${esc(m.data.kind || 'doc')}</span><b>${esc(m.data.name)}</b><button class="x" data-act="ws-rmfile" data-ref="${esc(m.ref)}" aria-label="Remove ${esc(m.data.name)}">×</button></span>`).join('') : '<span class="sm mute">No files added.</span>'}</div>
   <div class="row" style="margin-top:8px"><label class="bt sm filebtn">Add material<input type="file" id="wz-fin" multiple accept=".txt,.md,.pdf,.jpg,.jpeg,.png,.webp,.m4a,.mp3,.wav,.doc,.docx"></label></div>
   <div class="readout"><b id="wz-readout" aria-live="polite">${readoutText(S1.text.length, files.length)}</b><span class="mute sm" id="wz-saved">${esc(S1.saving)}</span><span class="sp"></span>${S1.text.trim() ? '' : '<button class="lk" data-act="ws-sample">Use a sample story</button>'}</div>
+  ${has ? `<div class="aprow big"><button class="bt apgo" data-act="ap-start"><span aria-hidden="true">✦</span> Roll camera</button><p class="sm">Or skip the reviewing: the AI does every step and approves it for you. You can change anything afterwards.</p></div>` : ''}
   <h4 class="lbl" style="margin-top:26px">What are we making</h4>
   <div class="mk"><span>Length</span><div>${LENGTHS.map(([n, s, l]) => chipOn('length', n, f.length === n, false).replace(`data-v="${n}"`, `data-v="${n}" data-s="${s}"`).replace(`>${n}<`, `>${l}<`)).join('')}${f.length === 'Custom' ? chipOn('length', 'Custom', true, false).replace('>Custom<', `>${esc(lengthLabel(f.seconds))}<`) : ''}
     <span class="own"><input class="f" type="number" min="1" step="any" inputmode="decimal" data-own="length" placeholder="Or type a length" aria-label="Your own length" style="width:150px"><select class="f" data-own-unit aria-label="Unit" style="width:auto"><option value="seconds">seconds</option><option value="minutes">minutes</option></select></span></div>

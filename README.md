@@ -40,6 +40,10 @@ The demo story is **Ask First**: on a deep-space station, the AI that runs every
 
 Steps 1 to 5 are decided once for the whole film. Step 6 repeats for every scene. Every page has the same three parts: **what you tell the AI**, **what the AI made for you to review**, and **one button to go on**, which stays locked, with the reason in words, until everything is reviewed.
 
+### Or press **Roll camera**
+
+Want to see the whole thing at once? **Roll camera** lets the AI do every step and approve each one for you: read the story, make faces and places, write the scenes, set up every stage and make the pictures. It works one move at a time and looks at the real state before each move, so it can pick up where it left off. A box in the top bar shows what it is doing, and pressing it jumps to the page being filled in, so you can look around while it works. When it finishes, one click downloads the whole project. Every approval is recorded as "Approved by Roll camera", and everything can still be changed afterwards.
+
 ### Click anything the AI made
 
 <img src="public/shots/understand.png" alt="The Understand step with a margin card open next to a story beat" width="860">

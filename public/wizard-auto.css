@@ -1,0 +1,41 @@
+/* Roll camera: the button, the question, and the box in the top bar that shows what the AI is doing. */
+.apwrap{position:relative;display:inline-flex;align-items:stretch;margin-left:6px}
+.apchip{display:inline-flex;align-items:center;gap:9px;padding:4px 12px 4px 10px;border:1px solid #c98a1c;border-right:0;border-radius:999px 0 0 999px;background:#241d0e;color:#f4d28a;cursor:pointer;font:inherit;position:relative;overflow:hidden;min-width:0;max-width:300px}
+.apchip:hover{background:#33290f}.apchip:focus-visible,.apmore:focus-visible{outline:2px solid #f4d28a;outline-offset:2px}
+.apchip .aptxt{display:flex;flex-direction:column;align-items:flex-start;line-height:1.15;min-width:0}
+.apchip b{font:700 12px/1.1 ui-monospace,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase}
+.apchip small{font-size:12px;color:#e8cf9a;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apchip .apbar{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(244,210,138,.18)}
+.apchip .apbar i{display:block;height:100%;background:#f4b43a;transition:width .5s ease}
+.apdot{width:9px;height:9px;border-radius:50%;background:#f4b43a;flex:none}
+.apchip.running .apdot{animation:apPulse 1.4s ease-in-out infinite}
+.apchip.paused .apdot{background:#c9c2b0}.apchip.error{border-color:#d66;color:#ffd0cc}.apchip.error .apdot{background:#e55}
+.apchip.done{border-color:#6bbf83;background:#13261a;color:#bfe9cb}.apchip.done .apdot{background:#6bbf83}.apchip.done small{color:#bfe9cb}.apchip.done .apbar i{background:#6bbf83}
+@keyframes apPulse{0%,100%{box-shadow:0 0 0 0 rgba(244,180,58,.6)}50%{box-shadow:0 0 0 6px rgba(244,180,58,0)}}
+.apmore{border:1px solid #c98a1c;border-left:1px solid rgba(201,138,28,.4);border-radius:0 999px 999px 0;background:#241d0e;color:#f4d28a;cursor:pointer;padding:0 11px;font-size:13px}.apmore:hover{background:#33290f}
+.apchip.done+.apmore{border-color:#6bbf83;background:#13261a;color:#bfe9cb}
+.appanel{position:absolute;top:calc(100% + 8px);left:0;width:min(390px,92vw);z-index:60;background:#fffaf0;color:#2b2418;border:1px solid #c9bfa6;border-radius:6px;box-shadow:0 14px 40px rgba(0,0,0,.35);padding:14px 16px 12px;font:15px/1.45 Georgia,'Iowan Old Style',serif;text-align:left}
+.appanel .aph{display:flex;justify-content:space-between;align-items:center;gap:8px}.appanel .aph b{font:italic 400 19px Georgia,serif}
+.appanel .apx{border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:#6b5f48}
+.appanel .approg{height:7px;background:#e4dcc9;border-radius:4px;margin:10px 0 6px;overflow:hidden}.appanel .approg i{display:block;height:100%;background:#c98a1c;transition:width .5s ease}
+.appanel .apmeta{margin:0 0 8px;font:12.5px ui-monospace,Menlo,monospace;color:#6b5f48}
+.appanel .apnow{background:#f6ecd2;border-left:4px solid #c98a1c;padding:7px 10px;margin:6px 0}.appanel .apnow b{display:block}.appanel .apnow span{font-size:13.5px;color:#4a4130}
+.appanel .aperr{margin:8px 0;padding:7px 10px;background:#fbe9e6;border-left:4px solid #b3261e;color:#7a1a14;font-size:14px}
+.appanel .apacts,.apbox .apacts{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.apb{display:inline-block;padding:6px 14px;border:1px solid #2b2418;border-radius:3px;background:transparent;color:#2b2418;cursor:pointer;font:600 14px Georgia,serif;text-decoration:none}.apb:hover{background:#f1e7cf}.apb.pri{background:#2b2418;color:#fffaf0}.apb.pri:hover{background:#40361f}
+.appanel h6{margin:12px 0 4px;font:700 11px ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;color:#6b5f48;border-bottom:1px solid #d9cfb5;padding-bottom:3px}
+.aplog{list-style:none;margin:0;padding:0;max-height:210px;overflow:auto}.aplog li{display:grid;grid-template-columns:16px 1fr auto;gap:6px;padding:3px 0;font-size:13.5px;border-bottom:1px dotted #e1d8c0}
+.aplog li i{color:#2f7a4a;font-style:normal;font-weight:700}.aplog time{color:#8a7e66;font-size:12px;white-space:nowrap}
+.appanel .apfoot{margin:10px 0 0;font-size:12.5px;color:#6b5f48;font-style:italic}
+/* the button in the contents column and on the Start page */
+.wz .aprow{margin:16px 0 0}.wz .aprow .apgo{display:block;width:100%;padding:10px 14px;border:0;border-radius:3px;background:linear-gradient(135deg,#c98a1c,#e0a73a);color:#1d1507;font:700 16px Georgia,serif;letter-spacing:.02em;cursor:pointer;box-shadow:0 2px 0 #8a5c0e}
+.wz .aprow .apgo:hover:not(:disabled){filter:brightness(1.06)}.wz .aprow .apgo:disabled{opacity:.7;cursor:default}
+.wz .aprow p{margin:6px 0 0;color:#6b5f48}
+.wz .aprow.big{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 14px;border:1px dashed #c98a1c;background:#fbf3df;margin:14px 0 0}.wz .aprow.big .apgo{width:auto;min-width:190px}.wz .aprow.big p{margin:0;flex:1;min-width:200px}
+/* the question */
+.apmodal{position:fixed;inset:0;z-index:100;background:rgba(20,14,4,.55);display:flex;align-items:center;justify-content:center;padding:18px}
+.apbox{background:#fffaf0;color:#2b2418;max-width:520px;width:100%;border-radius:6px;padding:22px 24px 16px;font:16px/1.5 Georgia,serif;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.apbox h2{margin:0 0 8px;font:italic 400 28px Georgia,serif}.apbox ul{margin:8px 0 0;padding-left:20px}.apbox li{margin:5px 0}.apbox li.warn{color:#7a1a14}
+@media (max-width:899px){.apchip small{max-width:120px}.apchip{max-width:200px}}
+@media (prefers-reduced-motion:reduce){.apchip.running .apdot{animation:none}.apchip .apbar i,.appanel .approg i{transition:none}}
+.apwrap[hidden],.appanel[hidden]{display:none}

@@ -10,3 +10,4 @@ import './w-brief.js';   // scene list, Brief and Sound
 import './w-stage.js';   // Stage and Pictures
 import './w-pack.js';    // Pack
 import './w-ship.js';    // 7 Ship
+import './w-auto.js';    // Roll camera: the AI does every step and approves it

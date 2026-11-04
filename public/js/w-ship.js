@@ -47,6 +47,8 @@ async function build() {
   if (s.backup) entries.push({ path: `${root}/backup.json`, text: JSON.stringify(await api(P('/backup')), null, 2) });
   return buildZip(entries, fetchBytes);
 }
+// The whole film as a .zip, saved to disk. Returns the files that could not be read.
+export async function downloadFilm() { const { bytes, missing } = await build(); saveBlob(`${slug(filmOf().name) || 'film'}-pack.zip`, bytes); return missing; }
 const allPrompts = () => { const f = filmOf(); return sceneArts().map((sc) => `Scene ${sc.data.n} · ${sc.data.name}\n${clipsOf(sc).map((c, i) => { const p = composeClip(sc, f, i + 1); return `Clip ${i + 1} of ${clipsOf(sc).length} (${p.seconds} s)\n${p.prompt}\nMust not show: ${p.negative || 'nothing special'}`; }).join('\n\n')}`).join('\n\n-----\n\n'); };
 
 function htmlShip(ctx) {
