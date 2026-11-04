@@ -1,0 +1,36 @@
+# secrets and local state
+.dev.vars
+.wrangler/
+node_modules/
+.DS_Store
+
+# earlier prototype and pre-existing sample media: not part of the hackathon submission
+legacy/
+public/audio/
+
+# editor and agent tooling that lives next to the code but is not part of it
+.agents/
+.claude/
+.codex/
+.gemini/
+.monomind/
+.opencode/
+.pi/
+.github/hooks/
+.mcp.json
+opencode.json
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+GRAPH_REPORT.md
+
+# design explorations (they use an older sample story) and the old sample-production importers
+docs/variations/
+docs/wizard-concepts.html
+docs/flow-map.html
+scripts/data/
+scripts/lib/
+scripts/import-teaser.mjs
+scripts/enrich-teaser.mjs
+scripts/seed.mjs
+.swarm/

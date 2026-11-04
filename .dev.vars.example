@@ -1,0 +1,6 @@
+# Copy to .dev.vars (never commit it)
+ADMIN_KEY=change-me-to-a-long-random-string
+# From https://dev.meta.ai -> API keys. Leave empty to run without the Meta models.
+MODEL_API_KEY=
+# Optional: point at a stand-in server for local tests
+# META_BASE=http://localhost:9099/v1

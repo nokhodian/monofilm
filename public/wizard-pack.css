@@ -1,0 +1,31 @@
+/* Pack (scene) and Ship pages of the wizard. Scoped under .wz, prefixed wzp-. Pack is rose (k-pack), Ship is slate (k-ship): both come from wizard.css. */
+.wz .wzp-ups{display:grid;gap:8px}
+.wz .wzp-up{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 10px;border:1px dashed var(--line2);background:var(--sheet)}
+.wz .wzp-up.over{border-color:var(--pc);background:var(--pt)}
+.wz .wzp-up input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+.wz .wzp-up .filebtn:focus-within{outline:2px solid var(--ink);outline-offset:2px}
+.wz .wzp-msg{flex-basis:100%;color:var(--mute)}
+.wz .wzp-miss{border-color:var(--warn);background:var(--warn-bg)}
+.wz .wzp-miss .lk{color:var(--warn)}
+.wz .wzp-bad{margin-top:6px;color:var(--warn)}
+.wz .wzp-pre{margin:0 0 4px;padding:8px 10px;background:var(--sheet2);border:1px solid var(--line);font:13px/1.5 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto}
+.wz .wzp-clip h5{color:var(--pc)}
+.wz .wzp-clip .man b{max-width:48%}
+.wz .wzp-det{margin-top:8px}.wz .wzp-det summary{cursor:pointer;color:var(--mute)}
+.wz .wzp-take{display:grid;grid-template-columns:minmax(120px,170px) minmax(0,1fr);gap:12px;align-items:start}
+.wz .wzp-take video{width:100%;max-height:260px;background:var(--slate);display:block}
+.wz .wzp-dl{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-bottom:4px}
+.wz .wzp-rows{border-top:1px solid var(--line)}
+.wz .wzp-row{display:grid;grid-template-columns:minmax(0,1.3fr) 44px 92px minmax(0,1fr);gap:10px;align-items:center;padding:7px 4px;border-bottom:1px solid var(--line);color:var(--ink);text-decoration:none}
+.wz .wzp-row:hover{background:var(--sheet2)}
+.wz .wzp-bars{display:flex;gap:3px}
+.wz .wzp-bars i{flex:1;height:8px;border:1px solid var(--pc);border-radius:1px;background:transparent}
+.wz .wzp-bars i.v1{background:linear-gradient(90deg,var(--ph) 50%,transparent 50%)}
+.wz .wzp-bars i.v2{background:var(--pc)}
+.wz .wzp-lane{display:flex;gap:4px;overflow-x:auto;padding-bottom:6px}
+.wz .wzp-cell{position:relative;min-height:110px;background:var(--slate);color:var(--chalk);display:flex;align-items:center;justify-content:center;overflow:hidden;text-decoration:none}
+.wz .wzp-cell video{width:100%;height:110px;object-fit:cover;display:block}
+.wz .wzp-cell small{position:absolute;left:0;bottom:0;right:0;padding:2px 6px;font:700 11px var(--mono);background:oklch(0.22 0.015 60/.8)}
+.wz .wzp-ph{font:italic 13px var(--serif);opacity:.75}
+.wz .wzp-after{margin-top:14px}
+@media (max-width:800px){.wz .wzp-take{grid-template-columns:1fr}.wz .wzp-row{grid-template-columns:1fr 44px}.wz .wzp-row .wzp-bars,.wz .wzp-row span:last-child{grid-column:1 / -1}}

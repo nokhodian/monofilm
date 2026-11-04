@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monofilm</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="wizard.css">
+<link rel="stylesheet" href="wizard-stage.css">
+<link rel="stylesheet" href="wizard-pack.css">
+<link rel="stylesheet" href="wizard-scenes.css">
+<link rel="stylesheet" href="wizard-steps35.css">
+</head>
+<body>
+<header class="bar">
+  <b class="brand">Monofilm</b>
+  <select id="prod" aria-label="Production" hidden></select>
+  <button class="btn sm" data-act="newprod" id="newprod" hidden>New production</button>
+  <span class="sp"></span>
+  <span id="live" class="mute small" hidden></span><a id="credchip" class="tag" href="#/credits" hidden></a><button class="btn sm" data-act="addcred" id="addcred" hidden title="Raise this production's credit budget">+ Credits</button>
+  <span id="who" class="mute"></span>
+  <button class="btn sm" data-act="logout" id="logout" hidden>Sign out</button>
+</header>
+<nav id="tabs" aria-label="Views"></nav>
+<main id="view"></main>
+<aside id="drawer" hidden aria-label="History"></aside>
+<div id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

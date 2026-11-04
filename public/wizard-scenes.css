@@ -1,0 +1,43 @@
+/* Scenes pages written in w-brief.js: scene list, Brief, Sound. Scoped under .wz, prefixed wzb-. Reuses the prototype's .script .dn .clips .ptabs .inh from wizard.css. */
+.wz .wzb-head{margin:2px 0 18px}
+.wz .wzb-head .row{gap:14px;margin-bottom:2px}
+.wz .wzb-bars{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px}
+.wz .wzb-bar{display:inline-flex;align-items:center;gap:5px;font:700 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.wz .wzb-bar i{display:inline-block;width:34px;height:8px;border:1px solid var(--pc);border-radius:1px;background:linear-gradient(90deg,var(--pc) 0 0,transparent 0) no-repeat;background-size:0 100%}
+.wz .wzb-bar.s1 i{background-size:50% 100%}.wz .wzb-bar.s2 i{background-size:100% 100%}
+.wz .wzb-bar.s2{color:var(--ink)}
+.wz .wzb-bar+.wzb-bar{margin-left:8px}
+.wz .wzb-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.wz .wzb-scene{padding:9px 10px;margin-bottom:6px;border:1px solid var(--line);background:oklch(0.995 0.008 88)}
+.wz .wzb-bud{margin:0 0 10px;font:15px/1.4 var(--serif);padding:6px 10px;border:1px solid var(--line2);background:oklch(0.995 0.008 88)}
+.wz .wzb-bud b{font:700 13px var(--mono);margin-right:4px}
+.wz .wzb-bud.ok b{color:var(--ok)}.wz .wzb-bud.warn{border-color:var(--warn);background:oklch(0.96 0.05 85)}.wz .wzb-bud.warn b{color:var(--warn)}
+.wz .wzb-err{margin:8px 0 0;font:700 14px var(--serif);color:var(--red-ink);background:var(--red-bg);padding:6px 10px;border-left:0;box-shadow:inset 0 -2px 0 var(--red)}
+.wz .wzb-edits{display:flex;flex-direction:column;gap:5px}
+.wz .wzb-edit{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:8px;align-items:center}
+.wz .wzb-sec{display:inline-flex;gap:5px;align-items:center}
+.wz .wzb-num{width:76px;font-family:var(--mono)}
+.wz .wzb-lines{display:flex;flex-direction:column;gap:6px}
+.wz .wzb-ln,.wz .wzb-cu{display:grid;grid-template-columns:116px minmax(0,1.4fr) minmax(0,1fr) 76px auto;gap:8px;align-items:start}
+.wz .wzb-cu{grid-template-columns:minmax(0,1.4fr) 76px 110px auto;align-items:center}
+.wz .wzb-who{text-transform:uppercase;font-family:var(--mono);font-size:13px}
+.wz .wzb-lh{font:700 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mute);align-items:end}
+.wz .wzb-ln textarea.f{resize:vertical;min-height:40px}
+.wz .wzb-join{margin-top:4px}
+.wz .wzb-redo{margin:8px 0 18px;flex-wrap:nowrap}
+.wz .wzb-redo .f{flex:1;min-width:0}
+.wz .wzb-honest{padding:8px 12px;border:1px dashed var(--pc);background:var(--pt);font:italic 15px/1.45 var(--serif);max-width:68ch}
+.wz .wzb-honest b{font:700 11.5px var(--mono);font-style:normal;letter-spacing:.1em;text-transform:uppercase;color:var(--pc);margin-right:6px}
+.wz .wzb-ro{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.wz .wzb-dl{display:flex;justify-content:space-between;gap:10px}
+.wz .wzb-snd{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px}
+.wz .wzb-scene .ri{min-width:0}
+@media (max-width:900px){
+  .wz .wzb-ln{grid-template-columns:minmax(0,1fr) 76px auto}
+  .wz .wzb-ln>:nth-child(1){grid-column:1/-1}.wz .wzb-ln>:nth-child(2),.wz .wzb-ln>:nth-child(3){grid-column:1/-1}
+  .wz .wzb-ln.wzb-lh{display:none}
+  .wz .wzb-cu{grid-template-columns:minmax(0,1fr) 76px}.wz .wzb-cu.wzb-lh{display:none}
+  .wz .wzb-ro,.wz .wzb-snd{grid-template-columns:1fr}
+  .wz .wzb-scene{grid-template-columns:1fr}.wz .wzb-side{align-items:flex-start;flex-direction:row;gap:12px}
+}
+.wz .dn.wzb-never .nm{color:var(--warn)}

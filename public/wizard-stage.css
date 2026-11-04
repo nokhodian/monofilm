@@ -1,0 +1,53 @@
+/* The Stage and Pictures pages of a scene (w-stage.js). Stage is teal, Pictures is violet: the colour comes from .k-stage / .k-pictures on the page. */
+.wz .wzs-go{text-decoration:none;display:inline-block;color:var(--sheet)}
+.wz a.wzs-go:hover{color:var(--sheet)}
+.wz .wzs-open{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:16px 0 4px}
+.wz .wzs-open .bt.pri{background:var(--pc);border-color:var(--pc)}
+.wz .wzs-open .bt.pri:hover:not(:disabled){background:var(--pc);filter:brightness(1.12)}
+.wz .k-stage .wzs-go[data-act]{background:var(--pc);border-color:var(--pc)}
+
+/* the stage preview: the picture the camera sees, with a clickable dot on each person */
+.wz .wzs-b{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:26px;align-items:start}
+.wz .wzs-view{margin:0;border:1px solid var(--pc);padding:8px;background:var(--sheet)}
+.wz .wzs-cap{display:flex;justify-content:space-between;gap:10px;font:700 11.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc);padding:0 2px 6px}
+.wz .wzs-frame{position:relative;aspect-ratio:var(--w)/var(--h);background:#cfd3d8}
+.wz .wzs-frame canvas{display:block;width:100%;height:100%}
+.wz .wzs-view figcaption{margin-top:7px}
+.wz .wzs-frame .wzs-hot{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;padding:2px;min-width:44px}
+.wz .wzs-frame .wzs-hot:hover{background:none;box-shadow:none}
+.wz .wzs-frame .wzs-hot.sel,.wz .wzs-frame .wzs-hot.sel:hover{background:none;outline:2px solid var(--red);outline-offset:1px;border-radius:8px}
+.wz .wzs-dot{width:30px;height:30px;border-radius:50%;background:var(--pc);color:#fff;font:700 14px/30px var(--mono);text-align:center;border:2px solid #fff;box-shadow:0 1px 4px #0006}
+.wz .wzs-lab{font:700 11px var(--mono);background:oklch(0.99 0.01 88/.92);color:var(--ink);padding:0 5px;border-radius:2px;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis}
+.wz .wzs-hot.out .wzs-dot{background:var(--warn)}
+.wz .wzs-row{display:block;padding:6px 8px;margin:0 0 4px;border-bottom:1px solid var(--line)}
+.wz .wzs-row .ri b{font-size:15px}
+
+/* pictures: one contact sheet per slot, beside "your layout" */
+.wz .wzs-slot{padding:12px 0;border-top:2px dashed var(--line2)}
+.wz .wzs-slot:first-child{border-top:0;padding-top:0}
+.wz .wzs-sheet{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:14px;margin-top:10px;align-items:start}
+.wz .wzs-sheet.one{grid-template-columns:128px minmax(0,1fr);align-items:center}
+.wz .wzs-c{margin:0;padding:6px;background:#fffdf6;border:1px solid var(--line);box-shadow:0 2px 7px -2px oklch(0.3 0.04 70/.4)}
+.wz .wzs-c.pk.sel{outline-offset:2px}
+.wz .wzs-c.on{border-color:var(--pc);box-shadow:0 0 0 2px var(--pc),0 2px 7px -2px #0006}
+.wz .wzs-c figcaption{margin-top:5px}
+.wz .wzs-img{position:relative;aspect-ratio:9/16;background:oklch(0.9 0.015 80);overflow:hidden}
+.wz .wzs-img img,.wz .wzs-img canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.wz .wzs-img em{position:absolute;right:6px;top:6px;font:700 11px var(--mono);font-style:normal;background:var(--pc);color:#fff;padding:1px 6px}
+.wz .wzs-img.nolay,.wz .wzs-img.nopic2{display:flex;align-items:center;justify-content:center;text-align:center;font-style:italic;color:var(--mute);padding:8px;font-size:13px;border:1.5px dashed var(--line2);background:none}
+.wz .wzs-act{margin-top:7px;gap:6px}
+.wz .wzs-act .bt.sm{padding:3px 8px}
+.wz .wzs-adh{margin-top:6px;padding-top:5px;border-top:1px solid var(--line)}
+.wz .wzs-err{margin:2px 0 8px;padding:7px 10px;border-left:0;border:1px solid var(--warn);color:var(--ink);background:oklch(0.96 0.04 70);font-size:14px}
+.wz .k-pictures .bt.acc{border-color:var(--pc);color:var(--pc)}
+@media (max-width:899px){
+.wz .wzs-b{grid-template-columns:1fr}
+.wz .wzs-view{max-width:340px}
+.wz .wzs-sheet{grid-template-columns:repeat(2,minmax(0,1fr))}
+.wz .wzs-sheet.one{grid-template-columns:110px minmax(0,1fr)}
+}
+.wz .wzs-plan canvas{display:block;width:100%;height:auto;background:#f4efe3;touch-action:none;cursor:grab;border:1px solid var(--line)}
+.wz .wzs-camrow{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.wz .wzs-camrow select.f{width:auto;padding:2px 6px}
+.wz .wzs-b.wzs-wide{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+@media (max-width:899px){.wz .wzs-b.wzs-wide{grid-template-columns:1fr}}

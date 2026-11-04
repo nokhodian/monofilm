@@ -1,0 +1,11 @@
+# Safe defaults for every page. Only the studio and its files stay out of search engines; the landing page at / can be found.
+/*
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+/app
+  X-Robots-Tag: noindex, nofollow
+/app.html
+  X-Robots-Tag: noindex, nofollow
+/js/*
+  X-Robots-Tag: noindex, nofollow

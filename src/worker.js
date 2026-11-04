@@ -1,0 +1,24 @@
+// Monofilm worker. Static UI comes from ./public; only /api/* and /mcp reach this code. Every call needs a bearer token.
+import { HttpError, json } from './util.js';
+import { authenticate } from './auth.js';
+import { authApi } from './auth-api.js';
+import { api } from './api.js';
+import { handleMcp } from './mcp.js';
+
+export default {
+  async fetch(req, env) {
+    try {
+      if (new URL(req.url).pathname.startsWith('/api/auth/')) return await authApi(req, env); // sign up, sign in, sign out: no key needed
+      const actor = await authenticate(req, env);
+      if (!actor) return json({ error: 'bearer token required' }, 401);
+      const path = new URL(req.url).pathname;
+      if (path === '/mcp') return await handleMcp(req, env, actor);
+      if (path.startsWith('/api/')) return await api(req, env, actor);
+      return json({ error: 'not found' }, 404);
+    } catch (e) {
+      if (e instanceof HttpError) return json({ error: e.message }, e.status);
+      console.error(e);
+      return json({ error: 'internal error' }, 500);
+    }
+  },
+};

@@ -1,0 +1,223 @@
+// The wizard's actions. A human starts each one; the AI (Muse Spark, Muse Image) makes the proposals, the human reviews them.
+// Structure (episode, clips) is created by the human's own request and approved at once; creative work is proposed by the AI and waits for review.
+import { HttpError, bad, parseJson } from './util.js';
+import * as S from './store.js';
+import { spark, outputText, metaConfigured } from './meta.js';
+import { AGENT } from './agent.js';
+import { registerTool, callTool } from './tools.js';
+import { REFS, R, slug, keyOf, clipPlan, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP } from '../public/js/wizard-model.js';
+
+const row = (db, pid, ref) => db.prepare('SELECT * FROM artifacts WHERE production=? AND ref=?').bind(pid, ref).first();
+const dataOf = (r) => (r ? parseJson(r.data) : null);
+const must = async (db, pid, ref, what) => { const r = await row(db, pid, ref); if (!r) throw new HttpError(409, `${what || ref} does not exist yet`); return r; };
+const human = (actor) => { if (actor.kind !== 'human') throw new HttpError(403, 'only a human starts this'); };
+const text = (v, n = 600) => String(v ?? '').slice(0, n);
+
+// ---- asking Muse Spark for structured work ----
+export async function askJson(env, system, user, f) {
+  const r = await spark(env, { instructions: `${system}\nReply with one JSON object and nothing else. Plain, simple English in every field except dialogue.`, input: user }, f);
+  const t = outputText(r), m = /\{[\s\S]*\}/.exec(t), o = m && parseJson(m[0], null);
+  if (!o || typeof o !== 'object') throw new HttpError(502, 'the AI did not answer in the expected form. Try again.');
+  return o;
+}
+export const splitSentences = (t) => String(t).replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s+(?=[A-ZÀ-Þ"“])/).filter(Boolean).slice(0, 200).map((x, i) => ({ id: `s${i + 1}`, text: x, mark: null }));
+
+// ---- reading without a key: names and sentences only, so the wizard still works offline ----
+export function localRead(story) {
+  const names = [...new Set((story.match(/\b[A-ZÀ-Þ][a-zà-ÿ]{2,}\b/g) || []).filter((w) => !/^(The|She|He|They|When|Nobody|And|But|Then|This|That|It|Her|His)$/.test(w)))].slice(0, 5);
+  const sents = splitSentences(story);
+  return { title: text(sents[0] ? sents[0].text : 'Untitled', 60), summary: text(story, 400), tone: ['tense'], period: '', language: 'English',
+    people: names.map((n) => ({ name: n, role: 'in the story', desc: '' })), places: [{ name: 'Main place', desc: '', time: 'day' }], beats: sents.slice(0, 5).map((s, i) => ({ id: `b${i + 1}`, text: s.text })),
+    questions: [], invented: [], looks: [{ name: 'Muted film', sub: 'soft light, fine grain', desc: 'Muted film, fine grain, natural light' }, { name: 'Hard noir', sub: 'high contrast', desc: 'Hard noir, high contrast, deep shadows' }, { name: 'Warm fresco', sub: 'painted warmth', desc: 'Warm fresco, painted colours' }], forbidden: [] };
+}
+const READ_SYSTEM = `You read a story for a film studio and set it up for a human to review. Output JSON with: title, summary (2 sentences), tone (list of short words), period (string), language (spoken language),
+people (list of {name, role, desc (face, age, clothes), voice (how they sound), invented (true if the story never names them)}), places (list of {name, desc, time}), beats (list of {text}, 4 to 8 short story beats),
+questions (up to 3 {q, options (2 to 3 short answers)} about things the story does not settle), invented (list of things you had to make up), looks (exactly 3 {name, sub, desc}: different visual styles that suit the period), forbidden (list of things that must never be on screen for this period).`;
+
+async function ensure(db, actor, pid, ref, data, extra = {}) {
+  const cur = await row(db, pid, ref); if (cur) return cur;
+  await S.propose(db, actor, pid, { ref, data, auto_approve: true, rationale: 'Set up by the wizard', ...extra });
+  return row(db, pid, ref);
+}
+const keep = (cur, data) => (cur && ['locked'].includes(cur.status) ? null : data); // a locked item is never rewritten by a re-read
+
+// ---- 1 and 2: read the story ----
+export async function readStory(env, db, actor, pid, f) {
+  human(actor);
+  const st = await must(db, pid, REFS.story, 'your story'), sd = dataOf(st), body = String(sd.text || '').trim();
+  if (!body) throw bad('Write or paste your story first.');
+  const mats = (await S.listArtifacts(db, pid, { kind: 'reference' })).filter((r) => r.data.category === 'material' && !r.data.removed).map((r) => r.data.name);
+  const fmt = { ...FORMAT_DEFAULT, ...(sd.format || {}) };
+  const o = metaConfigured(env) ? await askJson(env, READ_SYSTEM, `Story:\n${body.slice(0, 12000)}\n\nFormat: ${fmt.length}, ${fmt.seconds} seconds, ${fmt.aspect}. Spoken language: ${fmt.speech}.${mats.length ? `\nAlso attached: ${mats.join(', ')}.` : ''}`, f) : localRead(body);
+  await ensure(db, actor, pid, REFS.episode, { title: text(o.title, 80) || 'Episode' });
+  const sentences = splitSentences(body), prev = dataOf(await row(db, pid, REFS.reading));
+  if (prev && Array.isArray(prev.sentences)) for (const s of sentences) { const p = prev.sentences.find((x) => x.text === s.text); if (p) s.mark = p.mark || null; } // the person's marks survive a re-read
+  const questions = (o.questions || []).slice(0, 3).map((q, i) => ({ id: `q${i + 1}`, q: text(q.q, 200), options: (q.options || []).slice(0, 3).map((x) => text(x, 60)), answer: ((prev && prev.questions || []).find((x) => x.q === q.q) || {}).answer ?? null }));
+  const made = [];
+  const put = async (ref, data, why, extra) => { const cur = await row(db, pid, ref); if (keep(cur, data) === null) return; await S.propose(db, AGENT, pid, { ref, data: keep(cur, data), rationale: why, ...extra }); made.push(ref); };
+  await put(REFS.reading, { title: text(o.title, 80), summary: text(o.summary, 600), tone: (o.tone || []).slice(0, 5).map((x) => text(x, 30)), period: text(o.period, 80), language: text(o.language || fmt.speech, 40), beats: (o.beats || []).slice(0, 10).map((b, i) => ({ id: `b${i + 1}`, text: text(b.text || b, 240) })), sentences, questions, invented: (o.invented || []).slice(0, 8).map((x) => text(x, 160)) }, 'My reading of your story. Please correct anything I got wrong.');
+  for (const p of (o.people || []).slice(0, 8)) {
+    const id = slug(p.name), cur = dataOf(await row(db, pid, R.cast(id))) || {};
+    await put(R.cast(id), { ...cur, name: text(p.name, 60), role: text(p.role, 120), desc: text(p.desc, 400), invented: !!p.invented, candidates: cur.candidates || [], anchor: cur.anchor || null }, `A person I found in your story${p.invented ? '. The story does not name them, so I made them up.' : '.'}`);
+    await put(R.voice(id), { ...(dataOf(await row(db, pid, R.voice(id))) || {}), name: text(p.name, 60), desc: text(p.voice || '', 200), speed: 50, energy: 40 }, `How ${text(p.name, 40)} might sound.`);
+  }
+  for (const pl of (o.places || []).slice(0, 8)) {
+    const id = slug(pl.name), cur = dataOf(await row(db, pid, R.place(id))) || {};
+    await put(R.place(id), { ...cur, name: text(pl.name, 60), desc: text(pl.desc, 400), time: text(pl.time, 20), source: cur.source || 'none', must_keep: cur.must_keep || [] }, 'A place in your story.');
+  }
+  if (!(await row(db, pid, REFS.look))) {
+    const looks = (o.looks || []).slice(0, 3).map((l, i) => ({ id: `l${i + 1}`, name: text(l.name, 40), sub: text(l.sub, 60), desc: text(l.desc, 300) }));
+    await put(REFS.look, { aspect: fmt.aspect, shot_seconds: 6, fps: 24, lens: 35, look: looks[0] ? looks[0].desc : '', period: text(o.period, 80), forbidden: (o.forbidden || []).map((x) => text(x, 40)), rules: '', options: looks, chosen: looks[0] ? looks[0].id : null }, 'Three looks that suit your story. The first is my pick.');
+  }
+  await S.logEvent(db, pid, REFS.reading, 'wizard_read', actor, `${made.length} items proposed`);
+  return { made, via: metaConfigured(env) ? 'muse-spark' : 'local' };
+}
+
+// ---- 6: scenes ----
+const SCENES_SYSTEM = `You turn a story into scenes for a short film that will be made clip by clip with a video generator. Output JSON {scenes: [...]} with 3 to 8 scenes. Each scene: name, tag (one word for its job: hook, crash, price, title...), seconds (a whole number; all scenes add up to the film length),
+place (the name of one of the places given), time (dawn, day, dusk, night or none), who (names from the people given; may be empty), transcript (list of {who (UPPERCASE name or NARRATOR), text (in the spoken language), en (English meaning), sec}; may be empty),
+notes {happens (2 to 4 sentences: who is where, what moves, what is seen), mood (mood and pace), cam (camera and motion), sound (sound in the picture), never (what must not happen), cont (how it connects to the scene before and after)}.`;
+const castOf = async (db, pid) => (await S.listArtifacts(db, pid, { kind: 'canon.cast' }));
+const placesOf = async (db, pid) => (await S.listArtifacts(db, pid, { kind: 'canon.world' })).filter((a) => a.ref.startsWith('canon.world:place-'));
+const localScenes = (bible, fmt) => { const beats = (bible.beats || []).slice(0, 5), per = Math.max(2, Math.round(fmt.seconds / Math.max(1, beats.length))); return beats.map((b, i) => ({ name: `Scene ${i + 1}`, tag: '', seconds: per, place: '', time: 'day', who: [], transcript: [], notes: { happens: b.text, mood: '', cam: '', sound: '', never: '', cont: '' } })); };
+
+function sceneFrom(o, i, people, places) {
+  const pl = places.find((p) => p.data.name.toLowerCase() === String(o.place || '').toLowerCase()), who = (o.who || []).map((w) => people.find((p) => p.data.name.toLowerCase() === String(w).toLowerCase())).filter(Boolean).map((p) => p.ref);
+  const seconds = Math.max(2, Math.min(60, Math.round(Number(o.seconds) || 10)));
+  return { n: i + 1, name: text(o.name, 60) || `Scene ${i + 1}`, tag: text(o.tag, 20), seconds, place: pl ? pl.ref : null, time: text(o.time, 20), who, overrides: {},
+    transcript: (o.transcript || []).slice(0, 20).map((l, k) => ({ id: `l${k + 1}`, who: text(l.who, 40).toUpperCase(), text: text(l.text, 400), en: text(l.en, 400), sec: Number(l.sec) || 0 })),
+    notes: Object.fromEntries(NOTE_KEYS.map(([k]) => [k, text((o.notes || {})[k], 700)])), start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(seconds) };
+}
+export async function draftScenes(env, db, actor, pid, f) {
+  human(actor);
+  const bible = await must(db, pid, REFS.reading, 'the reading of your story'), bd = dataOf(bible), sd = dataOf(await row(db, pid, REFS.story)) || {}, fmt = { ...FORMAT_DEFAULT, ...(sd.format || {}) };
+  await must(db, pid, REFS.episode, 'the episode');
+  const [people, places] = await Promise.all([castOf(db, pid), placesOf(db, pid)]);
+  const prompt = `Story:\n${text(sd.text, 8000)}\n\nBeats: ${(bd.beats || []).map((b) => b.text).join(' | ')}\nPeople: ${people.map((p) => `${p.data.name} (${p.data.role})`).join('; ')}\nPlaces: ${places.map((p) => p.data.name).join('; ')}\nFilm length: ${fmt.seconds} seconds. Spoken language: ${fmt.speech}. Each scene ends up as clips of at most ${MAX_CLIP} seconds.`;
+  const o = metaConfigured(env) ? await askJson(env, SCENES_SYSTEM, prompt, f) : { scenes: localScenes(bd, fmt) };
+  const list = (o.scenes || []).slice(0, 12); if (!list.length) throw new HttpError(502, 'the AI made no scenes. Try again.');
+  const made = [], used = new Set();
+  for (const [i, s] of list.entries()) {
+    let id = slug(s.name) || `scene-${i + 1}`; while (used.has(id)) id += '-2'; used.add(id);
+    const cur = await row(db, pid, R.scene(id)); if (cur && cur.status === 'locked') continue;
+    await S.propose(db, AGENT, pid, { ref: R.scene(id), parent: REFS.episode, data: sceneFrom(s, i, people, places), rationale: 'A scene drafted from your story. Please review its brief.' }); made.push(R.scene(id));
+  }
+  await S.logEvent(db, pid, REFS.episode, 'wizard_scenes', actor, `${made.length} scenes proposed`);
+  return { made, via: metaConfigured(env) ? 'muse-spark' : 'local' };
+}
+// Redo one scene's brief, taking any open feedback on it into account.
+export async function draftBrief(env, db, actor, pid, { scene, instruction = '' }, f) {
+  human(actor);
+  const cur = await must(db, pid, R.scene(scene), `scene ${scene}`), d = dataOf(cur);
+  const open = (await S.listComments(db, pid, { ref: cur.ref, status: 'open' })).map((c) => c.body).filter(Boolean);
+  const [people, places] = await Promise.all([castOf(db, pid), placesOf(db, pid)]);
+  if (!metaConfigured(env)) throw new HttpError(503, 'MODEL_API_KEY is not set, so the AI cannot rewrite this brief.');
+  const o = await askJson(env, SCENES_SYSTEM.replace('Output JSON {scenes: [...]} with 3 to 8 scenes.', 'Output JSON {scenes: [one scene]} with exactly this one scene, rewritten.'), `Rewrite this scene, keeping what is good.\nCurrent: ${JSON.stringify({ name: d.name, seconds: d.seconds, notes: d.notes, transcript: d.transcript })}\nFeedback: ${[instruction, ...open].filter(Boolean).join(' | ') || 'none'}\nPeople: ${people.map((p) => p.data.name).join('; ')}. Places: ${places.map((p) => p.data.name).join('; ')}.`, f);
+  const s = sceneFrom((o.scenes || [])[0] || {}, d.n - 1, people, places);
+  const ids = (await S.listComments(db, pid, { ref: cur.ref, status: 'open' })).map((c) => c.id);
+  await S.propose(db, AGENT, pid, { ref: cur.ref, parent: REFS.episode, data: { ...d, name: s.name || d.name, tag: s.tag || d.tag, notes: s.notes, transcript: s.transcript.length ? s.transcript : d.transcript }, rationale: `Rewrote the brief${instruction ? `: ${text(instruction, 120)}` : ''}.`, addresses: ids });
+  return { ref: cur.ref };
+}
+
+// ---- revising one item after feedback: the AI rewrites only the text fields a person may complain about, never ids, marks or answers ----
+const EDITABLE = { bible: ['summary', 'tone', 'period', 'beats', 'invented'], 'canon.cast': ['role', 'desc'], 'canon.world': ['desc', 'time'], 'canon.voice': ['desc'], 'canon.style': ['look', 'period', 'forbidden', 'rules'] };
+const REVISE_SYSTEM = `You revise ONE item of a film's setup after a human gave feedback. You get the item's current fields and the feedback. Output JSON {data, note}: data holds ONLY the fields you changed, with the same shape as given (strings stay strings, lists stay lists; a list of beats is a list of {text}); note is one short sentence saying what you changed. Change only what the feedback asks for, and make it concrete, not vaguer. Never add fields.`;
+const tidy = (k, v, old) => {
+  if (Array.isArray(old) !== Array.isArray(v)) return undefined;
+  if (k === 'beats') return v.slice(0, 12).map((b, i) => ({ id: (old[i] && old[i].id) || `b${i + 1}`, text: text(b && b.text !== undefined ? b.text : b, 240) })).filter((b) => b.text);
+  if (Array.isArray(v)) return v.slice(0, 12).map((x) => text(x && x.text !== undefined ? x.text : x, 200)).filter(Boolean);
+  return typeof v === 'string' ? text(v, 700) : undefined;
+};
+export async function reviseItem(env, db, actor, pid, { ref, part = '', instruction = '' }, f) {
+  human(actor);
+  const cur = await must(db, pid, ref, ref), fields = EDITABLE[cur.kind];
+  if (!fields) throw bad('This kind of item cannot be rewritten here.');
+  if (cur.status === 'locked') throw new HttpError(409, `${ref} is locked. Unlock it first.`);
+  if (!metaConfigured(env)) throw new HttpError(503, 'MODEL_API_KEY is not set, so the AI cannot rewrite this.');
+  const d = dataOf(cur), open = await S.listComments(db, pid, { ref, status: 'open' }), story = dataOf(await row(db, pid, REFS.story)) || {};
+  const subset = Object.fromEntries(fields.filter((k) => d[k] !== undefined).map((k) => [k, d[k]]));
+  const o = await askJson(env, REVISE_SYSTEM, `Item: ${ref}${part ? ` (the person pointed at: ${part})` : ''}\nCurrent: ${JSON.stringify(subset)}\nFeedback: ${[instruction, ...open.map((c) => c.body)].filter(Boolean).join(' | ') || 'none'}\nThe film's story: ${text(story.text, 1500)}`, f);
+  const out = o.data && typeof o.data === 'object' && !Array.isArray(o.data) ? o.data : {}, next = { ...d }; let changed = 0;
+  for (const k of fields) { if (out[k] === undefined || d[k] === undefined) continue; const v = tidy(k, out[k], d[k]); if (v !== undefined && JSON.stringify(v) !== JSON.stringify(d[k])) { next[k] = v; changed++; } }
+  if (!changed) throw new HttpError(502, 'The AI did not change anything. Say more about what is wrong and try again.');
+  await S.propose(db, AGENT, pid, { ref, data: next, rationale: text(o.note, 300) || 'Revised after your feedback.', addresses: open.map((c) => c.id) });
+  return { ref, changed, note: text(o.note, 300) };
+}
+
+// ---- clips: one shot per clip, one keyframe shell per clip start and end ----
+export async function ensureClips(db, actor, pid, sceneId) {
+  const sc = await must(db, pid, R.scene(sceneId), `scene ${sceneId}`), d = dataOf(sc), clips = d.clips && d.clips.length ? d.clips : clipPlan(d.seconds);
+  const look = await must(db, pid, REFS.look, 'the look');
+  if (!['approved', 'locked'].includes(look.status)) throw new HttpError(409, 'Approve the look (step 3) first. Every picture is made from it.');
+  if (!['approved', 'locked'].includes(sc.status)) throw new HttpError(409, 'Approve the scene brief first, so the pictures are made from something you have checked.');
+  const out = [];
+  for (const [i, c] of clips.entries()) {
+    const n = i + 1, shot = R.shot(sceneId, n);
+    await ensure(db, actor, pid, shot, { title: `${d.name} · clip ${n}`, seconds: c.seconds, clip: n, prompt: composeClip({ data: d }, {}, n).prompt }, { parent: R.scene(sceneId), deps: [REFS.look] });
+    for (const which of ['start', 'end']) await ensure(db, actor, pid, R.frame(sceneId, n, which), { role: which, scene: sceneId, clip: n, chosen: null }, { parent: shot, deps: [REFS.look] });
+    out.push(shot);
+  }
+  return out;
+}
+
+// ---- pictures: faces, place plates, anchor frames ----
+async function ensureMuse(db) {
+  if (!(await db.prepare("SELECT 1 x FROM tools WHERE name='muse-image'").first())) await registerTool(db, { name: 'muse-image', kind: 'image', transport: 'meta-image', target: { accepts: ['layout', 'prompt'] }, cost_model: { per_call: 1 } });
+}
+const lookText = async (db, pid) => { const l = dataOf(await row(db, pid, REFS.look)) || {}; return [l.look, l.period && `Period: ${l.period}`, l.forbidden && (l.forbidden.length ? `Never show: ${[].concat(l.forbidden).join(', ')}` : '')].filter(Boolean).join('. '); };
+const VARIANT = ['', 'A slightly different person: different face shape.', 'A third, clearly different person: different age and features.'];
+async function paint(env, db, actor, pid, ref, input, f) {
+  if (!metaConfigured(env)) throw new HttpError(503, 'MODEL_API_KEY is not set, so Muse Image is off.');
+  await ensureMuse(db);
+  return callTool(db, env, actor, pid, { tool: 'muse-image', ref, input }, f);
+}
+// Several pictures for one item are made at once; each reads the item, adds its own and writes the next version. A clash is retried on fresh data, never lost.
+async function merge(db, pid, ref, build, why) {
+  for (let i = 0; ; i++) {
+    const cur = await row(db, pid, ref), fresh = dataOf(cur);
+    try { await S.propose(db, AGENT, pid, { ref, data: build(fresh), rationale: why, base_version: cur.version }); return; } catch (e) { if (e.status !== 409 || !/changed while/.test(e.message) || i >= 10) throw e; await new Promise((r) => setTimeout(r, 20 + Math.random() * 60)); }
+  }
+}
+const asProposal = async (db, pid, ref, parent, deps, data, why) => { await S.propose(db, AGENT, pid, { ref, parent: parent || undefined, deps, data, rationale: why }); };
+
+export async function makeFace(env, db, actor, pid, { id, variant = 0, instruction = '' }, f) {
+  human(actor);
+  const cur = await must(db, pid, R.cast(id), `person ${id}`), d = dataOf(cur), letter = 'ABC'[variant % 3];
+  const prompt = [`Portrait photograph of one person for a film. Head and shoulders, plain neutral background, looking slightly off camera, no text.`, d.desc || d.role, await lookText(db, pid), VARIANT[variant % 3], instruction].filter(Boolean).join(' ');
+  const r = await paint(env, db, actor, pid, cur.ref, { prompt, aspect: [3, 4], tag: `face:${letter}` }, f);
+  await merge(db, pid, cur.ref, (fresh) => ({ ...fresh, candidates: [...(fresh.candidates || []).filter((c) => c.letter !== letter), { id: r.asset.id, letter }] }), `Made face ${letter}.`);
+  return { asset: r.asset, letter };
+}
+export async function makePlate(env, db, actor, pid, { id, instruction = '' }, f) {
+  human(actor);
+  const cur = await must(db, pid, R.place(id), `place ${id}`), d = dataOf(cur);
+  const prompt = [`Photograph of a film location, no people, wide establishing view.`, d.name, d.desc, d.time && `Time of day: ${d.time}.`, (d.must_keep || []).length && `It must clearly show: ${d.must_keep.join(', ')}.`, await lookText(db, pid), instruction].filter(Boolean).join(' ');
+  const r = await paint(env, db, actor, pid, cur.ref, { prompt, aspect: [16, 9], tag: 'plate' }, f);
+  await merge(db, pid, cur.ref, (fresh) => ({ ...fresh, source: fresh.source === 'photo' ? 'photo' : 'made', plates: [...(fresh.plates || []), { id: r.asset.id }] }), 'Made a place plate.');
+  return { asset: r.asset };
+}
+// A start or end picture. Built from the stage layout when the scene has one with a camera for this clip, and always from the film's anchor faces.
+export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, instruction = '' }, f) {
+  human(actor);
+  if (!['start', 'end'].includes(which)) throw bad('which must be start or end');
+  const shots = await ensureClips(db, actor, pid, scene), shot = shots[clip - 1]; if (!shot) throw bad(`scene ${scene} has no clip ${clip}`);
+  const sd = dataOf(await row(db, pid, R.scene(scene))), fr = R.frame(scene, clip, which), c = composeClip({ data: sd }, {}, clip);
+  const anchors = []; for (const w of sd.who || []) { const p = dataOf(await row(db, pid, w)); const cand = p && (p.candidates || []).find((x) => x.id === p.anchor); if (cand) { const a = await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, cand.id).first(); if (a) anchors.push({ id: keyOf(w), uri: a.uri }); } }
+  const stageRef = R.stage(scene), st = await row(db, pid, stageRef), stageData = dataOf(st), staged = st && ['approved', 'locked'].includes(st.status) && stageData && (stageData.shots || {})[shot];
+  const place = sd.place && dataOf(await row(db, pid, sd.place));
+  const prompt = [`${which === 'start' ? 'The first frame' : 'The last frame'} of a ${c.seconds} second film clip.`, c.prompt.split('\n')[0], place && place.desc && `Place: ${place.name}. ${place.desc}`, await lookText(db, pid), instruction].filter(Boolean).join(' ');
+  const r = await paint(env, db, actor, pid, fr, { prompt, aspect: [9, 16], anchors, tag: `${which}`, ...(staged ? { stage: { ref: stageRef, shot } } : {}) }, f);
+  return { asset: r.asset, ref: fr, staged: !!staged };
+}
+
+// ---- takes: what the outside generator made, brought back ----
+export async function addTake(db, actor, pid, { scene, clip = 1, uri, first = null, last = null, note = '' }) {
+  human(actor);
+  const shots = await ensureClips(db, actor, pid, scene), shot = shots[clip - 1]; if (!shot) throw bad(`scene ${scene} has no clip ${clip}`);
+  if (typeof uri !== 'string' || !/^media\//.test(uri)) throw bad('upload the clip first, then pass its media/ uri');
+  const n = (await S.listArtifacts(db, pid, { kind: 'take', parent: shot })).length + 1, ref = R.take(scene, clip, 'abcdefghij'[n - 1] || n);
+  const kf = R.frame(scene, clip, 'start');
+  await S.propose(db, actor, pid, { ref, parent: shot, deps: [kf, REFS.look], data: { scene, clip, first, last, note: text(note, 300), picked: false }, rationale: 'Clip brought back from the video generator.', auto_approve: true });
+  await S.attachAsset(db, actor, pid, { ref, uri, mime: 'video/mp4', provenance: { tool: 'external-generator' } });
+  return { ref };
+}

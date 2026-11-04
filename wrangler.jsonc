@@ -1,0 +1,12 @@
+{
+  "name": "monofilm",
+  "account_id": "f3081b135d78869c384217e6a166f90a",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-23",
+  "assets": { "directory": "public", "run_worker_first": ["/api/*", "/mcp"] },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "artistic-intelligence-studio", "database_id": "542c623e-82e6-4b7d-bd80-ec0708b30975" }
+  ],
+  // Media bucket. Create it once with: npx wrangler r2 bucket create monofilm-media (local dev simulates it).
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "monofilm-media" }]
+}
