@@ -19,3 +19,8 @@ body.zv-open{overflow:hidden}
 /* pictures that open when clicked */
 .wz img:not([data-nozoom]):not(.pinpad img),.wz canvas[data-lay],.wz canvas#wzs-cv{cursor:zoom-in}
 img[data-act="zoom"],main img[data-src]{cursor:zoom-in}
+
+/* a video: its own controls, and the Enlarge button that follows the pointer onto it */
+.zv-vid{background:#000;object-fit:contain}.zv.zv-isvideo .zv-stage{cursor:default}.zv.zv-isvideo .zv-img{width:auto;max-width:min(96vw,100%)}
+.zv-venlarge{position:fixed;z-index:150;padding:4px 10px;border:1px solid rgba(255,255,255,.55);border-radius:4px;background:rgba(15,12,8,.82);color:#fff;font:600 13px system-ui,sans-serif;cursor:pointer}
+.zv-venlarge:hover{background:rgba(15,12,8,.95)}.zv-venlarge:focus-visible{outline:2px solid #f4b43a;outline-offset:2px}.zv-venlarge[hidden]{display:none}
