@@ -206,7 +206,8 @@ export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, i
   const stageRef = R.stage(scene), st = await row(db, pid, stageRef), stageData = dataOf(st), staged = st && ['approved', 'locked'].includes(st.status) && stageData && (stageData.shots || {})[shot];
   const place = sd.place && dataOf(await row(db, pid, sd.place));
   const prompt = [`${which === 'start' ? 'The first frame' : 'The last frame'} of a ${c.seconds} second film clip.`, c.prompt.split('\n')[0], place && place.desc && `Place: ${place.name}. ${place.desc}`, await lookText(db, pid), instruction].filter(Boolean).join(' ');
-  const r = await paint(env, db, actor, pid, fr, { prompt, aspect: [9, 16], anchors, tag: `${which}`, ...(staged ? { stage: { ref: stageRef, shot } } : {}) }, f);
+  const shape = String(((dataOf(await row(db, pid, REFS.look)) || {}).aspect) || '9:16').split(':').map(Number), aspect = shape.length === 2 && shape.every((n) => n > 0 && n < 100) ? shape : [9, 16]; // the pictures follow the film's shape, not always portrait
+  const r = await paint(env, db, actor, pid, fr, { prompt, aspect, anchors, tag: `${which}`, ...(staged ? { stage: { ref: stageRef, shot } } : {}) }, f);
   return { asset: r.asset, ref: fr, staged: !!staged };
 }
 

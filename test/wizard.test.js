@@ -130,3 +130,15 @@ test('revising one item: only the allowed text fields change, the feedback threa
   await assert.rejects(W.reviseItem({ ...t.env, MODEL_API_KEY: undefined }, t.db, human, t.id, { ref: REFS.reading }, f), (e) => e.status === 503);
   await assert.rejects(W.reviseItem(t.env, t.db, agent, t.id, { ref: REFS.reading }, f), (e) => e.status === 403);
 });
+
+test('start and end pictures follow the film\'s shape, not always portrait', async () => {
+  const t = await setup(), sizes = [], f0 = stand();
+  const f = async (url, init) => { if (/images\//.test(url)) sizes.push(JSON.parse(init.body).size); return f0(url, init); };
+  await W.readStory(t.env, t.db, human, t.id, f); await ok(t, REFS.reading); await ok(t, R.cast('ines')); await ok(t, R.place('cathedral-scaffold')); await ok(t, REFS.look);
+  await W.draftScenes(t.env, t.db, human, t.id, f); await ok(t, 'scene:the-beam');
+  await W.makeFrame(t.env, t.db, human, t.id, { scene: 'the-beam', which: 'start' }, f);
+  const [w, h] = sizes.pop().split('x').map(Number); assert.ok(w < h, 'the sample film is 9:16, so portrait');
+  const look = await S.getArtifact(t.db, t.id, REFS.look); await S.propose(t.db, human, t.id, { ref: REFS.look, data: { ...look.data, aspect: '16:9' }, auto_approve: true });
+  await W.makeFrame(t.env, t.db, human, t.id, { scene: 'the-beam', which: 'end', clip: 2 }, f);
+  const [w2, h2] = sizes.pop().split('x').map(Number); assert.ok(w2 > h2, 'a 16:9 film gets landscape pictures');
+});
