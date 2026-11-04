@@ -1,0 +1,21 @@
+/* The picture viewer (zoom.js) and the hint that pictures can be opened. */
+.zv{position:fixed;inset:0;z-index:300;background:rgba(10,8,5,.97);display:flex;flex-direction:column;color:#f4efe3;font:15px/1.4 system-ui,-apple-system,'Segoe UI',sans-serif}
+body.zv-open{overflow:hidden}
+.zv-top{display:flex;align-items:center;gap:8px;padding:10px 14px;flex-wrap:wrap;border-bottom:1px solid rgba(244,239,227,.14)}
+.zv-count{font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.08em;color:#e8cf9a;min-width:3.5em}
+.zv-cap{font-size:15px;color:#f4efe3;max-width:46ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zv-sp{flex:1}
+.zv-b{display:inline-block;padding:5px 12px;border:1px solid rgba(244,239,227,.4);border-radius:4px;background:transparent;color:#f4efe3;font:inherit;font-size:13.5px;cursor:pointer;text-decoration:none}
+.zv-b:hover{background:rgba(244,239,227,.14)}.zv-b:focus-visible,.zv-nav:focus-visible{outline:2px solid #f4b43a;outline-offset:2px}
+.zv-b[hidden],.zv-nav[hidden]{display:none}
+.zv-x{font-size:22px;line-height:1;padding:2px 11px}
+.zv-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:auto;cursor:zoom-in;padding:10px}
+.zv-img{display:block;height:calc(100vh - 118px);width:auto;max-width:min(96vw,100%);object-fit:contain;box-shadow:0 10px 50px rgba(0,0,0,.6);background:#222;user-select:none;-webkit-user-drag:none}
+.zv.zoomed .zv-stage{cursor:grab;align-items:flex-start;justify-content:flex-start}.zv.zoomed .zv-stage:active{cursor:grabbing}.zv.zoomed .zv-img{flex:none;object-fit:fill;height:auto}
+.zv-nav{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:76px;border:0;border-radius:6px;background:rgba(244,239,227,.14);color:#f4efe3;font-size:38px;line-height:1;cursor:pointer;z-index:2}
+.zv-nav:hover{background:rgba(244,239,227,.28)}.zv-prev{left:10px}.zv-next{right:10px}
+.zv-hint{padding:7px 14px;text-align:center;font-size:12.5px;color:#b9b19c;border-top:1px solid rgba(244,239,227,.1)}
+@media (max-width:640px){.zv-hint{display:none}.zv-cap{max-width:100%;order:5;flex-basis:100%}.zv-nav{width:38px;height:60px;font-size:30px}.zv-b{padding:5px 9px;font-size:13px}}
+/* pictures that open when clicked */
+.wz img:not([data-nozoom]):not(.pinpad img),.wz canvas[data-lay],.wz canvas#wzs-cv{cursor:zoom-in}
+img[data-act="zoom"],main img[data-src]{cursor:zoom-in}

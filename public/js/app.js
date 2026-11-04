@@ -1,4 +1,5 @@
 // Monofilm, the human side: watch what the AI made, react to it, change it, approve it.
+import './zoom.js'; // click any picture to see it large
 import { $, esc, st, api, KEY, toast, P, ago, lightbox, isHuman, canGrant } from './core.js';
 import { load, awaiting, unseenEvents } from './data.js';
 import { acts as fbActs } from './feedback.js';

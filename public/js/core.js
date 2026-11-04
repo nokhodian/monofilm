@@ -31,14 +31,10 @@ export const go = (h) => { location.hash = h; };
 export const chip = (a) => `<span class="st s-${a.status}">${esc(a.status.replace('_', ' '))}</span>${a.stale ? '<span class="st s-stale" title="something it was built on changed">stale</span>' : ''}`;
 export const tag = (t, cls = '') => `<span class="tag ${cls}">${esc(t)}</span>`;
 
-// opts.ref lets a human draw on the picture; app.js listens for mf-markup so core stays free of the drawing tool.
+// Opens the shared picture viewer (zoom.js). opts.ref lets a human draw on the picture; app.js listens for mf-markup so core stays free of the drawing tool.
 export function lightbox(src, caption = '', opts = {}) {
-  const el = document.createElement('div'); el.className = 'lb';
-  el.innerHTML = `<img src="${esc(src)}" alt=""><p>${esc(caption)}</p>${opts.ref && st.me && st.me.role !== 'viewer' ? '<button class="btn pri sm" id="lbdraw">Draw on this to give feedback</button>' : ''}`;
-  const dr = el.querySelector('#lbdraw'); if (dr) dr.addEventListener('click', (e) => { e.stopPropagation(); el.remove(); document.dispatchEvent(new CustomEvent('mf-markup', { detail: { mode: 'sketch', base: src, ...opts } })); });
-  el.addEventListener('click', () => el.remove());
-  document.addEventListener('keydown', function k(e) { if (e.key === 'Escape') { el.remove(); document.removeEventListener('keydown', k); } });
-  document.body.appendChild(el);
+  const ok = st.me && st.me.role !== 'viewer';
+  document.dispatchEvent(new CustomEvent('mf-view', { detail: { index: 0, items: [{ src, caption, card: null, ...(opts.ref && ok ? { ref: opts.ref, context: opts.context } : {}) }] } }));
 }
 
 // Text from the board carries <b> tags; keep those and escape everything else.
