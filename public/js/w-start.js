@@ -3,7 +3,7 @@
 //   Understand: A = answer the AI's questions and mark sentences; B = review the reading (bible:main), each person (canon.cast:*) and each place (canon.world:place-*).
 import { $, $$, esc, st, api, P, toast } from './core.js';
 import { get, createArtifact, editArtifact } from './data.js';
-import { FORMAT_DEFAULT, REFS } from './wizard-model.js';
+import { FORMAT_DEFAULT, REFS, sceneBounds } from './wizard-model.js';
 import { registerStep, spine, itemEl, rowItem, chipOf, pill, nothing, lk, mats, castArts, placeArts, ownEdit, refresh, rerender, hrefOf } from './w-core.js';
 import { LENGTHS, ALL_LANGS, ASPECT_PRESETS, cleanAspect, cleanSeconds, lengthLabel, readoutText, startReason, kindOfFile, isTextFile, nextMark, MARK_LABEL } from './w-pure.js';
 
@@ -61,6 +61,7 @@ function htmlStart(ctx) {
   <h4 class="lbl" style="margin-top:26px">What are we making</h4>
   <div class="mk"><span>Length</span><div>${LENGTHS.map(([n, s, l]) => chipOn('length', n, f.length === n, false).replace(`data-v="${n}"`, `data-v="${n}" data-s="${s}"`).replace(`>${n}<`, `>${l}<`)).join('')}${f.length === 'Custom' ? chipOn('length', 'Custom', true, false).replace('>Custom<', `>${esc(lengthLabel(f.seconds))}<`) : ''}
     <span class="own"><input class="f" type="number" min="1" step="any" inputmode="decimal" data-own="length" placeholder="Or type a length" aria-label="Your own length" style="width:150px"><select class="f" data-own-unit aria-label="Unit" style="width:auto"><option value="seconds">seconds</option><option value="minutes">minutes</option></select></span></div>
+  <span>Each scene</span><div class="row"><label class="sm">at least <input class="f" type="number" min="1" max="600" step="1" data-scene="sceneMin" value="${sceneBounds(f)[0]}" aria-label="Shortest scene in seconds" style="width:80px"></label><label class="sm">at most <input class="f" type="number" min="1" max="600" step="1" data-scene="sceneMax" value="${sceneBounds(f)[1]}" aria-label="Longest scene in seconds" style="width:80px"></label><span class="mute sm">seconds. Fixed here, so every scene the AI writes keeps to it.</span></div>
   <span>Shape</span><div>${[...SHAPES, ...(f.aspect && !SHAPES.includes(f.aspect) ? [f.aspect] : [])].map((v) => chipOn('aspect', v, f.aspect === v)).join('')}<span class="own"><input class="f" type="text" data-own="aspect" placeholder="Or type one, like 3:4" aria-label="Your own shape" style="width:160px"></span></div>
   <span>Speech</span><div>${[...LANGS, ...(f.speech && !LANGS.includes(f.speech) ? [f.speech] : [])].map((v) => chipOn('speech', v, f.speech === v)).join('')}<span class="own"><input class="f" type="text" list="wz-langs" data-own="speech" placeholder="Any other language" aria-label="Another speech language" style="width:190px"></span></div>
   <span>Captions</span><div>${[...LANGS, ...(f.captions || []).filter((c) => !LANGS.includes(c))].map((v) => chipOn('captions', v, (f.captions || []).includes(v), true)).join('')}${chipOn('captions', 'None', !(f.captions || []).length, false)}<span class="own"><input class="f" type="text" list="wz-langs" data-own="captions" placeholder="Add another language" aria-label="Another caption language" style="width:190px"></span></div>
@@ -80,6 +81,12 @@ function bindStart(root) {
     else if (k === 'aspect') { const a = cleanAspect(v); if (!a) { toast('Type a shape as two whole numbers, like 3:4.'); return; } f.aspect = a; }
     else if (k === 'speech') f.speech = v.slice(0, 40);
     else if (k === 'captions') { const c = f.captions || []; if (!c.some((x) => x.toLowerCase() === v.toLowerCase())) f.captions = [...c, v.slice(0, 40)]; }
+    queueSave(); rerender();
+  }));
+  $$('[data-scene]', root).forEach((inp) => inp.addEventListener('change', () => {
+    const f = S1.format, k = inp.dataset.scene, v = Math.round(Number(inp.value)); if (!(v >= 1 && v <= 600)) { toast('Type a whole number of seconds between 1 and 600.'); rerender(); return; }
+    const [lo, hi] = sceneBounds(f); f.sceneMin = lo; f.sceneMax = hi; f[k] = v; // a minimum above the maximum lifts the maximum; a maximum below the minimum lowers the minimum
+    if (k === 'sceneMin' && v > f.sceneMax) f.sceneMax = v; if (k === 'sceneMax' && v < f.sceneMin) f.sceneMin = v;
     queueSave(); rerender();
   }));
   $('#wz-fin', root).addEventListener('change', (e) => { const fs = [...e.target.files]; e.target.value = ''; addFiles(fs).catch((x) => toast(x.message)); });

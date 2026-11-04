@@ -5,7 +5,7 @@
 // Edits are applied to the page's snapshot at once and saved a moment later with ownEdit (like w-start.js). Typing never re-renders the page, so the cursor stays; only part B is repainted in place.
 import { $, esc, api, P, toast } from './core.js';
 import { get } from './data.js';
-import { R, REFS, SUBS, NOTE_KEYS, ANCHOR_MODES, JOINS, MAX_CLIP, FORMAT_DEFAULT, clipPlan, emptyScene, sceneReadiness, keyOf, slug } from './wizard-model.js';
+import { R, REFS, SUBS, NOTE_KEYS, ANCHOR_MODES, JOINS, MAX_CLIP, FORMAT_DEFAULT, sceneBounds, clampScene, clipPlan, emptyScene, sceneReadiness, keyOf, slug } from './wizard-model.js';
 import { gateReason } from './w-pure.js';
 import { W, spine, itemEl, chipOf, statusOf, pill, nothing, ownEdit, sceneArts, rerender, hrefOf } from './w-core.js';
 import { registerFix, markSel, placeMargin } from './w-fix.js';
@@ -32,7 +32,7 @@ export function flush() {
   return Q.chain;
 }
 addEventListener('hashchange', () => { flush(); });
-const setSeconds = (v) => (d) => { const n = Math.max(1, Math.min(600, Math.round(Number(v) || 1))); d.seconds = n; d.clips = clipPlan(n, MAX_CLIP, (d.clips || []).map((c) => c.join)); return d; };
+const setSeconds = (v) => (d) => { const n = clampScene(v, fmtOf()); d.seconds = n; d.clips = clipPlan(n, MAX_CLIP, (d.clips || []).map((c) => c.join)); return d; };
 // "n:happens" a note, "l:<id>:text" a line, "c:<id>:name" a cue, "s:name|seconds|tag" the scene itself
 function setter(key, v) {
   const [k, a, b] = key.split(':');
@@ -53,7 +53,7 @@ function tabs(ctx) {
   const r = sceneReadiness(scn(ctx), rc);
   return `<nav class="ptabs" aria-label="Pages of this scene">${SUBS.map((u, i) => `<button class="k-${u[0]} ${u[0] === ctx.sub ? 'on' : ''}" data-go="${hrefOf('scenes', ctx.scene, u[0])}" ${u[0] === ctx.sub ? 'aria-current="page"' : ''}><small>${i + 1}</small>${u[1]}${r[i] === 2 ? ' <span class="tick" aria-label="ready">✓</span>' : ''}</button>`).join('')}</nav>`;
 }
-const field = (key, v, o = {}) => `<input class="f ${o.cls || ''}" data-wbf="${key}" value="${esc(v)}" ${o.type ? `type="${o.type}" min="${o.min ?? 0}" ${o.step ? `step="${o.step}"` : ''}` : ''} aria-label="${esc(o.label || '')}" placeholder="${esc(o.ph || '')}">`;
+const field = (key, v, o = {}) => `<input class="f ${o.cls || ''}" data-wbf="${key}" value="${esc(v)}" ${o.type ? `type="${o.type}" min="${o.min ?? 0}" ${o.max ? `max="${o.max}"` : ''} ${o.step ? `step="${o.step}"` : ''}` : ''} aria-label="${esc(o.label || '')}" placeholder="${esc(o.ph || '')}">`;
 
 // ---------- the scene list ----------
 const budget = (scenes) => {
@@ -69,7 +69,7 @@ function sceneRow(a) {
 const listB = () => { const sc = sceneArts(); return sc.length ? sc.map(sceneRow).join('') : nothing('No scenes yet. Press the first button above and I will write them.'); };
 function listA(scenes) {
   const b = budget(scenes), why = !get(REFS.episode) ? 'Finish steps 1 and 2 first, then I can write the scenes.' : '';
-  const rows = scenes.map((a) => `<div class="wzb-edit"><span class="mono mute">${a.data.n}</span>${field(`s:name`, a.data.name, { label: `Name of scene ${a.data.n}` }).replace('data-wbf="s:name"', `data-wbf="s:name" data-ref="${esc(a.ref)}"`)}<label class="wzb-sec">${field('s:seconds', a.data.seconds, { type: 'number', min: 1, step: 1, label: `Seconds of scene ${a.data.n}`, cls: 'wzb-num' }).replace('data-wbf="s:seconds"', `data-wbf="s:seconds" data-ref="${esc(a.ref)}"`)} s</label></div>`).join('');
+  const rows = scenes.map((a) => `<div class="wzb-edit"><span class="mono mute">${a.data.n}</span>${field(`s:name`, a.data.name, { label: `Name of scene ${a.data.n}` }).replace('data-wbf="s:name"', `data-wbf="s:name" data-ref="${esc(a.ref)}"`)}<label class="wzb-sec">${field('s:seconds', a.data.seconds, { type: 'number', min: sceneBounds(fmtOf())[0], max: sceneBounds(fmtOf())[1], step: 1, label: `Seconds of scene ${a.data.n}`, cls: 'wzb-num' }).replace('data-wbf="s:seconds"', `data-wbf="s:seconds" data-ref="${esc(a.ref)}"`)} s</label></div>`).join('');
   return `<span class="lbl" style="margin-top:0">Write the scenes</span>
   <p class="rule">I turn your story into scenes. Each one gets a brief: a script, notes for the video maker and its length.</p>
   <div class="row"><button class="bt pri big" data-act="wb-draft" ${S.busy || why ? 'disabled' : ''}>${S.busy ? 'Writing the scenes…' : scenes.length ? 'Write all the scene briefs again' : 'Write all the scene briefs for me'}</button><span class="sm mute">${S.busy ? 'This takes a little while. You can wait here.' : why || (scenes.length ? 'This replaces the scenes I wrote before. Your own new scenes stay.' : 'Nothing is made until you press it.')}</span></div>
@@ -114,7 +114,7 @@ function anchorsA(d) {
 }
 function clipsA(d) {
   const clips = d.clips && d.clips.length ? d.clips : clipPlan(d.seconds);
-  return `<span class="lbl">Length and clips</span><div class="row"><label class="row"><b>Scene length</b> ${field('s:seconds', d.seconds, { type: 'number', min: 1, step: 1, label: 'Scene length in seconds', cls: 'wzb-num' })} s</label><span class="mute sm">Video makers make short clips (up to ${MAX_CLIP} s), so I split the scene.</span></div>
+  return `<span class="lbl">Length and clips</span><div class="row"><label class="row"><b>Scene length</b> ${field('s:seconds', d.seconds, { type: 'number', min: sceneBounds(fmtOf())[0], max: sceneBounds(fmtOf())[1], step: 1, label: 'Scene length in seconds', cls: 'wzb-num' })} s</label><span class="mute sm">Video makers make short clips (up to ${MAX_CLIP} s), so I split the scene.</span></div>
   <div class="clips" role="img" aria-label="${clips.map((c, i) => `clip ${i + 1}: ${c.seconds} seconds`).join(', ')}">${clips.map((c, i) => `<i style="flex:${c.seconds}">clip ${i + 1} · ${c.seconds} s</i>`).join('')}</div>
   ${clips.length > 1 ? clips.slice(1).map((c, k) => `<div class="wzb-join"><span class="wk">How clip ${k + 2} begins</span><div>${JOINS.map((j) => `<span class="ch cl ${c.join === j[0] ? 'on' : ''}" tabindex="0" role="button" aria-pressed="${c.join === j[0]}" data-act="wb-join" data-i="${k + 1}" data-v="${j[0]}">${j[1]}</span>`).join('')}</div><div class="sm mute">${c.join === 'cut' ? 'A new view. This clip gets its own start picture.' : 'Same view, place and people. No jump.'}</div></div>`).join('') : '<div class="sm mute">One clip. No split needed.</div>'}`;
 }
@@ -207,7 +207,7 @@ const acts = {
   async 'wb-add'() {
     const sc = sceneArts(), n = Math.max(0, ...sc.map((a) => a.data.n || 0)) + 1, want = Number(fmtOf().seconds) || 0, used = sc.reduce((s, a) => s + (Number(a.data.seconds) || 0), 0);
     let id = slug(`scene ${n}`); while (get(R.scene(id))) id += '-2';
-    try { await api(P('/propose'), { method: 'POST', body: { ref: R.scene(id), parent: REFS.episode, auto_approve: false, rationale: 'A scene you added in the wizard', data: emptyScene(n, { seconds: want > used ? Math.min(60, want - used) : 10 }) } }); toast(`Scene ${n} added. Open it to write its brief.`); }
+    try { await api(P('/propose'), { method: 'POST', body: { ref: R.scene(id), parent: REFS.episode, auto_approve: false, rationale: 'A scene you added in the wizard', data: emptyScene(n, { seconds: clampScene(want > used ? want - used : 10, fmtOf()) }) } }); toast(`Scene ${n} added. Open it to write its brief.`); }
     catch (e) { toast(`Could not add the scene: ${bad(e)}`); }
     return 'refresh';
   },

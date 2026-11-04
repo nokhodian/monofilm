@@ -85,7 +85,7 @@ async function loadProds(select) {
   st.prods = await api('/p');
   if (select) st.pid = select; else if (!st.prods.some((p) => p.id === st.pid)) st.pid = st.prods[0]?.id || '';
   localStorage.setItem('mf-pid', st.pid);
-  $('#prod').innerHTML = st.prods.map((p) => `<option value="${esc(p.id)}"${p.id === st.pid ? ' selected' : ''}>${esc(p.name)} (${esc(p.format)})</option>`).join('');
+  $('#prod').innerHTML = st.prods.map((p) => `<option value="${esc(p.id)}"${p.id === st.pid ? ' selected' : ''}>${esc(p.name)} (${p.format === 'movie' ? 'film' : esc(p.format)})</option>`).join('');
 }
 async function boot() {
   // Who is signed in? (a cookie from an email sign-in, or the access key kept in this browser). A first visit simply gets nobody.
@@ -102,7 +102,17 @@ const BASE = {
   logout: signout,
   // The credit budget is the studio's own spending limit per production (separate from the Meta account balance). A human raises it here.
   async addcred() { const n = Number(prompt('How many credits do you want to add to this production? Each picture costs 1.', '40')); if (!Number.isFinite(n) || n <= 0) return; await api(P('/budget/grant'), { method: 'POST', body: { add: n } }); toast(`Added ${n} credits.`); return 'refresh'; },
-  async newprod() { const name = prompt('Production name'); if (!name) return; const format = confirm('OK = series, Cancel = movie') ? 'series' : 'movie'; const r = await api('/p', { method: 'POST', body: { name, format, budget: 40 } }); await loadProds(r.id); return 'refresh'; },
+  newprod() {
+    const m = document.createElement('div'); m.className = 'apmodal'; m.id = 'npmodal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'np-t');
+    const kind = (v, t, d, on) => `<label class="npk"><input type="radio" name="npf" value="${v}" ${on ? 'checked' : ''}><b>${t}</b><span class="sm mute">${d}</span></label>`;
+    m.innerHTML = `<div class="apbox"><h2 id="np-t">New production</h2><label class="lbl" for="npname">Name</label><input id="npname" class="f" style="width:100%" maxlength="80" placeholder="Untitled">
+    <span class="lbl">What are you making?</span><div class="npkinds">${kind('movie', 'Film', 'One story, told in one go: a teaser, a short film or a feature.', true)}${kind('series', 'Series', 'Many episodes that share the same people, places and look.', false)}</div>
+    <div class="apacts"><button class="apb pri" data-act="np-go">Create</button><button class="apb" data-act="np-no">Cancel</button></div></div>`;
+    document.body.appendChild(m); $('#npname', m).focus();
+    m.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') m.remove(); if (ev.key === 'Enter' && ev.target.id === 'npname') $('[data-act="np-go"]', m).click(); }); m.addEventListener('click', (ev) => { if (ev.target === m) m.remove(); });
+  },
+  'np-no'() { const m = $('#npmodal'); if (m) m.remove(); },
+  async 'np-go'() { const m = $('#npmodal'), name = $('#npname', m).value.trim() || 'Untitled', format = $('input[name=npf]:checked', m).value; m.remove(); const r = await api('/p', { method: 'POST', body: { name, format, budget: 40 } }); await loadProds(r.id); return 'refresh'; },
 };
 async function act(el) {
   const fn = BASE[el.dataset.act] || ACTS[el.dataset.act];

@@ -16,7 +16,7 @@ const names = (e) => e.map((x) => x.path);
 test('a scene pack has a brief, a transcript, subtitles and one folder per clip, with only what the target takes', () => {
   assert.equal(sceneDir(scene), 'scene-01-the-beam');
   const both = names(sceneEntries(film, scene, { target: 'both' }));
-  for (const p of ['brief.md', 'transcript.json', 'transcript.srt', 'clip-01/prompt.txt', 'clip-01/negative.txt', 'clip-01/clip.json', 'clip-01/start.png', 'clip-01/stage/layout.png', 'clip-02/start.jpg', 'clip-02/end.png']) assert.ok(both.includes(`scene-01-the-beam/${p}`), p);
+  for (const p of ['brief.md', 'start.png', 'end.png', 'transcript.json', 'transcript.srt', 'clip-01/prompt.txt', 'clip-01/negative.txt', 'clip-01/clip.json', 'clip-01/start.png', 'clip-01/stage/layout.png', 'clip-02/start.jpg', 'clip-02/end.png']) assert.ok(both.includes(`scene-01-the-beam/${p}`), p);
   assert.ok(!both.includes('scene-01-the-beam/clip-01/end.png'), 'only the last clip ends on the end picture');
   const start = names(sceneEntries(film, scene, { target: 'start' })), refs = names(sceneEntries(film, scene, { target: 'refs' })), text = names(sceneEntries(film, scene, { target: 'text' }));
   assert.ok(start.some((p) => p.endsWith('clip-01/start.png')) && !start.some((p) => p.endsWith('end.png')));

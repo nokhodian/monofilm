@@ -5,7 +5,7 @@ import * as S from './store.js';
 import { spark, outputText, metaConfigured } from './meta.js';
 import { AGENT } from './agent.js';
 import { registerTool, callTool } from './tools.js';
-import { REFS, R, slug, keyOf, clipPlan, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP } from '../public/js/wizard-model.js';
+import { REFS, R, slug, keyOf, clipPlan, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP, sceneBounds, clampScene } from '../public/js/wizard-model.js';
 
 const row = (db, pid, ref) => db.prepare('SELECT * FROM artifacts WHERE production=? AND ref=?').bind(pid, ref).first();
 const dataOf = (r) => (r ? parseJson(r.data) : null);
@@ -74,16 +74,16 @@ export async function readStory(env, db, actor, pid, f) {
 }
 
 // ---- 6: scenes ----
-const SCENES_SYSTEM = `You turn a story into scenes for a short film that will be made clip by clip with a video generator. Output JSON {scenes: [...]} with 3 to 8 scenes. Each scene: name, tag (one word for its job: hook, crash, price, title...), seconds (a whole number; all scenes add up to the film length),
+const SCENES_SYSTEM = `You turn a story into scenes for a short film that will be made clip by clip with a video generator. Output JSON {scenes: [...]} with 3 to 8 scenes. Each scene: name, tag (one word for its job: hook, crash, price, title...), seconds (a whole number between the shortest and longest scene length given; all scenes add up to the film length),
 place (the name of one of the places given), time (dawn, day, dusk, night or none), who (names from the people given; may be empty), transcript (list of {who (UPPERCASE name or NARRATOR), text (in the spoken language), en (English meaning), sec}; may be empty),
 notes {happens (2 to 4 sentences: who is where, what moves, what is seen), mood (mood and pace), cam (camera and motion), sound (sound in the picture), never (what must not happen), cont (how it connects to the scene before and after)}.`;
 const castOf = async (db, pid) => (await S.listArtifacts(db, pid, { kind: 'canon.cast' }));
 const placesOf = async (db, pid) => (await S.listArtifacts(db, pid, { kind: 'canon.world' })).filter((a) => a.ref.startsWith('canon.world:place-'));
-const localScenes = (bible, fmt) => { const beats = (bible.beats || []).slice(0, 5), per = Math.max(2, Math.round(fmt.seconds / Math.max(1, beats.length))); return beats.map((b, i) => ({ name: `Scene ${i + 1}`, tag: '', seconds: per, place: '', time: 'day', who: [], transcript: [], notes: { happens: b.text, mood: '', cam: '', sound: '', never: '', cont: '' } })); };
+const localScenes = (bible, fmt) => { const beats = (bible.beats || []).slice(0, 5), per = clampScene(fmt.seconds / Math.max(1, beats.length), fmt); return beats.map((b, i) => ({ name: `Scene ${i + 1}`, tag: '', seconds: per, place: '', time: 'day', who: [], transcript: [], notes: { happens: b.text, mood: '', cam: '', sound: '', never: '', cont: '' } })); };
 
-function sceneFrom(o, i, people, places) {
+function sceneFrom(o, i, people, places, fmt) {
   const pl = places.find((p) => p.data.name.toLowerCase() === String(o.place || '').toLowerCase()), who = (o.who || []).map((w) => people.find((p) => p.data.name.toLowerCase() === String(w).toLowerCase())).filter(Boolean).map((p) => p.ref);
-  const seconds = Math.max(2, Math.min(60, Math.round(Number(o.seconds) || 10)));
+  const seconds = clampScene(o.seconds || 10, fmt);
   return { n: i + 1, name: text(o.name, 60) || `Scene ${i + 1}`, tag: text(o.tag, 20), seconds, place: pl ? pl.ref : null, time: text(o.time, 20), who, overrides: {},
     transcript: (o.transcript || []).slice(0, 20).map((l, k) => ({ id: `l${k + 1}`, who: text(l.who, 40).toUpperCase(), text: text(l.text, 400), en: text(l.en, 400), sec: Number(l.sec) || 0 })),
     notes: Object.fromEntries(NOTE_KEYS.map(([k]) => [k, text((o.notes || {})[k], 700)])), start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(seconds) };
@@ -93,14 +93,14 @@ export async function draftScenes(env, db, actor, pid, f) {
   const bible = await must(db, pid, REFS.reading, 'the reading of your story'), bd = dataOf(bible), sd = dataOf(await row(db, pid, REFS.story)) || {}, fmt = { ...FORMAT_DEFAULT, ...(sd.format || {}) };
   await must(db, pid, REFS.episode, 'the episode');
   const [people, places] = await Promise.all([castOf(db, pid), placesOf(db, pid)]);
-  const prompt = `Story:\n${text(sd.text, 8000)}\n\nBeats: ${(bd.beats || []).map((b) => b.text).join(' | ')}\nPeople: ${people.map((p) => `${p.data.name} (${p.data.role})`).join('; ')}\nPlaces: ${places.map((p) => p.data.name).join('; ')}\nFilm length: ${fmt.seconds} seconds. Spoken language: ${fmt.speech}. Each scene ends up as clips of at most ${MAX_CLIP} seconds.`;
+  const prompt = `Story:\n${text(sd.text, 8000)}\n\nBeats: ${(bd.beats || []).map((b) => b.text).join(' | ')}\nPeople: ${people.map((p) => `${p.data.name} (${p.data.role})`).join('; ')}\nPlaces: ${places.map((p) => p.data.name).join('; ')}\nFilm length: ${fmt.seconds} seconds. Every scene is between ${sceneBounds(fmt)[0]} and ${sceneBounds(fmt)[1]} seconds long. Spoken language: ${fmt.speech}. Each scene ends up as clips of at most ${MAX_CLIP} seconds.`;
   const o = metaConfigured(env) ? await askJson(env, SCENES_SYSTEM, prompt, f) : { scenes: localScenes(bd, fmt) };
   const list = (o.scenes || []).slice(0, 12); if (!list.length) throw new HttpError(502, 'the AI made no scenes. Try again.');
   const made = [], used = new Set();
   for (const [i, s] of list.entries()) {
     let id = slug(s.name) || `scene-${i + 1}`; while (used.has(id)) id += '-2'; used.add(id);
     const cur = await row(db, pid, R.scene(id)); if (cur && cur.status === 'locked') continue;
-    await S.propose(db, AGENT, pid, { ref: R.scene(id), parent: REFS.episode, data: sceneFrom(s, i, people, places), rationale: 'A scene drafted from your story. Please review its brief.' }); made.push(R.scene(id));
+    await S.propose(db, AGENT, pid, { ref: R.scene(id), parent: REFS.episode, data: sceneFrom(s, i, people, places, fmt), rationale: 'A scene drafted from your story. Please review its brief.' }); made.push(R.scene(id));
   }
   await S.logEvent(db, pid, REFS.episode, 'wizard_scenes', actor, `${made.length} scenes proposed`);
   return { made, via: metaConfigured(env) ? 'muse-spark' : 'local' };
@@ -108,12 +108,12 @@ export async function draftScenes(env, db, actor, pid, f) {
 // Redo one scene's brief, taking any open feedback on it into account.
 export async function draftBrief(env, db, actor, pid, { scene, instruction = '' }, f) {
   human(actor);
-  const cur = await must(db, pid, R.scene(scene), `scene ${scene}`), d = dataOf(cur);
+  const cur = await must(db, pid, R.scene(scene), `scene ${scene}`), d = dataOf(cur), fmt = { ...FORMAT_DEFAULT, ...((dataOf(await row(db, pid, REFS.story)) || {}).format || {}) };
   const open = (await S.listComments(db, pid, { ref: cur.ref, status: 'open' })).map((c) => c.body).filter(Boolean);
   const [people, places] = await Promise.all([castOf(db, pid), placesOf(db, pid)]);
   if (!metaConfigured(env)) throw new HttpError(503, 'MODEL_API_KEY is not set, so the AI cannot rewrite this brief.');
   const o = await askJson(env, SCENES_SYSTEM.replace('Output JSON {scenes: [...]} with 3 to 8 scenes.', 'Output JSON {scenes: [one scene]} with exactly this one scene, rewritten.'), `Rewrite this scene, keeping what is good.\nCurrent: ${JSON.stringify({ name: d.name, seconds: d.seconds, notes: d.notes, transcript: d.transcript })}\nFeedback: ${[instruction, ...open].filter(Boolean).join(' | ') || 'none'}\nPeople: ${people.map((p) => p.data.name).join('; ')}. Places: ${places.map((p) => p.data.name).join('; ')}.`, f);
-  const s = sceneFrom((o.scenes || [])[0] || {}, d.n - 1, people, places);
+  const s = sceneFrom((o.scenes || [])[0] || {}, d.n - 1, people, places, fmt);
   const ids = (await S.listComments(db, pid, { ref: cur.ref, status: 'open' })).map((c) => c.id);
   await S.propose(db, AGENT, pid, { ref: cur.ref, parent: REFS.episode, data: { ...d, name: s.name || d.name, tag: s.tag || d.tag, notes: s.notes, transcript: s.transcript.length ? s.transcript : d.transcript }, rationale: `Rewrote the brief${instruction ? `: ${text(instruction, 120)}` : ''}.`, addresses: ids });
   return { ref: cur.ref };

@@ -16,7 +16,10 @@ export const NOTE_KEYS = [['happens', 'What happens'], ['mood', 'Mood and pace']
 export const ANCHOR_MODES = [['stage', 'From the stage'], ['chain', 'Previous scene\'s end'], ['own', 'My own picture'], ['skip', 'Skip it']];
 export const JOINS = [['cont', 'Continue from the last picture of the clip before'], ['cut', 'New view, a cut']];
 export const TARGETS = [['both', 'Start + end frame'], ['start', 'Start frame only'], ['refs', 'Reference images'], ['text', 'Text only']];
-export const FORMAT_DEFAULT = { length: 'Teaser', seconds: 60, aspect: '9:16', speech: 'English', captions: ['English'], faithful: 30 };
+export const FORMAT_DEFAULT = { length: 'Teaser', seconds: 60, aspect: '9:16', speech: 'English', captions: ['English'], faithful: 30, sceneMin: 4, sceneMax: 20 };
+// The shortest and longest a scene may be, in whole seconds, fixed on the Start page. Always 1 <= min <= max <= 600.
+export const sceneBounds = (f = {}) => { const lo = Math.max(1, Math.min(600, Math.round(Number(f.sceneMin) || FORMAT_DEFAULT.sceneMin))), hi = Math.max(lo, Math.min(600, Math.round(Number(f.sceneMax) || FORMAT_DEFAULT.sceneMax))); return [lo, hi]; };
+export const clampScene = (s, f) => { const [lo, hi] = sceneBounds(f); return Math.max(lo, Math.min(hi, Math.round(Number(s) || lo))); };
 export const MAX_CLIP = 8; // seconds a generator is assumed to make in one go; the person can change it in the Pack
 
 export const REFS = { story: 'logline:main', reading: 'bible:main', look: 'canon.style:look', episode: 'episode:main' };

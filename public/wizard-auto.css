@@ -39,3 +39,6 @@
 @media (max-width:899px){.apchip small{max-width:120px}.apchip{max-width:200px}}
 @media (prefers-reduced-motion:reduce){.apchip.running .apdot{animation:none}.apchip .apbar i,.appanel .approg i{transition:none}}
 .apwrap[hidden],.appanel[hidden]{display:none}
+.npkinds{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 4px}.npk{display:flex;flex-direction:column;gap:4px;border:2px solid #cdbf9f;border-radius:6px;padding:12px 14px;cursor:pointer;background:#fff}
+.npk:has(input:checked){border-color:#2b2418;background:#f3e9d0}.npk input{position:absolute;opacity:0;pointer-events:none}.npk:has(input:focus-visible){outline:2px solid #2b2418;outline-offset:2px}.npk b{font:italic 400 22px Georgia,serif}
+@media (max-width:520px){.npkinds{grid-template-columns:1fr}}

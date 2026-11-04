@@ -26,6 +26,9 @@ export function sceneEntries(film, scene, { target = 'both', max = MAX_CLIP, roo
   E('brief.md', [`# ${d.name}`, '', `${d.seconds} s · ${d.place ? 'place: ' + keyOf(d.place) : 'no set place'} · ${d.time || 'no time of day'}`, '', ...NOTE_KEYS.map(([k, label]) => `## ${label}\n${(d.notes || {})[k] || '-'}\n`)].join('\n'));
   E('transcript.json', JSON.stringify(d.transcript || [], null, 2));
   if ((d.transcript || []).some((l) => l.text)) E('transcript.srt', srt(d.transcript));
+  const first = scene.frames['1-start'], lastEnd = scene.frames[`${clips.length}-end`]; // the scene's own start and end pictures, next to the brief, as far as the target can take them
+  if (w.start && first && d.start && d.start.mode !== 'skip') U(`start.${ext(first)}`, first);
+  if (w.end && lastEnd && d.end && d.end.mode !== 'skip') U(`end.${ext(lastEnd)}`, lastEnd);
   const refs = [];
   clips.forEach((c, i) => {
     const n = i + 1, last = n === clips.length, c1 = `clip-${pad(n)}`, p = composeClip(scene, film, n), files = [];

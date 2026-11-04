@@ -142,3 +142,10 @@ test('start and end pictures follow the film\'s shape, not always portrait', asy
   await W.makeFrame(t.env, t.db, human, t.id, { scene: 'the-beam', which: 'end', clip: 2 }, f);
   const [w2, h2] = sizes.pop().split('x').map(Number); assert.ok(w2 > h2, 'a 16:9 film gets landscape pictures');
 });
+
+test('scene lengths stay between the bounds fixed on the Start page', async () => {
+  const { sceneBounds, clampScene } = await import('../public/js/wizard-model.js');
+  assert.deepEqual(sceneBounds({}), [4, 20]);
+  assert.deepEqual(sceneBounds({ sceneMin: 10, sceneMax: 5 }), [10, 10]);
+  assert.deepEqual([clampScene(1, { sceneMin: 5, sceneMax: 12 }), clampScene(99, { sceneMin: 5, sceneMax: 12 }), clampScene(8, { sceneMin: 5, sceneMax: 12 })], [5, 12, 8]);
+});

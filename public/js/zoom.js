@@ -2,7 +2,7 @@
 // (in the studio) "Give feedback on this", which opens the same margin card as clicking the picture's card used to. Standalone: no imports, so the landing page uses it too.
 const MIN = 48; // smaller things are icons, not pictures
 // A picture inside one of these keeps its own job: the margin card's pin picture, the drawing tool, the stage floor plan, links and buttons.
-const OWN = '.zv, #apmodal, #mkmodal, .pinpad, [data-nozoom], .apwrap, button, a, label, select, summary, video, #wzs-plan';
+const OWN = '.zv, #apmodal, #npmodal, #mkmodal, .pinpad, [data-nozoom], .apwrap, button, a, label, select, summary, video, #wzs-plan';
 const isVid = (el) => el.tagName === 'VIDEO' && !el.closest('.zv, [data-nozoom]') && el.offsetParent !== null && el.getBoundingClientRect().width >= MIN;
 const isPic = (el) => (el.tagName === 'IMG' || (el.tagName === 'CANVAS' && el.matches('[data-lay], #wzs-cv'))) && !el.closest(OWN) && el.offsetParent !== null && el.getBoundingClientRect().width >= MIN;
 let V = null; // the open viewer: { items, i, root, back, zoomed }
