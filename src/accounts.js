@@ -19,7 +19,7 @@ const dummyHash = () => (dummy ||= hashPassword('not a real password'));
 export const cleanEmail = (e) => { const s = String(e || '').trim().toLowerCase(); return s.length <= 254 && /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(s) ? s : null; };
 const cookie = (token, https, maxAge = SESSION_MS / 1000) => `mfs=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${https ? '; Secure' : ''}`;
 export const tokenFrom = (req) => { const c = /(?:^|;\s*)mfs=([A-Za-z0-9_-]+)/.exec(req.headers.get('cookie') || ''); return c && c[1]; };
-const who = (u) => ({ id: `u:${u.id}`, name: u.email, email: u.email, kind: 'human', role: 'member', user: true });
+const who = (u) => ({ id: `u:${u.id}`, name: u.email, email: u.email, kind: 'human', role: u.role === 'admin' ? 'admin' : 'member', user: true }); // an account is a member unless the studio owner made it an admin
 
 async function startSession(db, userId, https) {
   const token = newToken(), now = Date.now();
@@ -29,7 +29,7 @@ async function startSession(db, userId, https) {
 // The person behind a session cookie, or null.
 export async function sessionActor(db, token) {
   if (!token) return null;
-  const u = await db.prepare("SELECT u.id,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires>? AND u.status='approved'").bind(await sha256hex(token), Date.now()).first();
+  const u = await db.prepare("SELECT u.id,u.email,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires>? AND u.status='approved'").bind(await sha256hex(token), Date.now()).first();
   return u ? who(u) : null;
 }
 
@@ -52,7 +52,7 @@ export async function signup(db, env, { email, password, code }, ip, https) {
 
 // ---- the person who runs the studio decides on sign-ups ----
 export async function listAccounts(db) {
-  const r = await db.prepare(`SELECT u.id,u.email,u.status,u.credits,u.created,
+  const r = await db.prepare(`SELECT u.id,u.email,u.status,u.role,u.credits,u.created,
     (SELECT COUNT(*) FROM productions p WHERE p.owner='u:'||u.id) productions,
     (SELECT COALESCE(SUM(l.credits),0) FROM ledger l JOIN productions p ON p.id=l.production WHERE p.owner='u:'||u.id) spent
     FROM users u ORDER BY (u.status='pending') DESC, u.created DESC`).all();
@@ -81,7 +81,7 @@ async function throttle(db, email, ip) {
 export async function login(db, { email, password }, ip, https) {
   const e = cleanEmail(email) || String(email || '').trim().toLowerCase().slice(0, 254);
   await throttle(db, e, ip);
-  const u = await db.prepare('SELECT id,email,pw,status FROM users WHERE email=?').bind(e).first(), ok = await verifyPassword(String(password || '').slice(0, 200), u ? u.pw : await dummyHash());
+  const u = await db.prepare('SELECT id,email,pw,status,role FROM users WHERE email=?').bind(e).first(), ok = await verifyPassword(String(password || '').slice(0, 200), u ? u.pw : await dummyHash());
   if (!u || !ok) { await note(db, e, ip); throw new HttpError(401, 'Wrong email or password.'); }
   if (u.status === 'pending') throw new HttpError(403, 'Your account is waiting for approval. We will email you as soon as it is approved.');
   if (u.status === 'rejected') throw new HttpError(403, 'This sign-up was not approved.');

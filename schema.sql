@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS presence (project TEXT NOT NULL, who TEXT NOT NULL, t
 
 -- Accounts: email and password. A password is stored only as a salted PBKDF2 hash; a session cookie is stored only as the hash of its token.
 -- status: 'pending' until the person who runs the studio approves the sign-up, then 'approved' (or 'rejected'). credits: the allowance for the whole account, shared by all its productions.
-CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, pw TEXT NOT NULL, created INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'approved', credits REAL NOT NULL DEFAULT 15);
+CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, pw TEXT NOT NULL, created INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'approved', credits REAL NOT NULL DEFAULT 15, role TEXT NOT NULL DEFAULT 'member');
 CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, created INTEGER NOT NULL, expires INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id);
 -- Failed and successful sign-in tries, to slow down guessing.

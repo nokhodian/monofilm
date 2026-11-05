@@ -130,3 +130,11 @@ test('credits belong to the account: one production may use all of it, and all i
   const g = await call(`/api/p/${a}/budget/grant`, { method: 'POST', key: 'admin-secret', body: { add: 5 } }); assert.equal(g.status, 200);
   assert.equal(await S.charge(env.DB, act, a, { ref: 'logline:main', tool: 't', credits: 5 }), 5, 'credits the owner adds to a production go to the account');
 });
+
+test('an admin account signs in with email and password and can decide on accounts; its own work is not capped by an allowance', async () => {
+  await env.DB.prepare("INSERT INTO users (id,email,pw,created,status,credits,role) VALUES ('adm1','owner@x.org',?,?,'approved',0,'admin')").bind(await hashPassword(PW), Date.now()).run();
+  const ok = await call('/api/auth/login', { method: 'POST', ip: '6.6.6.6', body: { email: 'owner@x.org', password: PW } }); assert.equal(ok.status, 200); assert.equal(ok.body.me.role, 'admin');
+  assert.equal((await call('/api/accounts', { cookie: sess(ok) })).status, 200);
+  const id = (await call('/api/p', { method: 'POST', cookie: sess(ok), body: { name: 'Mine', budget: 100 } })).body.id; assert.equal((await call(`/api/p/${id}`, { cookie: sess(ok) })).body.budget, 100, 'an admin sets the budget');
+  const S = await import('../src/store.js'), adm = { id: 'u:adm1', name: 'owner@x.org', kind: 'human', role: 'admin' }; await S.propose(env.DB, adm, id, { ref: 'logline:main', data: { text: 'x' }, auto_approve: true }); assert.equal(await S.charge(env.DB, adm, id, { ref: 'logline:main', tool: 't', credits: 50 }), 50);
+});

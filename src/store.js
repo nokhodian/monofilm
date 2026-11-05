@@ -243,7 +243,7 @@ export async function charge(db, actor, pid, { ref, tool, credits }) {
   const r = await p(db, `INSERT INTO ledger (production,ref,scope,tool,credits,actor,ts) SELECT ?,?,?,?,?,?,? WHERE
     (SELECT COALESCE(SUM(credits),0) FROM ledger WHERE production=?)+? <= (SELECT budget FROM productions WHERE id=?)
     AND ((SELECT shot_cap FROM productions WHERE id=?)=0 OR (SELECT COALESCE(SUM(credits),0) FROM ledger WHERE production=? AND scope=?)+? <= (SELECT shot_cap FROM productions WHERE id=?))
-    AND (COALESCE((SELECT owner FROM productions WHERE id=?),'') NOT LIKE 'u:%' OR (SELECT COALESCE(SUM(l.credits),0) FROM ledger l JOIN productions q ON q.id=l.production WHERE q.owner=(SELECT owner FROM productions WHERE id=?))+? <= COALESCE((SELECT u.credits FROM users u WHERE 'u:'||u.id=(SELECT owner FROM productions WHERE id=?)), 1e18))`,
+    AND (COALESCE((SELECT owner FROM productions WHERE id=?),'') NOT LIKE 'u:%' OR (SELECT COALESCE(SUM(l.credits),0) FROM ledger l JOIN productions q ON q.id=l.production WHERE q.owner=(SELECT owner FROM productions WHERE id=?))+? <= COALESCE((SELECT u.credits FROM users u WHERE u.role='member' AND 'u:'||u.id=(SELECT owner FROM productions WHERE id=?)), 1e18))`,
     pid, ref, scope, tool, credits, actor.name, now, pid, credits, pid, pid, pid, scope, credits, pid, pid, pid, credits, pid).run();
   if (!r.meta.changes) throw new HttpError(402, `over budget for ${scope}: ask a human via request_budget`);
   return credits;
