@@ -3,6 +3,8 @@ import { HttpError, bad, json } from './util.js';
 import { can } from './kinds.js';
 import * as S from './store.js';
 import { createActor } from './auth.js';
+import { listAccounts, decideAccount } from './accounts.js';
+import * as AP from './autopilot.js';
 import { registerTool, listTools, callTool } from './tools.js';
 import { checkAdherence } from './adherence.js';
 import { transcribe, metaConfigured, MODELS } from './meta.js';
@@ -13,7 +15,7 @@ const MAX_MEDIA = 25 * 1024 * 1024;
 const body = async (req) => { try { return await req.json(); } catch { throw bad('body must be JSON'); } };
 const must = (actor, action) => { if (!can(actor, action)) throw new HttpError(403, `role ${actor.role} cannot ${action}`); };
 
-export async function api(req, env, actor) {
+export async function api(req, env, actor, ctx) {
   const url = new URL(req.url), m = req.method, db = env.DB;
   const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['api', ...]
   const [, a, b, c, d] = parts;
@@ -23,6 +25,11 @@ export async function api(req, env, actor) {
     const secure = url.protocol === 'https:' ? '; Secure' : '';
     if (m === 'POST') return json({ ok: true }, 200, { 'set-cookie': `mf=${encodeURIComponent((/^Bearer (.+)$/.exec(req.headers.get('authorization') || '') || [])[1])}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=2592000${secure}` });
     if (m === 'DELETE') return json({ ok: true }, 200, { 'set-cookie': `mf=; Path=/api; HttpOnly; SameSite=Strict; Max-Age=0${secure}` });
+  }
+  if (a === 'accounts') { // who asked for access: the person who runs the studio approves or declines, and gives credits
+    must(actor, 'manage');
+    if (m === 'GET' && !b) return json(await listAccounts(db));
+    if (m === 'POST' && b) return json(await decideAccount(db, env, b, await body(req)));
   }
   if (a === 'actors' && m === 'POST') { must(actor, 'manage'); return json(await createActor(db, await body(req)), 201); }
   if (a === 'restore' && m === 'POST') { must(actor, 'budget'); return json(await S.restoreBackup(db, actor, await body(req)), 201); } // a backup carries its own budget, so only someone who may grant credits may restore one
@@ -38,7 +45,8 @@ export async function api(req, env, actor) {
       const o = await body(req);
       if (actor.role === 'member') { // a signed-up person gets a small fixed budget and a few productions, whatever they ask for
         const cap = Number(env.MEMBER_PRODUCTIONS) || 3; if ((await S.countOwned(db, actor)) >= cap) throw new HttpError(403, `You can have up to ${cap} productions. Ask the person who runs this studio for more.`);
-        o.budget = Number(env.MEMBER_BUDGET) || 15; o.shot_cap = 0;
+        const u = await db.prepare('SELECT credits FROM users WHERE id=?').bind(actor.id.slice(2)).first(); // a production may use the whole account's allowance; the account total is what stops it
+        o.budget = u ? u.credits : Number(env.MEMBER_BUDGET) || 15; o.shot_cap = 0;
       }
       return json(await S.createProduction(db, actor, o), 201);
     }
@@ -72,6 +80,11 @@ export async function api(req, env, actor) {
     const b2 = await body(req).catch(() => ({})), act = { read: () => W.readStory(env, db, actor, pid), scenes: () => W.draftScenes(env, db, actor, pid), brief: () => W.draftBrief(env, db, actor, pid, b2), revise: () => W.reviseItem(env, db, actor, pid, b2), clips: async () => ({ shots: await W.ensureClips(db, actor, pid, b2.scene) }), face: () => W.makeFace(env, db, actor, pid, b2), plate: () => W.makePlate(env, db, actor, pid, b2), frame: () => W.makeFrame(env, db, actor, pid, b2), take: () => W.addTake(db, actor, pid, b2) }[d];
     if (!act) throw new HttpError(404, `no wizard action ${d}`);
     return json(await act(), 201);
+  }
+  if (c === 'autopilot') { // Roll camera, run by the server so it carries on when the page is closed
+    if (m === 'GET') return json(await AP.status(db, pid));
+    if (m === 'POST' && d === 'start') { must(actor, 'decide'); if (actor.kind !== 'human') throw new HttpError(403, 'only a human starts Roll camera'); return json(await AP.start(env, db, actor, pid, ctx), 201); }
+    if (m === 'POST' && d === 'stop') { must(actor, 'decide'); return json(await AP.stop(db, pid)); }
   }
   if (c === 'queue' && m === 'GET') return json(await S.queue(db, pid));
   if (c === 'next-work' && m === 'GET') return json(await S.nextWork(db, pid));

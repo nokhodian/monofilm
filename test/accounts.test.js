@@ -23,7 +23,7 @@ test('passwords are hashed with a salt and checked in full', async () => {
 
 test('sign-up needs the invite code, a real email and a long password; the cookie is safe', async () => {
   assert.equal((await call('/api/auth/signup', { method: 'POST', body: { email: 'a@b.co', password: PW, code: 'x' }, e: { ...env, SIGNUP_CODE: undefined } })).status, 403);
-  const bad = await up('ann@x.org', { code: 'wrong' }); assert.deepEqual([bad.status, bad.body.error], [403, 'That invite code is not right.']);
+  const bad = await up('ann@x.org', { code: 'wrong' }); assert.equal(bad.status, 403); assert.match(bad.body.error, /invite code is not right/);
   assert.equal((await up('not-an-email')).status, 400); assert.equal((await up('ann@x.org', { password: 'short' })).status, 400);
   assert.equal((await call('/api/auth/signup', { method: 'POST', mf: false, body: { email: 'ann@x.org', password: PW, code: 'let-me-in-please' } })).status, 400, 'a plain cross-site form cannot sign up');
   const ok = await up('Ann@X.org'); assert.equal(ok.status, 201); assert.equal(ok.body.me.email, 'ann@x.org'); assert.equal(ok.body.me.role, 'member');
@@ -82,4 +82,51 @@ test('wrong invite codes slow down the guesser, not everyone else', async () => 
   const stuck = await call('/api/auth/signup', { method: 'POST', body: { email: 'late@x.org', password: PW, code: 'let-me-in-please' }, ip: '5.5.5.5' }), ok = await up('fine@x.org');
   assert.equal(ok.status, 429, 'the address that guessed is held back, even with the right code');
   assert.equal(stuck.status, 201, 'someone else can still sign up');
+});
+
+// ---- approval, emails, account credits ----
+const mails = [];
+const mailEnv = { ...env, RESEND_API_KEY: 're_test', MAIL_FROM: 'Monofilm <noreply@x.test>', ADMIN_EMAIL: 'boss@x.test' };
+const realFetch = globalThis.fetch;
+const withMail = async (f) => { globalThis.fetch = async (url, init) => { if (String(url).startsWith('https://api.resend.com/')) { mails.push(JSON.parse(init.body)); return new Response('{}', { status: 200 }); } return realFetch(url, init); }; try { return await f(); } finally { globalThis.fetch = realFetch; } };
+const ask = (email, extra = {}, ip = '3.3.3.3') => call('/api/auth/signup', { method: 'POST', e: mailEnv, ip, body: { email, password: PW, ...extra } });
+const upIp = (email, ip, extra = {}) => call('/api/auth/signup', { method: 'POST', ip, body: { email, password: PW, code: 'let-me-in-please', ...extra } });
+
+test('without an invite code a sign-up waits for approval; the person is told, and signs in once approved', async () => withMail(async () => {
+  const r = await ask('pat@x.org', {}, '3.3.3.4'); assert.equal(r.status, 202); assert.equal(r.body.pending, true); assert.equal(r.setCookie, null, 'no session while waiting');
+  assert.deepEqual([mails.at(-1).to, mails.at(-1).subject], [['boss@x.test'], 'Monofilm: someone asked for access'], 'the studio owner hears about the request');
+  const wait = await call('/api/auth/login', { method: 'POST', body: { email: 'pat@x.org', password: PW } }); assert.equal(wait.status, 403); assert.match(wait.body.error, /waiting for approval/);
+  assert.equal((await call('/api/auth/login', { method: 'POST', body: { email: 'pat@x.org', password: 'wrong-wrong-wrong' } })).status, 401, 'a wrong password still learns nothing');
+  const list = await call('/api/accounts', { key: 'admin-secret' }); assert.equal(list.body[0].email, 'pat@x.org'); assert.equal(list.body[0].status, 'pending', 'pending ones are listed first');
+  const id = list.body[0].id;
+  const approved = await call('/api/accounts/' + id, { method: 'POST', key: 'admin-secret', e: mailEnv, body: { action: 'approve' } }); assert.equal(approved.body.status, 'approved');
+  assert.deepEqual([mails.at(-1).to, mails.at(-1).subject], [['pat@x.org'], 'Your Monofilm account is approved'], 'the person is told when it is approved');
+  const ok = await call('/api/auth/login', { method: 'POST', body: { email: 'pat@x.org', password: PW } }); assert.equal(ok.status, 200);
+  const n = mails.length; await call('/api/accounts/' + id, { method: 'POST', key: 'admin-secret', e: mailEnv, body: { action: 'approve' } }); assert.equal(mails.length, n, 'approving twice does not email twice');
+}));
+
+test('a valid invite code is approved at once; a wrong one is refused; only the studio owner sees and decides on accounts', async () => {
+  const r = await upIp('quinn@x.org', '4.4.4.4'); assert.equal(r.status, 201); assert.ok(sess(r));
+  assert.equal((await upIp('rae@x.org', '4.4.4.5', { code: 'nope' })).status, 403);
+  assert.equal((await call('/api/accounts', { cookie: sess(r) })).status, 403, 'a member cannot list accounts');
+  assert.equal((await call('/api/accounts')).status, 401);
+  const wait = await ask('sol@x.org', {}, '4.4.4.6'); const id = (await call('/api/accounts', { key: 'admin-secret' })).body.find((u) => u.email === 'sol@x.org').id;
+  assert.equal((await call('/api/accounts/' + id, { method: 'POST', cookie: sess(r), body: { action: 'approve' } })).status, 403, 'nor approve one');
+  await call('/api/accounts/' + id, { method: 'POST', key: 'admin-secret', body: { action: 'reject' } });
+  const no = await call('/api/auth/login', { method: 'POST', body: { email: 'sol@x.org', password: PW } }); assert.equal(no.status, 403); assert.match(no.body.error, /not approved/);
+  assert.equal((await call('/api/accounts/' + id, { method: 'POST', key: 'admin-secret', body: { action: 'dance' } })).status, 400);
+});
+
+test('credits belong to the account: one production may use all of it, and all its productions together never pass it', async () => {
+  const r = await upIp('tess@x.org', '5.5.5.5'), ck = sess(r), id = (await call('/api/accounts', { key: 'admin-secret' })).body.find((u) => u.email === 'tess@x.org').id;
+  await call('/api/accounts/' + id, { method: 'POST', key: 'admin-secret', body: { action: 'credits', add: 25 } }); // 15 + 25 = 40
+  const a = (await call('/api/p', { method: 'POST', cookie: ck, body: { name: 'A' } })).body.id, b = (await call('/api/p', { method: 'POST', cookie: ck, body: { name: 'B' } })).body.id;
+  assert.equal((await call(`/api/p/${a}`, { cookie: ck })).body.budget, 40, 'the whole allowance, not a small slice');
+  const S = await import('../src/store.js'), act = { id: 'u:' + id, name: 'tess@x.org', kind: 'human', role: 'member' };
+  for (const pid of [a, b]) await S.propose(env.DB, act, pid, { ref: 'logline:main', data: { text: 'x' }, auto_approve: true });
+  await S.charge(env.DB, act, a, { ref: 'logline:main', tool: 't', credits: 30 });
+  await assert.rejects(S.charge(env.DB, act, b, { ref: 'logline:main', tool: 't', credits: 11 }), /over budget/, 'B has room on its own, but the account only has 10 left');
+  assert.equal(await S.charge(env.DB, act, b, { ref: 'logline:main', tool: 't', credits: 10 }), 10);
+  const g = await call(`/api/p/${a}/budget/grant`, { method: 'POST', key: 'admin-secret', body: { add: 5 } }); assert.equal(g.status, 200);
+  assert.equal(await S.charge(env.DB, act, a, { ref: 'logline:main', tool: 't', credits: 5 }), 5, 'credits the owner adds to a production go to the account');
 });

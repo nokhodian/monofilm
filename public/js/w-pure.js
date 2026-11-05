@@ -91,3 +91,10 @@ export function cleanSeconds(n, unit) {
   const s = Math.round(v * (unit === 'minutes' ? 60 : 1)); return s >= 1 && s <= 10800 ? s : null;
 }
 export const lengthLabel = (s) => (s % 60 === 0 && s >= 60 ? `${s / 60} min` : s > 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`);
+
+// An old studio address (#/credits, #/overview, #/cast ...) leads into the wizard; #/w and #/stage stay as they are. Returns the new hash, or null when none is needed.
+export function legacyHash(hash) {
+  const v = String(hash || '').replace(/^#\/?/, '').split('/')[0];
+  if (!v || v === 'w' || v === 'stage') return null;
+  return v === 'credits' || v === 'ledger' ? '#/w/credits' : '#/w';
+}

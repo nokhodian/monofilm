@@ -1,5 +1,5 @@
 // Pure helpers behind the wizard page: words for progress and reasons, the margin card's plan sentence, anchors.
-import { cleanAspect, cleanSeconds, lengthLabel, ALL_LANGS } from '../public/js/w-pure.js';
+import { cleanAspect, cleanSeconds, lengthLabel, ALL_LANGS, legacyHash } from '../public/js/w-pure.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CFG, kindFor, emptyDraft, planOf, anchorOf, readoutText, startReason, progressText, gateReason, nextMark } from '../public/js/w-pure.js';
@@ -32,4 +32,10 @@ test('free entry: shapes, lengths and the language list are checked', () => {
   for (const bad of ['', '0', '-3', 'abc', '200']) assert.equal(bad === '200' ? cleanSeconds(bad, 'minutes') : cleanSeconds(bad, 'seconds'), null, bad);
   assert.deepEqual([lengthLabel(45), lengthLabel(60), lengthLabel(90), lengthLabel(300)], ['45 s', '1 min', '1 min 30 s', '5 min']);
   assert.ok(ALL_LANGS.length > 70 && ALL_LANGS.includes('Persian') && ALL_LANGS.includes('Japanese') && new Set(ALL_LANGS).size === ALL_LANGS.length);
+});
+
+test('old studio addresses lead into the wizard', () => {
+  assert.equal(legacyHash('#/credits'), '#/w/credits'); assert.equal(legacyHash('#/ledger'), '#/w/credits');
+  for (const h of ['#/overview', '#/cast', '#/shots', '#/shot/abc', '#/feedback', '#/approvals', '#/tools', '#/cut/x', '#/staging']) assert.equal(legacyHash(h), '#/w', h);
+  for (const h of ['', '#', '#/', '#/w', '#/w/credits', '#/w/scenes/a/stage', '#/stage/the-gap']) assert.equal(legacyHash(h), null, h);
 });

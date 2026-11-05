@@ -25,10 +25,14 @@ CREATE INDEX IF NOT EXISTS comments_status ON comments (production, status);
 CREATE TABLE IF NOT EXISTS presence (project TEXT NOT NULL, who TEXT NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (project, who));
 
 -- Accounts: email and password. A password is stored only as a salted PBKDF2 hash; a session cookie is stored only as the hash of its token.
-CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, pw TEXT NOT NULL, created INTEGER NOT NULL);
+-- status: 'pending' until the person who runs the studio approves the sign-up, then 'approved' (or 'rejected'). credits: the allowance for the whole account, shared by all its productions.
+CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, pw TEXT NOT NULL, created INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'approved', credits REAL NOT NULL DEFAULT 15);
 CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, created INTEGER NOT NULL, expires INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id);
 -- Failed and successful sign-in tries, to slow down guessing.
 CREATE TABLE IF NOT EXISTS login_attempts (email TEXT NOT NULL, ip TEXT NOT NULL, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS attempts_email ON login_attempts (email, ts);
 CREATE INDEX IF NOT EXISTS attempts_ip ON login_attempts (ip, ts);
+
+-- Roll camera, run by the server (a cron tick every minute carries it on), so it keeps going when the page is closed. One row per production.
+CREATE TABLE IF NOT EXISTS autopilot (production TEXT PRIMARY KEY, status TEXT NOT NULL, actor TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, log TEXT NOT NULL DEFAULT '[]', err TEXT NOT NULL DEFAULT '', cur TEXT, left INTEGER NOT NULL DEFAULT 0, spent0 REAL NOT NULL DEFAULT 0, started INTEGER NOT NULL DEFAULT 0, finished INTEGER NOT NULL DEFAULT 0, lease INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL);

@@ -8,5 +8,9 @@
     { "binding": "DB", "database_name": "artistic-intelligence-studio", "database_id": "542c623e-82e6-4b7d-bd80-ec0708b30975" }
   ],
   // Media bucket. Create it once with: npx wrangler r2 bucket create monofilm-media (local dev simulates it).
-  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "monofilm-media" }]
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "monofilm-media" }],
+  // Roll camera runs on the server: this tick carries on any run that is still going (src/autopilot.js).
+  "triggers": { "crons": ["* * * * *"] },
+  // Who the emails to new accounts come from (the key itself is the secret RESEND_API_KEY; ADMIN_EMAIL, if set, is told when someone asks for access).
+  "vars": { "MAIL_FROM": "Monofilm <noreply@monoes.me>" }
 }

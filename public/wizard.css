@@ -445,3 +445,10 @@ body.wzmode .btn.pri{color:#fff}
 @media (prefers-reduced-motion:reduce){.wz *,.wz *::before,.wz *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 .wz .mk .own{display:inline-flex;gap:6px;align-items:center;margin-left:6px;vertical-align:middle}
 .wz .mk .own .f{padding:3px 8px;font-size:14px}
+
+/* Credits page */
+.wz .crnum{font-size:26px;margin-bottom:10px}.wz .crnum b{font-size:40px;font-weight:600}
+.wz .crbar{height:12px;border:1px solid var(--ink);border-radius:2px;background:var(--sheet);margin:6px 0 12px;overflow:hidden}.wz .crbar i{display:block;height:100%;background:var(--ink)}
+.wz .crtab{width:100%;border-collapse:collapse;font-size:15px}.wz .crtab td{padding:5px 4px;border-bottom:1px dotted var(--line2)}.wz .crtab td:last-child{text-align:right;font-family:var(--mono)}
+.wz .toc .lk.on{font-weight:700}
+.wz input[type=number]{border:1px solid var(--line2);border-radius:2px;background:var(--sheet);padding:6px 8px}

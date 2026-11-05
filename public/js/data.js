@@ -38,8 +38,6 @@ export const openCount = (ref) => threads(ref).filter((c) => c.status === 'open'
 export const mine = (a) => a.author === st.me.name;
 export const isNew = (a) => a.updated > d().seen.ts && !mine(a);
 const QUIET = ['attach_asset', 'budget_request', 'tool_failed']; // file attachments are plumbing, not news
-export const unseenEvents = () => d().events.filter((e) => e.id > d().seen.id && e.actor !== st.me.name && !QUIET.includes(e.action));
-export const awaiting = () => d().comments.filter((c) => c.status === 'addressed');
 
 // ---- a human's own edits: saved as their version, approved at once, and whatever was built on them goes stale ----
 export async function editArtifact(ref, fn, why = 'Edited in the studio') {

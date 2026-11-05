@@ -20,6 +20,9 @@ export const W = { step: 'start', scene: null, sub: 'brief', sel: [], routeKey: 
 const REG = {};
 export const wzActs = { ...fixActs };
 export function registerStep(key, def) { REG[key] = def; if (def.acts) Object.assign(wzActs, def.acts); }
+// A page that is not one of the seven steps (Credits): registerPage(key, { title, html(ctx), bind?(root), acts? }), reached at #/w/<key>. It sits in the same shell, with the contents column.
+const PAGES = {};
+export function registerPage(key, def) { PAGES[key] = def; if (def.acts) Object.assign(wzActs, def.acts); }
 export const rerender = () => document.dispatchEvent(new Event('mf-rerender'));
 // Other files may add a block to the contents column (Roll camera does): registerTocExtra(() => '<html>').
 const TOC_EXTRAS = []; export const registerTocExtra = (f) => { TOC_EXTRAS.push(f); };
@@ -30,6 +33,7 @@ export const hrefOf = (step, scene, sub) => `#/w/${[step, scene, sub].filter(Boo
 export const wgo = (step, scene, sub) => { location.hash = hrefOf(step, scene, sub); };
 function readRoute() {
   const p = location.hash.replace(/^#\/?/, '').split('/').map((x) => { try { return decodeURIComponent(x); } catch { return x; } });
+  if (PAGES[p[1]]) return { step: p[1], scene: null, sub: 'brief', page: true };
   let step = STEPS.some((s) => s.key === p[1]) ? p[1] : null;
   if (!step) step = get(REFS.reading) ? 'understand' : 'start'; // #/w alone: carry on where the person is
   const scene = step === 'scenes' && p[2] ? p[2] : null, sub = step === 'scenes' && scene ? (SUBS.some((u) => u[0] === p[3]) ? p[3] : 'brief') : 'brief';
@@ -155,7 +159,7 @@ function toc(ctx) {
   return `<nav class="toc" aria-label="Contents"><div class="wbrand">Monofilm<small>${esc([prod.name, fmt.seconds ? `${fmt.seconds} s` : '', fmt.aspect].filter(Boolean).join(' · '))}</small></div>
   <div class="tocl"><h6>The whole film</h6>${by('film')}<h6>Each scene</h6>${by('scene')}${scs}<h6>The finished film</h6>${by('finish')}</div>
   <div class="legend"><h6>Colour guide</h6><div class="lgs"><span><i class="k-canon sw"></i>Whole film</span><span><i class="k-brief sw"></i>Brief</span><span><i class="k-stage sw"></i>Stage</span><span><i class="k-pictures sw"></i>Pictures</span><span><i class="k-sound sw"></i>Sound</span><span><i class="k-pack sw"></i>Pack</span></div><div class="lg2"><span class="wstc review"><b>●</b>To review</span><span class="wstc ok"><b>✓</b>Approved</span><span class="wstc change"><b>✎</b>Needs a change</span></div><div class="sm mute" style="margin-top:6px">Red pencil is always the AI and your feedback.</div></div>
-  ${TOC_EXTRAS.map((f) => f()).join('')}<p class="sm" style="margin:16px 0 0"><a class="lk" href="#/overview">Advanced studio →</a></p></nav>`;
+  ${TOC_EXTRAS.map((f) => f()).join('')}<p class="sm" style="margin:16px 0 0"><a class="lk ${ctx.step === 'credits' ? 'on' : ''}" href="#/w/credits">Credits →</a>${st.me && st.me.role === 'admin' ? `<br><a class="lk ${ctx.step === 'accounts' ? 'on' : ''}" href="#/w/accounts">Accounts →</a>` : ''}</p></nav>`;
 }
 
 const SPRITE = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="fig" viewBox="0 0 60 80"><circle cx="30" cy="14" r="9"/><path d="M14 78 L18 34 Q30 26 42 34 L46 78 Z"/></symbol><symbol id="arch" viewBox="0 0 60 80"><path d="M4 78 V34 Q4 8 30 4 Q56 8 56 34 V78 H44 V36 Q44 20 30 17 Q16 20 16 36 V78 Z"/></symbol><symbol id="beam" viewBox="0 0 60 80"><path d="M2 30 L58 22 L58 34 L2 42 Z M26 40 H34 V78 H26 Z"/></symbol><symbol id="crowd" viewBox="0 0 60 80"><circle cx="14" cy="30" r="6"/><circle cx="30" cy="24" r="7"/><circle cx="46" cy="30" r="6"/><path d="M4 78 L8 42 H20 L24 78 Z M22 78 L25 36 H35 L38 78 Z M36 78 L40 42 H52 L56 78 Z"/></symbol><symbol id="house" viewBox="0 0 60 80"><path d="M4 40 L30 14 L56 40 V78 H4 Z M24 78 V54 H36 V78 Z"/></symbol><symbol id="candle" viewBox="0 0 60 80"><path d="M26 30 H34 V76 H26 Z"/><path d="M30 6 Q38 18 30 28 Q22 18 30 6 Z"/></symbol></svg>'; // picture placeholders: fig arch beam crowd house candle
@@ -167,6 +171,7 @@ export async function vWizard() {
   W.fresh = key !== W.routeKey; if (W.fresh) { W.sel = []; W.pending = null; } W.routeKey = key; Object.assign(W, r);
   W.sel = W.sel.filter((s) => get(s.ref)); W.keepY = W.fresh ? 0 : scrollY;
   const ctx = ctxOf(), def = REG[r.step];
+  if (r.page) { document.title = `Monofilm · ${PAGES[r.step].title}`; return `<div class="wz">${SPRITE}<div class="app">${toc(ctx)}<div class="wmain k-canon">${await PAGES[r.step].html(ctx)}</div></div></div>`; }
   const body = def ? await def.html(ctx) : placeholder(ctx);
   const stp = STEPS.find((s) => s.key === r.step);
   document.title = `Monofilm · ${stp.label}`;
@@ -174,7 +179,7 @@ export async function vWizard() {
 }
 export function bindWizard(root) {
   if (!root) return;
-  const ctx = ctxOf(), def = REG[W.step];
+  const ctx = ctxOf(), def = REG[W.step] || PAGES[W.step];
   bindFix(root);
   if (def && def.bind) def.bind(root, ctx);
   markSel(); scrollTo(0, W.keepY);

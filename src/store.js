@@ -221,8 +221,8 @@ export async function budgetStatus(db, pid) {
   return { budget: pr.budget, shot_cap: pr.shot_cap, spent: tot.s, remaining: pr.budget - tot.s, by_scope: Object.fromEntries(by.results.map((x) => [x.scope, x.s])) };
 }
 export async function grantBudget(db, actor, pid, { add = 0, shot_cap }) {
-  needHuman(actor, 'budget'); await getProduction(db, pid);
-  const stmts = [p(db, 'UPDATE productions SET budget=budget+?, updated=? WHERE id=?', num(add, 'add'), ts(), pid), eventStmt(db, pid, null, null, 'budget_grant', actor, `+${add}${shot_cap !== undefined ? `, shot_cap ${shot_cap}` : ''}`)];
+  needHuman(actor, 'budget'); const pr = await getProduction(db, pid);
+  const stmts = [p(db, 'UPDATE productions SET budget=budget+?, updated=? WHERE id=?', num(add, 'add'), ts(), pid), ...(String(pr.owner || '').startsWith('u:') && num(add, 'add') > 0 ? [p(db, 'UPDATE users SET credits=credits+? WHERE id=?', num(add, 'add'), pr.owner.slice(2))] : []), eventStmt(db, pid, null, null, 'budget_grant', actor, `+${add}${shot_cap !== undefined ? `, shot_cap ${shot_cap}` : ''}`)];
   if (shot_cap !== undefined) stmts.push(p(db, 'UPDATE productions SET shot_cap=? WHERE id=?', num(shot_cap, 'shot_cap'), pid));
   await db.batch(stmts);
   return budgetStatus(db, pid);
@@ -236,14 +236,15 @@ async function scopeOf(db, pid, ref) {
   const r = await mustGet(db, pid, ref);
   return r.kind === 'shot' ? ref : (r.parent && parseRef(r.parent)?.kind === 'shot' ? r.parent : ref);
 }
-// Atomic: the row is only inserted if it fits the production budget and the per-shot cap.
+// Atomic: the row is only inserted if it fits the production budget, the per-shot cap and, for a signed-up person, the allowance of the whole account.
 export async function charge(db, actor, pid, { ref, tool, credits }) {
   if (!credits) return 0;
   const scope = await scopeOf(db, pid, ref), now = ts();
   const r = await p(db, `INSERT INTO ledger (production,ref,scope,tool,credits,actor,ts) SELECT ?,?,?,?,?,?,? WHERE
     (SELECT COALESCE(SUM(credits),0) FROM ledger WHERE production=?)+? <= (SELECT budget FROM productions WHERE id=?)
-    AND ((SELECT shot_cap FROM productions WHERE id=?)=0 OR (SELECT COALESCE(SUM(credits),0) FROM ledger WHERE production=? AND scope=?)+? <= (SELECT shot_cap FROM productions WHERE id=?))`,
-    pid, ref, scope, tool, credits, actor.name, now, pid, credits, pid, pid, pid, scope, credits, pid).run();
+    AND ((SELECT shot_cap FROM productions WHERE id=?)=0 OR (SELECT COALESCE(SUM(credits),0) FROM ledger WHERE production=? AND scope=?)+? <= (SELECT shot_cap FROM productions WHERE id=?))
+    AND (COALESCE((SELECT owner FROM productions WHERE id=?),'') NOT LIKE 'u:%' OR (SELECT COALESCE(SUM(l.credits),0) FROM ledger l JOIN productions q ON q.id=l.production WHERE q.owner=(SELECT owner FROM productions WHERE id=?))+? <= COALESCE((SELECT u.credits FROM users u WHERE 'u:'||u.id=(SELECT owner FROM productions WHERE id=?)), 1e18))`,
+    pid, ref, scope, tool, credits, actor.name, now, pid, credits, pid, pid, pid, scope, credits, pid, pid, pid, credits, pid).run();
   if (!r.meta.changes) throw new HttpError(402, `over budget for ${scope}: ask a human via request_budget`);
   return credits;
 }

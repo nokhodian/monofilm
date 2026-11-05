@@ -68,16 +68,9 @@ const selObj = () => { const s = S.sel; if (!s) return null; if (s.type === 'cam
 const dirty = () => { S.dirty = true; $('#stgsave') && ($('#stgsave').disabled = false); };
 
 // ---------- screens ----------
-export function vStaging() {
-  const scenes = ofKind('scene').filter((s) => s.data.heading), stages = Object.fromEntries(ofKind('stage').map((s) => [s.parent, s]));
-  return `<h1>Staging</h1><p class="mute">Place each scene in 3D before anything is generated: where the characters stand, what is in the set, where each camera is. The studio turns it into files that a generator can follow.</p>
-  <div class="sgrid">${scenes.map((sc) => { const stg = stages[sc.ref], shots = ofKind('shot').filter((x) => x.parent === sc.ref).length;
-    return `<a class="scard" href="#/stage/${esc(keyOf(sc.ref))}"><div class="sb"><div class="row"><b>${esc(sc.data.heading)}</b>${stg ? chip(stg) : tag('no stage yet', 'warn')}</div><div class="mute">${shots} shot${shots === 1 ? '' : 's'}${stg ? ` · ${(stg.data.characters || []).length} characters · ${(stg.data.set || []).length} objects · ${Object.keys(stg.data.cameras || {}).length} cameras` : ''}</div><p class="mute small">${stg ? `Version ${stg.version} by ${esc(stg.author)}${(stg.assets || []).length ? ` · ${(stg.assets || []).length} exported files` : ''}` : 'Open it to start a stage from the cast and the shots.'}</p></div></a>`; }).join('') || '<div class="empty">No scenes yet.</div>'}</div>`;
-}
-
 export function vStage(key) {
   const sceneRef = `scene:${key}`, scene = get(sceneRef);
-  if (!scene) return '<div class="empty">No such scene. <a href="#/staging">Back to staging</a></div>';
+  if (!scene) return '<div class="empty">No such scene. <a href="#/w/scenes">Back to the scenes</a></div>';
   const ref = `stage:${key}`, existing = get(ref), ed = isHuman();
   if (S && S.ref === ref && !S.dirty && existing) S.stage = JSON.parse(JSON.stringify(existing.data)); // pick up what the AI changed while you were away
   if (!S || S.ref !== ref) { S = { sceneRef, ref, stage: JSON.parse(JSON.stringify(existing ? existing.data : starter(sceneRef))), sel: null, view: { mode: 'editor', az: 30, el: 18, dist: 6.5, cam: 'A' }, dirty: !existing, op: 0, plate: null, shot: null }; S.shot = Object.keys(S.stage.shots)[0] || null; if (S.stage.plate && S.stage.plate.asset) loadPlate(S.stage.plate); }

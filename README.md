@@ -42,7 +42,7 @@ Steps 1 to 5 are decided once for the whole film. Step 6 repeats for every scene
 
 ### Or press **Roll camera**
 
-Want to see the whole thing at once? **Roll camera** lets the AI do every step and approve each one for you: read the story, make faces and places, write the scenes, set up every stage and make the pictures. It works one move at a time and looks at the real state before each move, so it can pick up where it left off. A box in the top bar shows what it is doing, and pressing it jumps to the page being filled in, so you can look around while it works. When it finishes, one click downloads the whole project. Every approval is recorded as "Approved by Roll camera", and everything can still be changed afterwards.
+Want to see the whole thing at once? **Roll camera** lets the AI do every step and approve each one for you: read the story, make faces and places, write the scenes, set up every stage and make the pictures. It works one move at a time and looks at the real state before each move, so it can pick up where it left off. It runs on the server, so it keeps going when you close the page. A box in the top bar shows what it is doing, and pressing it jumps to the page being filled in, so you can look around while it works. When it finishes, one click downloads the whole project. Every approval is recorded as "Approved by Roll camera", and everything can still be changed afterwards.
 
 ### Click anything the AI made
 
@@ -105,8 +105,8 @@ flowchart LR
 - **Cloudflare Workers + D1 + R2.** Vanilla JavaScript in the browser, no framework and no build step.
 - **An MCP server** at `/mcp`, so any AI agent can read the human's feedback (`next_work`, `get_feedback`), revise, and answer. The wizard and the agent work on the same artifacts.
 - **Connecting a video generation model.** Make an AI actor (`POST /api/actors` with `{"name":"videobot","kind":"ai","role":"agent"}`; the token is shown once), then point any MCP client at `https://<your-worker>/mcp` with `Authorization: Bearer <token>`. The model calls `list_clips`, then `get_clip` (prompt, negative prompt, length, shape, start and end pictures, references, stage controls, each with a url it can fetch with the same token; `get_media` returns a picture inline), makes the clip, and calls `submit_take` with a `url`, `data_base64` or `uri` (25 MB max). The take waits for the human on the Pack page; the model can never approve its own work.
-- **Accounts.** Email and password (salted PBKDF2), sessions in HttpOnly cookies, a header check on every change, guess limits, and an invite code so a public page cannot spend the studio's credits. Each account sees only its own productions and has a small fixed budget it cannot raise.
-- **71 tests** (`npm test`, no network and no key needed): the state machine, accounts, the wizard actions with Meta stood in, the export pack (including a real `unzip -t`), and the stage maths.
+- **Accounts.** Email and password (salted PBKDF2), sessions in HttpOnly cookies, a header check on every change and guess limits. A new sign-up waits until the person who runs the studio approves it on the Accounts page, and is emailed when it is (an invite code skips the wait). Each account sees only its own productions and has one allowance of credits for all of them, which only the studio owner can raise.
+- **78 tests** (`npm test`, no network and no key needed): the state machine, accounts, the wizard actions with Meta stood in, the export pack (including a real `unzip -t`), and the stage maths.
 
 ## Run it
 
@@ -126,7 +126,7 @@ node scripts/e2e-seed.mjs ready          # a production with the "Ask First" fil
 scripts/e2e-down.sh /tmp/monofilm-demo
 ```
 
-Deploying: `npx wrangler secret put MODEL_API_KEY`, `npx wrangler secret put ADMIN_KEY`, and `npx wrangler secret put SIGNUP_CODE` to let people sign up with an invite. On an existing database run `migrations/0001_accounts.sql` once.
+Deploying: `npx wrangler secret put MODEL_API_KEY` and `npx wrangler secret put ADMIN_KEY`. Optional: `SIGNUP_CODE` (an invite code that skips approval), and `RESEND_API_KEY` with `MAIL_FROM` in `wrangler.jsonc` so approvals are emailed (`ADMIN_EMAIL` is told when someone asks for access). On an existing database run `migrations/0001_accounts.sql` and `migrations/0002_approval_credits_autopilot.sql` once. Roll camera runs on a cron tick every minute (`triggers.crons`).
 
 ## What is built, and what is not
 
