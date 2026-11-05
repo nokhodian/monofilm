@@ -12,4 +12,5 @@ import './w-pack.js';    // Pack
 import './w-ship.js';    // 7 Ship
 import './w-auto.js';    // Roll camera: the AI does every step and approves it
 import './w-credits.js'; // Credits (not a step): #/w/credits
+import './w-connect.js'; // Connect an AI agent (not a step): #/w/connect
 import './w-accounts.js'; // Accounts (not a step, for the studio owner): #/w/accounts

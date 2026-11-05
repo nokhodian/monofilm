@@ -452,3 +452,7 @@ body.wzmode .btn.pri{color:#fff}
 .wz .crtab{width:100%;border-collapse:collapse;font-size:15px}.wz .crtab td{padding:5px 4px;border-bottom:1px dotted var(--line2)}.wz .crtab td:last-child{text-align:right;font-family:var(--mono)}
 .wz .toc .lk.on{font-weight:700}
 .wz input[type=number]{border:1px solid var(--line2);border-radius:2px;background:var(--sheet);padding:6px 8px}
+
+/* Connect an AI agent */
+.wz .cncode{position:relative;margin:4px 0 10px}.wz .cncode pre{margin:0;padding:10px 70px 10px 12px;background:var(--sheet2);border:1px solid var(--line2);border-radius:2px;font:13px/1.45 var(--mono);white-space:pre-wrap;word-break:break-all}
+.wz .cncode .bt{position:absolute;top:6px;right:6px}
