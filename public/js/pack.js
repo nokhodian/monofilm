@@ -1,6 +1,6 @@
 // The export pack: what an outside video generator needs, as a folder or a .zip. Pure functions, so the page and the tests use the same code.
 // Meta has no video generator, so nothing here generates video. It writes the prompt, the anchor pictures, the stage controls and a manifest for whichever generator the person uses.
-import { composeClip, clipPlan, NOTE_KEYS, slug, keyOf, MAX_CLIP } from './wizard-model.js';
+import { composeClip, clipPlan, linesOfClip, NOTE_KEYS, slug, keyOf, MAX_CLIP } from './wizard-model.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 const ext = (uri, mime) => (/\.(png|jpe?g|webp|gif|mp4|webm|wav|mp3|json)$/i.exec(uri || '') || [, ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4' })[mime] || 'png'])[1].toLowerCase();
@@ -10,7 +10,7 @@ export const sceneDir = (s) => `scene-${pad(s.data.n)}-${slug(s.data.name)}`;
 const stamp = (t) => { const ms = Math.round(t * 1000), h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, s = Math.floor(ms / 1000) % 60; return `${pad(h)}:${pad(m)}:${pad(s)},${String(ms % 1000).padStart(3, '0')}`; };
 export function srt(lines) {
   let t = 0, i = 0, out = [];
-  for (const l of lines || []) { if (!(l.text || '').trim()) continue; const d = Math.max(1, Number(l.sec) || 2); out.push(`${++i}\n${stamp(t)} --> ${stamp(t + d)}\n${l.who ? l.who + ': ' : ''}${l.text}${l.en ? `\n(${l.en})` : ''}\n`); t += d; }
+  for (const l of lines || []) { if (!(l.text || '').trim()) continue; const d = Math.max(1, Number(l.sec) || 2); if (typeof l.at === 'number') t = l.at; out.push(`${++i}\n${stamp(t)} --> ${stamp(t + d)}\n${l.who ? l.who + ': ' : ''}${l.text}${l.en ? `\n(${l.en})` : ''}\n`); t += d; }
   return out.join('\n');
 }
 
@@ -33,6 +33,7 @@ export function sceneEntries(film, scene, { target = 'both', max = MAX_CLIP, roo
   clips.forEach((c, i) => {
     const n = i + 1, last = n === clips.length, c1 = `clip-${pad(n)}`, p = composeClip(scene, film, n), files = [];
     E(`${c1}/prompt.txt`, p.prompt); E(`${c1}/negative.txt`, p.negative); files.push('prompt.txt', 'negative.txt');
+    const cl = linesOfClip(d, n); if (cl.length) { E(`${c1}/transcript.json`, JSON.stringify(cl.map(({ who, text, en, at, sec }) => ({ who, text, en, at, sec })), null, 2)); E(`${c1}/transcript.srt`, srt(cl.map((l) => ({ ...l, sec: l.sec })))); files.push('transcript.json', 'transcript.srt'); } // the lines spoken in this clip, timed from its own start
     let startFrom = null;
     if (w.start) {
       if (n === 1 && d.start && d.start.mode !== 'skip' && scene.frames[`${n}-start`]) { U(`${c1}/start.${ext(scene.frames[`${n}-start`])}`, scene.frames[`${n}-start`]); files.push('start'); startFrom = 'start picture'; }
@@ -42,7 +43,7 @@ export function sceneEntries(film, scene, { target = 'both', max = MAX_CLIP, roo
     if (w.end && last && d.end && d.end.mode !== 'skip' && scene.frames[`${n}-end`]) { U(`${c1}/end.${ext(scene.frames[`${n}-end`])}`, scene.frames[`${n}-end`]); files.push('end'); }
     if (w.stage) for (const s of (scene.stage || []).filter((x) => !x.shot || x.shot.endsWith(`-c${n}`) || n === 1)) { U(`${c1}/stage/${s.role}.${ext(s.uri)}`, s.uri); files.push(`stage/${s.role}`); }
     if (w.refs) for (const a of scene.anchors || []) { U(`${c1}/refs/${slug(a.id)}.${ext(a.uri)}`, a.uri); refs.push(a.id); files.push(`refs/${slug(a.id)}`); }
-    E(`${c1}/clip.json`, JSON.stringify({ film: film.name, scene: d.n, scene_name: d.name, clip: n, of: clips.length, seconds: p.seconds, aspect: (film.look && film.look.aspect) || '9:16', fps: (film.look && film.look.fps) || 24, target, begins: n === 1 ? 'start' : c.join === 'cut' ? 'cut' : 'continues', start_from: startFrom, ends_with: last && w.end && d.end && d.end.mode !== 'skip' ? 'end picture' : null, files, depends_on: [scene.ref, 'canon.style:look', ...(d.who || [])] }, null, 2));
+    E(`${c1}/clip.json`, JSON.stringify({ film: film.name, scene: d.n, scene_name: d.name, clip: n, of: clips.length, seconds: p.seconds, aspect: (film.look && film.look.aspect) || '9:16', fps: (film.look && film.look.fps) || 24, target, begins: n === 1 ? 'start' : c.join === 'cut' ? 'cut' : 'continues', start_from: startFrom, ends_with: last && w.end && d.end && d.end.mode !== 'skip' ? 'end picture' : null, timing: p.timing, files, depends_on: [scene.ref, 'canon.style:look', ...(d.who || [])] }, null, 2));
   });
   return out;
 }
@@ -94,3 +95,12 @@ export function hashOf(rgba, w, h) { // rgba: Uint8ClampedArray from a canvas
   return g.map((v) => (v >= mean ? 1 : 0));
 }
 export const similarity = (a, b) => Math.round(100 * (1 - a.reduce((d, v, i) => d + (v !== b[i] ? 1 : 0), 0) / a.length));
+
+// How long a returned clip stands still at the very end. samples: small greyscale pictures [{ t, g: number[] }] taken going back from the last frame (samples[0]). A generator that
+// reaches the end picture early holds it; the hold is how far back the picture still matches the last one. Under 0.4 s is not worth mentioning.
+export function tailHold(samples, duration, tol = 2.5) {
+  if (!samples || samples.length < 2) return 0;
+  const last = samples[0].g; let hold = 0;
+  for (const s of samples.slice(1)) { const diff = s.g.reduce((a, v, i) => a + Math.abs(v - last[i]), 0) / last.length; if (diff > tol) break; hold = Math.max(hold, duration - s.t); }
+  return hold >= 0.4 ? Math.round(hold * 10) / 10 : 0;
+}

@@ -5,9 +5,10 @@
 // Edits are applied to the page's snapshot at once and saved a moment later with ownEdit (like w-start.js). Typing never re-renders the page, so the cursor stays; only part B is repainted in place.
 import { $, esc, api, P, toast } from './core.js';
 import { get } from './data.js';
-import { R, REFS, SUBS, NOTE_KEYS, ANCHOR_MODES, JOINS, MAX_CLIP, FORMAT_DEFAULT, sceneBounds, clampScene, clipPlan, emptyScene, sceneReadiness, keyOf, slug } from './wizard-model.js';
+import { R, REFS, SUBS, NOTE_KEYS, ANCHOR_MODES, JOINS, MAX_CLIP, FORMAT_DEFAULT, sceneBounds, clampScene, clipPlan, clipSpans, linesOfClip, cuesOfClip, emptyScene, sceneReadiness, keyOf, slug } from './wizard-model.js';
 import { gateReason } from './w-pure.js';
-import { W, spine, itemEl, chipOf, statusOf, pill, nothing, ownEdit, sceneArts, rerender, hrefOf } from './w-core.js';
+import { W, spine, itemEl, chipOf, statusOf, pill, nothing, ownEdit, sceneArts, rerender, hrefOf, hrefIn } from './w-core.js';
+import { clipBar } from './w-clips.js';
 import { registerFix, markSel, placeMargin } from './w-fix.js';
 import { registerSub } from './w-scenes.js';
 
@@ -51,7 +52,7 @@ const link = (label, href) => `<a class="lk" href="${href}">${label}</a>`;
 const bars = (r) => `<span class="wzb-bars" role="img" aria-label="${SUBS.map((u, i) => `${u[1]} ${['not started', 'in progress', 'ready'][r[i]]}`).join(', ')}">${SUBS.map((u, i) => `<span class="wzb-bar k-${u[0]} s${r[i]}"><i></i>${u[1]}</span>`).join('')}</span>`;
 function tabs(ctx) {
   const r = sceneReadiness(scn(ctx), rc);
-  return `<nav class="ptabs" aria-label="Pages of this scene">${SUBS.map((u, i) => `<button class="k-${u[0]} ${u[0] === ctx.sub ? 'on' : ''}" data-go="${hrefOf('scenes', ctx.scene, u[0])}" ${u[0] === ctx.sub ? 'aria-current="page"' : ''}><small>${i + 1}</small>${u[1]}${r[i] === 2 ? ' <span class="tick" aria-label="ready">✓</span>' : ''}</button>`).join('')}</nav>`;
+  return `<nav class="ptabs" aria-label="Pages of this scene">${SUBS.map((u, i) => `<button class="k-${u[0]} ${u[0] === ctx.sub ? 'on' : ''}" data-go="${hrefIn(ctx, u[0])}" ${u[0] === ctx.sub ? 'aria-current="page"' : ''}><small>${i + 1}</small>${u[1]}${r[i] === 2 ? ' <span class="tick" aria-label="ready">✓</span>' : ''}</button>`).join('')}</nav>`;
 }
 const field = (key, v, o = {}) => `<input class="f ${o.cls || ''}" data-wbf="${key}" value="${esc(v)}" ${o.type ? `type="${o.type}" min="${o.min ?? 0}" ${o.max ? `max="${o.max}"` : ''} ${o.step ? `step="${o.step}"` : ''}` : ''} aria-label="${esc(o.label || '')}" placeholder="${esc(o.ph || '')}">`;
 
@@ -92,7 +93,7 @@ const peopleOf = (d) => (d.who || []).map((r) => ({ ref: r, name: nameOf(r) })).
 const A_STEP = { chip: (label, href) => `<a class="ch lk" href="${href}">${label}</a>` };
 function sceneHead(ctx, a) {
   const d = a.data, ppl = peopleOf(d), look = (get(REFS.look) || {}).data || {}, place = d.place ? get(d.place) : null, faces = ppl.filter((p) => ((get(p.ref) || {}).data || {}).anchor).length;
-  return `${tabs(ctx)}
+  return `${tabs(ctx)}${clipBar(ctx)}
   <div class="wzb-head"><div class="row"><b class="mono">Scene ${d.n}</b>${d.tag ? pill(d.tag) : ''}<span class="mono">${d.seconds} s</span><span class="mute">${esc(d.time && d.time !== 'none' ? cap(d.time) : 'No time of day')}</span></div>
   <div class="inh"><span class="mute sm">Where and who</span>${place ? A_STEP.chip(`${esc(place.data.name)} · change in step 5`, hrefOf('places')) : `<span class="ch">No place chosen</span> ${A_STEP.chip('Choose in step 5', hrefOf('places'))}`}${ppl.length ? ppl.map((p) => A_STEP.chip(`${esc(p.name)} · change in step 4`, hrefOf('people'))).join('') : '<span class="ch">Nobody on screen</span>'}</div>
   <div class="inh"><span class="mute sm">Inherited from the film</span>${A_STEP.chip(`Look: ${esc(look.look || look.base || look.name || 'the film look')}`, hrefOf('look'))}${A_STEP.chip(`People: ${ppl.length ? `${faces} of ${ppl.length} with a face` : 'none here'}`, hrefOf('people'))}${A_STEP.chip(`Place plate: ${place ? ((place.assets || []).length || (place.data || {}).anchor ? 'made' : 'not made yet') : 'no place'}`, hrefOf('places'))}</div></div>`;
@@ -145,26 +146,26 @@ function htmlBrief(ctx) {
 
 // ---------- 'sound' ----------
 const LEVELS = [['low', 'Quiet'], ['mid', 'Normal'], ['high', 'Loud']];
-function soundA(a) {
-  const d = a.data, cues = d.cues || [], f = fmtOf(), caps = (f.captions || []).length ? f.captions.join(', ') : 'none', snd = ((d.notes || {}).sound || '').trim();
+function soundA(a, clip = 1) {
+  const d = a.data, multi = clipSpans(d).length > 1, span = clipSpans(d)[clip - 1] || { from: 0, to: d.seconds }, cues = multi ? cuesOfClip(d, clip) : d.cues || [], f = fmtOf(), caps = (f.captions || []).length ? f.captions.join(', ') : 'none', snd = ((d.notes || {}).sound || '').trim();
   return `<div class="wzb-honest"><b>Good to know.</b> Meta has no voice or sound generator. Your lines and sounds go into the pack as text and as the transcript, not as audio. Take them to any voice or sound maker you like.</div>
-  <span class="lbl">Sounds and music for this scene</span>
-  <div class="wzb-lines">${cues.length ? `<div class="wzb-cu wzb-lh" aria-hidden="true"><span>Sound</span><span>At (s)</span><span>Level</span><span></span></div>` : '<p class="nothing">No sounds yet. Add one, for example “wind” or “low music”.</p>'}${cues.map((c) => `<div class="wzb-cu">${field(`c:${c.id}:name`, c.name, { label: 'Sound or music', ph: 'What it is' })}${field(`c:${c.id}:at`, c.at, { type: 'number', min: 0, step: 0.5, label: 'Starts at (seconds)', cls: 'wzb-num' })}<select class="f" data-wbf="c:${c.id}:level" aria-label="Level">${LEVELS.map((l) => `<option value="${l[0]}" ${c.level === l[0] ? 'selected' : ''}>${l[1]}</option>`).join('')}</select><button class="bt sm" data-act="wb-crm" data-id="${esc(c.id)}" aria-label="Remove this sound">×</button></div>`).join('')}</div>
+  <span class="lbl">Sounds and music for ${multi ? `clip ${clip} (${span.from}–${span.to} s of the scene)` : 'this scene'}</span>
+  <div class="wzb-lines">${cues.length ? `<div class="wzb-cu wzb-lh" aria-hidden="true"><span>Sound</span><span>At (s)</span><span>Level</span><span></span></div>` : `<p class="nothing">No sounds ${multi ? 'in this clip' : 'yet'}. Add one, for example “wind” or “low music”.</p>`}${cues.map((c) => `<div class="wzb-cu">${field(`c:${c.id}:name`, c.name, { label: 'Sound or music', ph: 'What it is' })}${field(`c:${c.id}:at`, c.at, { type: 'number', min: 0, step: 0.5, label: 'Starts at (seconds of the scene)', cls: 'wzb-num' })}<select class="f" data-wbf="c:${c.id}:level" aria-label="Level">${LEVELS.map((l) => `<option value="${l[0]}" ${c.level === l[0] ? 'selected' : ''}>${l[1]}</option>`).join('')}</select><button class="bt sm" data-act="wb-crm" data-id="${esc(c.id)}" aria-label="Remove this sound">×</button></div>`).join('')}</div>
   <div class="row" style="margin-top:6px"><button class="bt sm" data-act="wb-cadd">+ Sound</button><span class="mute sm" id="wzb-saved" aria-live="polite"></span></div>
   <span class="lbl">Set elsewhere</span>
   <div class="wzb-ro"><div><span class="wk">Sound in the picture</span><div class="sm">${snd ? esc(snd) : '<i class="mute">Not written yet.</i>'}</div>${link('Change in Brief', hrefOf('scenes', keyOf(a.ref), 'brief'))}</div>
   <div><span class="wk">Captions</span><div class="sm">${esc(caps)}</div>${link('Change in Start', hrefOf('start'))}</div></div>`;
 }
-function soundB(a) {
-  const d = a.data, ls = (d.transcript || []).filter((l) => l.text), cues = d.cues || [];
-  return `<div class="g2 wzb-snd"><div><span class="lbl" style="margin-top:0">Lines in this scene · click one</span>${ls.length ? ls.map((l) => itemEl(a.ref, `<div class="ri"><div class="wzb-dl"><b class="mono">${esc(l.who || 'Narrator')}</b><span class="mono mute sm">${l.sec ? l.sec + ' s' : ''}</span></div><div style="font-size:17px">${esc(l.text)}</div><div class="sm mute">${esc(l.en)}</div></div>`, { part: `line:${l.id}`, kind: 'line', cls: 'rowitem hc2', name: `${l.who || 'Narrator'}: ${String(l.text).slice(0, 40)}` })).join('') : `<div class="sm mute">No speech in this scene. ${link('Add lines in Brief', hrefOf('scenes', keyOf(a.ref), 'brief'))}</div>`}
+function soundB(a, clip = 1) {
+  const d = a.data, multi = clipSpans(d).length > 1, ls = multi ? linesOfClip(d, clip) : (d.transcript || []).filter((l) => l.text), cues = multi ? cuesOfClip(d, clip) : d.cues || [];
+  return `<div class="g2 wzb-snd"><div><span class="lbl" style="margin-top:0">Lines in ${multi ? `clip ${clip}` : 'this scene'} · click one</span>${ls.length ? ls.map((l) => itemEl(a.ref, `<div class="ri"><div class="wzb-dl"><b class="mono">${esc(l.who || 'Narrator')}</b><span class="mono mute sm">${multi ? `at ${l.at} s` : ''}${l.sec ? `${multi ? ' · ' : ''}${l.sec} s` : ''}</span></div><div style="font-size:17px">${esc(l.text)}</div><div class="sm mute">${esc(l.en)}</div></div>`, { part: `line:${l.id}`, kind: 'line', cls: 'rowitem hc2', name: `${l.who || 'Narrator'}: ${String(l.text).slice(0, 40)}` })).join('') : `<div class="sm mute">No speech in ${multi ? 'this clip' : 'this scene'}. ${link('Add lines in Brief', hrefOf('scenes', keyOf(a.ref), 'brief'))}</div>`}
   <p class="sm mute" style="margin:8px 0 0">Click a line to say “too fast”, “mispronounced” and so on. The speed and energy sliders are only a note: the voice maker you use reads them.</p></div>
   <div><span class="lbl" style="margin-top:0">Sounds and music · click one</span>${cues.length ? cues.map((c) => itemEl(a.ref, `<div class="ri"><b>${esc(c.name || 'Sound')}</b><div class="sm mute">from ${c.at || 0} s · ${(LEVELS.find((l) => l[0] === c.level) || LEVELS[1])[1].toLowerCase()}</div></div>`, { part: `cue:${c.id}`, kind: 'cue', cls: 'rowitem hc2', name: c.name || 'Sound' })).join('') : '<div class="sm mute">No sounds added.</div>'}</div></div>`;
 }
 function htmlSound(ctx) {
   const a = scn(ctx); if (!a) return htmlList(ctx);
-  return spine(ctx, { head: sceneHead(ctx, a), title: `Scene ${a.data.n} · ${a.data.name}`, A: soundA(a), B: soundB(a), items: [], act: 'B',
-    ai: 'Here are the lines and sounds for this scene. Click one to leave a note on it.',
+  return spine(ctx, { head: sceneHead(ctx, a), title: `Scene ${a.data.n} · ${a.data.name}`, A: soundA(a, ctx.clip), B: soundB(a, ctx.clip), items: [], act: 'B',
+    ai: clipSpans(a.data).length > 1 ? `Here are the lines and sounds for clip ${ctx.clip}. Choose another clip above to see its own. Click one to leave a note on it.` : 'Here are the lines and sounds for this scene. Click one to leave a note on it.',
     gate: { ready: true, reason: `The scene itself is approved in Brief (${statusOf(a.ref) === 'ok' ? 'it is' : 'not yet'}). Nothing to approve here, so you can go on.` } });
 }
 
@@ -173,7 +174,7 @@ function liveB(root) {
   const ctx = { scene: W.scene, sub: (W.scene ? W.sub : 'list') }, a = scn(ctx), pb = $('.pB .pb', root);
   const keep = document.activeElement;
   if (!pb) return;
-  if (ctx.scene && a) pb.innerHTML = (W.scene ? W.sub : 'list') === 'sound' ? soundB(a) : briefB(a);
+  if (ctx.scene && a) pb.innerHTML = (W.scene ? W.sub : 'list') === 'sound' ? soundB(a, W.clip) : briefB(a);
   else pb.innerHTML = listB();
   if (keep && keep.focus && document.contains(keep)) keep.focus();
   markSel(); placeMargin();
@@ -213,7 +214,7 @@ const acts = {
   },
   'wb-ladd'(el) { const r = scn({ scene: W.scene }).ref; return act(r, (d) => { d.transcript = d.transcript || []; d.transcript.push({ id: nextId(d.transcript, 'l'), who: el.dataset.who || '', text: '', en: '', sec: 0 }); return d; }); },
   'wb-lrm'(el) { return act(scn({ scene: W.scene }).ref, (d) => { d.transcript = (d.transcript || []).filter((l) => l.id !== el.dataset.id); return d; }); },
-  'wb-cadd'() { return act(scn({ scene: W.scene }).ref, (d) => { d.cues = d.cues || []; d.cues.push({ id: nextId(d.cues, 'c'), name: '', at: 0, level: 'mid' }); return d; }); },
+  'wb-cadd'() { return act(scn({ scene: W.scene }).ref, (d) => { d.cues = d.cues || []; d.cues.push({ id: nextId(d.cues, 'c'), name: '', at: (clipSpans(d)[W.clip - 1] || { from: 0 }).from, level: 'mid' }); return d; }); },
   'wb-crm'(el) { return act(scn({ scene: W.scene }).ref, (d) => { d.cues = (d.cues || []).filter((c) => c.id !== el.dataset.id); return d; }); },
   'wb-anchor'(el) { return act(scn({ scene: W.scene }).ref, (d) => { d[el.dataset.w] = { ...(d[el.dataset.w] || {}), mode: el.dataset.v }; return d; }); },
   'wb-join'(el) { return act(scn({ scene: W.scene }).ref, (d) => { const i = +el.dataset.i; d.clips = clipPlan(d.seconds, MAX_CLIP, (d.clips || []).map((c) => c.join)); if (d.clips[i]) d.clips[i].join = el.dataset.v; return d; }); },

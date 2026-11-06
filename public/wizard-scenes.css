@@ -41,3 +41,12 @@
   .wz .wzb-scene{grid-template-columns:1fr}.wz .wzb-side{align-items:flex-start;flex-direction:row;gap:12px}
 }
 .wz .dn.wzb-never .nm{color:var(--warn)}
+
+/* Clip bar: which clip of the scene is open on Stage, Pictures, Sound and Pack */
+.wz .cbar{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin:10px 0 14px}
+.wz .cbar .lbl{align-self:center;margin:0 4px 0 0}
+.wz .cbar button{display:flex;align-items:baseline;gap:8px;background:var(--sheet);border:1px solid var(--line2);border-radius:2px;padding:6px 12px;cursor:pointer;font:15px var(--serif);color:var(--ink)}
+.wz .cbar button b{font:700 15px var(--mono)}.wz .cbar button span{color:var(--mute);font-size:13px}.wz .cbar button small{color:var(--mute);font-size:12px;font-style:italic}
+.wz .cbar button.on{background:var(--ink);color:var(--sheet);border-color:var(--ink)}.wz .cbar button.on span,.wz .cbar button.on small{color:inherit;opacity:.8}
+.wz .cdots{display:inline-flex;gap:3px;margin-left:4px}.wz .cdot{width:8px;height:8px;border-radius:50%;border:1px solid currentColor;display:inline-block;opacity:.5}.wz .cdot.s1{background:linear-gradient(90deg,currentColor 50%,transparent 50%);opacity:.8}.wz .cdot.s2{background:currentColor;opacity:1}
+.wz .cbar-note{align-self:center;margin-left:6px}

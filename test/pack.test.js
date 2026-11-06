@@ -5,8 +5,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sceneEntries, filmEntries, srt, zip, crc32, buildZip, hashOf, similarity, sceneDir } from '../public/js/pack.js';
-import { clipPlan, emptyNotes } from '../public/js/wizard-model.js';
+import { sceneEntries, filmEntries, srt, zip, crc32, buildZip, hashOf, similarity, sceneDir, tailHold } from '../public/js/pack.js';
+import { clipPlan, emptyNotes, clipSpans, linesOfClip, cuesOfClip, composeClip } from '../public/js/wizard-model.js';
 
 const film = { name: 'Ines teaser', look: { look: 'Muted film', aspect: '9:16', fps: 24, forbidden: ['electric light'] }, speech: 'German', captions: ['English'], anchors: [{ id: 'ines', name: 'Ines', uri: 'media/p/a.png' }], plates: [{ id: 'scaffold', uri: 'media/p/pl.png' }] };
 const scene = { ref: 'scene:the-beam', data: { n: 1, name: 'The beam', seconds: 12, clips: clipPlan(12, 8, [null, 'cut']), who: ['canon.cast:ines'], start: { mode: 'stage' }, end: { mode: 'stage' }, notes: { ...emptyNotes(), happens: 'She looks up.', never: 'No collapse' }, transcript: [{ who: 'INES', text: 'Hallo', en: 'Hi', sec: 2 }, { who: '', text: '', sec: 1 }] },
@@ -53,4 +53,35 @@ test('the frame check: the same picture matches, a very different one does not',
   const img = (f) => { const w = 16, h = 16, d = new Uint8ClampedArray(w * h * 4); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = f(x, y), i = (y * w + x) * 4; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; } return hashOf(d, w, h); };
   const a = img((x, y) => (x < 8 ? 200 : 40)), same = img((x, y) => (x < 8 ? 190 : 50)), other = img((x, y) => (x < 8 ? 40 : 200));
   assert.equal(similarity(a, same), 100); assert.ok(similarity(a, other) < 20);
+});
+
+test('clips: each one covers its own seconds, and gets its own lines and sounds', () => {
+  const d = { seconds: 15, clips: clipPlan(15), transcript: [{ who: 'A', text: 'one', sec: 3 }, { who: 'B', text: '', sec: 2 }, { who: 'B', text: 'two', sec: 4 }, { who: 'A', text: 'three', sec: 3 }], cues: [{ name: 'wind', at: 1 }, { name: 'bell', at: 9 }] };
+  assert.deepEqual(clipSpans(d).map((c) => [c.from, c.to]), [[0, 8], [8, 15]]);
+  assert.deepEqual(linesOfClip(d, 1).map((l) => [l.text, l.at, l.index]), [['one', 0, 0], ['two', 5, 2]]);
+  assert.deepEqual(linesOfClip(d, 2).map((l) => [l.text, l.at, l.index]), [['three', 1, 3]], 'a line belongs to the clip it starts in, timed from that clip\'s start');
+  assert.deepEqual(cuesOfClip(d, 1).map((c) => c.name), ['wind']); assert.deepEqual(cuesOfClip(d, 2).map((c) => c.name), ['bell']);
+});
+test('the generator is told to land on the end picture on the last frame and never hold it', () => {
+  const sc = { data: { seconds: 12, clips: clipPlan(12, 8), notes: { happens: 'She looks up.' }, start: { mode: 'stage' }, end: { mode: 'stage' }, transcript: [{ who: 'A', text: 'hello', sec: 2 }, { who: 'B', text: 'bye', sec: 2 }] } };
+  const a = composeClip(sc, {}, 1), b = composeClip(sc, {}, 2);
+  assert.match(a.prompt, /Timing: spread the action over the full 6 seconds/); assert.doesNotMatch(a.prompt, /end picture is the very last frame/, 'only the last clip ends on the end picture');
+  assert.match(b.prompt, /end picture is the very last frame only: arrive at it on the final frame, not before, and never hold it still/); assert.match(b.prompt, /do not freeze or hold a pose/);
+  assert.match(a.prompt, /hello/); assert.match(a.prompt, /bye/, 'both lines start inside the first 6 seconds'); 
+  const skip = composeClip({ data: { ...sc.data, end: { mode: 'skip' } } }, {}, 2); assert.doesNotMatch(skip.prompt, /end picture is the very last frame/, 'no end picture, nothing to land on');
+});
+test('the pack gives each clip its own lines, timed from the clip start, and the timing rule', () => {
+  const sc = { ...scene, data: { ...scene.data, seconds: 12, clips: clipPlan(12, 8, [null, 'cont']), transcript: [{ who: 'A', text: 'first', sec: 4 }, { who: 'B', text: 'second', sec: 4 }, { who: 'A', text: 'third', sec: 4 }] } };
+  const e = sceneEntries(film, sc, { target: 'both' }), get = (p) => e.find((x) => x.path.endsWith(p));
+  assert.deepEqual(JSON.parse(get('clip-01/transcript.json').text).map((l) => l.text), ['first', 'second']); assert.deepEqual(JSON.parse(get('clip-02/transcript.json').text).map((l) => [l.text, l.at]), [['third', 2]]);
+  assert.match(get('clip-02/transcript.srt').text, /00:00:02,000 --> 00:00:06,000\nA: third/);
+  assert.match(JSON.parse(get('clip-02/clip.json').text).timing, /never hold it still/); assert.match(get('clip-01/prompt.txt').text, /Timing:/);
+});
+
+test('a clip that reaches its end picture early and stands still is caught, to the tenth of a second', () => {
+  const g = (v) => Array(16).fill(v), still = [{ t: 9.95, g: g(100) }, { t: 9.7, g: g(100) }, { t: 9.45, g: g(101) }, { t: 9.2, g: g(100) }, { t: 8.95, g: g(100) }, { t: 8.7, g: g(140) }, { t: 8.45, g: g(100) }];
+  assert.equal(tailHold(still, 10), 1.1, 'the picture matches the last frame back to 8.9 s, then it moves; an old match further back does not count');
+  assert.equal(tailHold([{ t: 9.95, g: g(100) }, { t: 9.7, g: g(160) }, { t: 9.45, g: g(100) }], 10), 0, 'a clip still moving at the end');
+  assert.equal(tailHold([{ t: 9.95, g: g(100) }, { t: 9.7, g: g(100) }], 10), 0, 'a quarter second is not worth a warning');
+  assert.equal(tailHold([], 10), 0);
 });

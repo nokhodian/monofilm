@@ -4,8 +4,9 @@
 // The picture SOURCE and the clip join are decided on the Brief page only; here they are read-only with a link.
 import { $, $$, esc, st, api, P, toast, mediaSrc, isHuman } from './core.js';
 import { get, createArtifact } from './data.js';
-import { R, keyOf, SUBS, ANCHOR_MODES, sceneReadiness } from './wizard-model.js';
-import { W, spine, itemEl, chipOf, pill, lk, nothing, ownEdit, approveRefs, rerender, refresh, hrefOf, castArts } from './w-core.js';
+import { R, keyOf, SUBS, ANCHOR_MODES, sceneReadiness, clipSpans } from './wizard-model.js';
+import { W, spine, itemEl, chipOf, pill, lk, nothing, ownEdit, approveRefs, rerender, refresh, hrefOf, hrefIn, castArts } from './w-core.js';
+import { clipBar } from './w-clips.js';
 import { registerFix } from './w-fix.js';
 import { registerSub } from './w-scenes.js';
 import { renderScene } from './stage.js';
@@ -19,12 +20,17 @@ const nameOf = (c) => ((get(c.cast) || {}).data || {}).name || c.name || c.id.ch
 const modeName = (m) => (ANCHOR_MODES.find((x) => x[0] === m) || ['', m])[1];
 
 // ---------- the head shared by both pages: scene name and the five page tabs ----------
-function head(ctx) {
+export function head(ctx) {
   const sc = sceneOf(ctx), d = sc.data, r = sceneReadiness(sc, { get, assets: (ref) => (get(ref) || {}).assets || [] }), place = d.place && get(d.place);
   return `<div class="shead"><span class="snum">${d.n}</span><div><h2 style="margin:0">${esc(d.name)}</h2><div class="sm mute">${[d.tag, d.seconds && `${d.seconds} s`, place && place.data.name].filter(Boolean).map(esc).join(' · ')}</div></div></div>
-  <div class="ptabs" role="tablist">${SUBS.map((u, i) => `<button class="k-${u[0]} ${u[0] === ctx.sub ? 'on' : ''}" data-go="${hrefOf('scenes', ctx.scene, u[0])}"><small>${i + 1}</small>${u[1]}${r[i] === 2 ? ' <span class="tick">✓</span>' : ''}</button>`).join('')}</div>`;
+  <div class="ptabs" role="tablist">${SUBS.map((u, i) => `<button class="k-${u[0]} ${u[0] === ctx.sub ? 'on' : ''}" data-go="${hrefIn(ctx, u[0])}"><small>${i + 1}</small>${u[1]}${r[i] === 2 ? ' <span class="tick">✓</span>' : ''}</button>`).join('')}</div>${clipBar(ctx)}`;
 }
 // Where a picture comes from is decided on the Brief page; this only shows it.
+// Where this clip's pictures come from: the first clip has the scene's start picture, a later clip either its own (after a cut) or the last frame of the clip before; only the last clip has the end picture.
+const clipSources = (ctx, d) => { const n = ctx.clip, spans = clipSpans(d), c = spans[n - 1] || {}, last = n === spans.length, brief = lk('Change in Brief', hrefOf('scenes', ctx.scene, 'brief'));
+  const start = n === 1 ? sourceLine(ctx, (d.start || {}).mode || 'stage') : c.join === 'cut' ? '<span class="sm">Its own start picture, from this layout</span> <span class="sm mute">· a cut</span>' : `<span class="sm">The last frame of clip ${n - 1}, from the clip you bring back</span>`;
+  const end = last ? sourceLine(ctx, (d.end || {}).mode || 'stage') : `<span class="sm">None. Clip ${n} ends where its camera move ends, and clip ${n + 1} goes on from there.</span> <span class="sm mute">· ${brief}</span>`;
+  return `<span class="lbl">Where the pictures come from</span><div class="arow"><b>Start picture</b><div>${start}</div></div><div class="arow"><b>End picture</b><div>${end}</div></div>`; };
 const sourceLine = (ctx, mode) => `<span class="sm">${esc(modeName(mode))}</span> <span class="sm mute">· ${lk('Change in Brief', hrefOf('scenes', ctx.scene, 'brief'))}</span>`;
 
 // ================= STAGE =================
@@ -44,31 +50,32 @@ function spots(stage, cam, W, H) {
 
 function stageHtml(ctx) {
   const sc = sceneOf(ctx), d = sc.data, id = ctx.scene, ref = R.stage(id), a = get(ref), clips = clipsOf(d), mom = SS.mom;
-  const toggle = `<span class="lbl" style="margin-top:0">Which moment do you want to look at?</span><div>${['start', 'end'].map((k) => `<span class="ch cl ${mom === k ? 'on' : ''}" tabindex="0" role="button" aria-pressed="${mom === k}" data-act="wzs-mom" data-v="${k}">${k === 'start' ? 'Start' : 'End'} of the scene</span>`).join('')}</div>`;
-  const src = `<span class="lbl">Where the pictures come from</span><div class="arow"><b>Start picture</b><div>${sourceLine(ctx, (d.start || {}).mode || 'stage')}</div></div><div class="arow"><b>End picture</b><div>${sourceLine(ctx, (d.end || {}).mode || 'stage')}</div></div>`;
+  const multi = clips.length > 1, of = multi ? `clip ${ctx.clip}` : 'the scene', clipCam = ((a && a.data.shots) || {})[R.shot(id, ctx.clip)];
+  const toggle = `<span class="lbl" style="margin-top:0">Which moment do you want to look at?</span><div>${['start', 'end'].map((k) => `<span class="ch cl ${mom === k ? 'on' : ''}" tabindex="0" role="button" aria-pressed="${mom === k}" data-act="wzs-mom" data-v="${k}">${k === 'start' ? 'Start' : 'End'} of ${of}</span>`).join('')}</div>`;
+  const src = clipSources(ctx, d);
   if (!a) {
     const A = `<p style="margin:0 0 10px">There is no layout for this scene yet. I can set one up from the people and the place in your Brief. You can move everything afterwards.</p><button class="bt pri big wzs-go" data-act="wzs-setup">Set up the stage</button>${src}`;
     return spine(ctx, { head: head(ctx), A, B: nothing('Nothing to review yet. Set up the stage and it will appear here.'), items: [], empty: true, gate: { ready: false, reason: 'Set up the stage first. Then look at it and press "Looks right".' }, ai: 'There is no layout for this scene yet. I can set one up from the people and the place in your Brief.' });
   }
-  const stage = a.data, [W, H] = dim(aspect()), cam = camFor(stage, id, mom === 'start' ? 1 : clips.length, mom);
+  const stage = a.data, [W, H] = dim(aspect()), cam = camFor(stage, id, ctx.clip, mom);
   const hot = cam ? spots(stage, cam, W, H) : [], cams = Object.entries(stage.cameras || {});
-  const still = mom === 'end' && cam && camFor(stage, id, 1, 'start') && JSON.stringify(camFor(stage, id, 1, 'start').pos) === JSON.stringify(cam.pos);
+  const still = mom === 'end' && cam && camFor(stage, id, ctx.clip, 'start') && JSON.stringify(camFor(stage, id, ctx.clip, 'start').pos) === JSON.stringify(cam.pos);
   const viewSw = `<span class="lbl" style="margin-top:0">How do you want to see it?</span><div>${[['plan', 'Floor plan · drag things to move them'], ['shot', 'Through the camera']].map(([k, l]) => `<span class="ch cl ${SS.view === k ? 'on' : ''}" tabindex="0" role="button" aria-pressed="${SS.view === k}" data-act="wzs-view" data-v="${k}">${l}</span>`).join('')}</div>`;
   const A = `${viewSw}${SS.view === 'shot' ? toggle : ''}<div class="wzs-open"><a class="bt pri big wzs-go" href="#/stage/${esc(id)}">Open the 3D editor</a><span class="sm mute">Move people, objects and cameras in 3D. There is a way back to this page.</span></div>${src}
-    <div class="sm mute" style="margin-top:10px">The pictures are made from this layout on the ${lk('Pictures', hrefOf('scenes', id, 'pictures'))} page.</div>`;
-  const view = `<figure class="wzs-view" style="--w:${W};--h:${H}"><div class="wzs-cap"><span>Where everyone stands</span><span>${mom} of the scene</span></div><div class="wzs-frame"><canvas id="wzs-cv" width="${W}" height="${H}" role="img" aria-label="The stage seen from the camera at the ${mom} of the scene"></canvas>${hot.map((s) => itemEl(ref, `<span class="wzs-dot">${esc(s.name.charAt(0))}</span><span class="wzs-lab">${esc(s.name)}</span>`, { part: `obj:${s.id}`, kind: 'obj', name: s.name, cls: `wzs-hot ${s.inFrame ? '' : 'out'}`, plain: true }).replace('<div class="pk', `<div style="left:${s.x.toFixed(1)}%;top:${s.y.toFixed(1)}%" class="pk`)).join('')}</div><figcaption class="sm mute">${esc(camLine(cam, mom))}${still ? '. The camera does not move in this scene, so the end looks like the start.' : ''}</figcaption></figure>`;
-  const list = `<span class="lbl" style="margin-top:0">In the picture · click one to move it</span>${hot.map((s) => itemEl(ref, `<div class="ri"><b>${esc(s.name)}</b><div class="sm mute">${s.inFrame ? s.side : 'not in the picture'}</div></div>`, { part: `obj:${s.id}`, kind: 'obj', name: s.name, cls: 'wzs-row', plain: true })).join('')}${cams.map(([k, c]) => itemEl(ref, `<div class="ri"><b>Camera ${esc(k)}</b><div class="sm mute">${c.lens} mm${c.move && c.move.type !== 'static' ? ` · ${esc(c.move.type.replace('-', ' '))}` : ''}</div></div>`, { part: `obj:cam-${k}`, kind: 'obj', name: `Camera ${k}`, cls: 'wzs-row', plain: true })).join('')}<div style="margin-top:12px">${itemEl(ref, `<div class="row"><b>The whole layout</b>${chipOf(ref)}</div>`, { kind: 'obj', name: 'The layout', cls: 'wzs-row' })}</div>`;
-  const ed = isHuman(), camCtl = cams.map(([k, c]) => `<div class="wzs-camrow"><b>Camera ${esc(k)}</b><label class="sm">Lens <select class="f" data-wzs-cam="${esc(k)}" data-f="lens" ${ed ? '' : 'disabled'}>${LENSES.map((l) => `<option value="${l}" ${Number(c.lens) === l ? 'selected' : ''}>${l} mm</option>`).join('')}</select></label><label class="sm">Move <select class="f" data-wzs-cam="${esc(k)}" data-f="move" ${ed ? '' : 'disabled'}>${MOVES.map((m) => `<option value="${m}" ${(c.move || {}).type === m ? 'selected' : ''}>${m.replace('-', ' ')}</option>`).join('')}</select></label></div>`).join('');
+    <div class="sm mute" style="margin-top:10px">The pictures are made from this layout on the ${lk('Pictures', hrefIn(ctx, 'pictures'))} page.</div>`;
+  const view = `<figure class="wzs-view" style="--w:${W};--h:${H}"><div class="wzs-cap"><span>Where everyone stands</span><span>${mom} of ${of}</span></div><div class="wzs-frame"><canvas id="wzs-cv" width="${W}" height="${H}" role="img" aria-label="The stage seen from the camera at the ${mom} of ${of}"></canvas>${hot.map((s) => itemEl(ref, `<span class="wzs-dot">${esc(s.name.charAt(0))}</span><span class="wzs-lab">${esc(s.name)}</span>`, { part: `obj:${s.id}`, kind: 'obj', name: s.name, cls: `wzs-hot ${s.inFrame ? '' : 'out'}`, plain: true }).replace('<div class="pk', `<div style="left:${s.x.toFixed(1)}%;top:${s.y.toFixed(1)}%" class="pk`)).join('')}</div><figcaption class="sm mute">${esc(camLine(cam, mom))}${still ? '. The camera does not move in this scene, so the end looks like the start.' : ''}</figcaption></figure>`;
+  const list = `<span class="lbl" style="margin-top:0">In the picture · click one to move it</span>${hot.map((s) => itemEl(ref, `<div class="ri"><b>${esc(s.name)}</b><div class="sm mute">${s.inFrame ? s.side : 'not in the picture'}</div></div>`, { part: `obj:${s.id}`, kind: 'obj', name: s.name, cls: 'wzs-row', plain: true })).join('')}${cams.map(([k, c]) => itemEl(ref, `<div class="ri"><b>Camera ${esc(k)}</b>${multi && clipCam && clipCam.camera === k ? ' <span class="sm mute">· clip ' + ctx.clip + '</span>' : ''}<div class="sm mute">${c.lens} mm${c.move && c.move.type !== 'static' ? ` · ${esc(c.move.type.replace('-', ' '))}` : ''}</div></div>`, { part: `obj:cam-${k}`, kind: 'obj', name: `Camera ${k}`, cls: 'wzs-row', plain: true })).join('')}<div style="margin-top:12px">${itemEl(ref, `<div class="row"><b>The whole layout</b>${chipOf(ref)}</div>`, { kind: 'obj', name: 'The layout', cls: 'wzs-row' })}</div>`;
+  const ed = isHuman(), camCtl = cams.filter(([k]) => !multi || !clipCam || clipCam.camera === k).map(([k, c]) => `<div class="wzs-camrow"><b>Camera ${esc(k)}</b><label class="sm">Lens <select class="f" data-wzs-cam="${esc(k)}" data-f="lens" ${ed ? '' : 'disabled'}>${LENSES.map((l) => `<option value="${l}" ${Number(c.lens) === l ? 'selected' : ''}>${l} mm</option>`).join('')}</select></label><label class="sm">Move <select class="f" data-wzs-cam="${esc(k)}" data-f="move" ${ed ? '' : 'disabled'}>${MOVES.map((m) => `<option value="${m}" ${(c.move || {}).type === m ? 'selected' : ''}>${m.replace('-', ' ')}</option>`).join('')}</select></label></div>`).join('');
   const plan = `<figure class="wzs-view wzs-plan"><div class="wzs-cap"><span>The stage from above</span><span>${ed ? 'drag to move' : 'view only'}</span></div><canvas id="wzs-plan" width="640" height="460" role="img" aria-label="The stage from above. People, objects and cameras can be dragged."></canvas><figcaption class="sm mute">${ed ? 'Drag a person, an object or a camera. Drag the small ring to aim a camera. Dashed line: where a camera moves to. For small steps use the arrows on the right.' : 'You can look but not move things.'}</figcaption>${camCtl}</figure>`;
   const B = `<div class="wzs-b ${SS.view === 'plan' ? 'wzs-wide' : ''}">${SS.view === 'plan' ? plan : view}<div>${list}</div></div>`;
   const checks = checkStage(stage, { aspect: aspect(), cast: castArts().map((c) => c.ref) });
   const notice = checks.map((x) => [x.lvl === 'ok' ? 'ok' : 'warn', esc(x.txt)]);
-  return spine(ctx, { head: head(ctx), A, B, items: [ref], noun: ['layout', 'layouts'], notice, ai: 'This is who stands where and where the camera is. Drag people, objects and cameras on the floor plan to move them, or click one for small steps. The 3D editor is there for fine work.', next: { label: 'Go to Pictures →', href: hrefOf('scenes', id, 'pictures') } });
+  return spine(ctx, { head: head(ctx), A, B, items: [ref], noun: ['layout', 'layouts'], notice, ai: 'This is who stands where and where the camera is. Drag people, objects and cameras on the floor plan to move them, or click one for small steps. The 3D editor is there for fine work.', next: { label: 'Go to Pictures →', href: hrefIn(ctx, 'pictures') } });
 }
 
 function drawStage(root, ctx) {
   const cv = $('#wzs-cv', root), a = get(R.stage(ctx.scene)); if (!cv || !a) return;
-  const sc = sceneOf(ctx), clips = clipsOf(sc.data), cam = camFor(a.data, ctx.scene, SS.mom === 'start' ? 1 : clips.length, SS.mom);
+  const cam = camFor(a.data, ctx.scene, ctx.clip, SS.mom);
   if (cam) renderScene(cv.getContext('2d'), { ...a.data, cameras: {} }, cam, cv.width, cv.height, 'layout');
 }
 
@@ -177,22 +184,22 @@ function slotHtml(ctx, s, stage) {
 const adhHtml = (r) => (r.error ? `<div class="sm wzs-adh">${esc(r.error)}</div>` : `<div class="wzs-adh sm"><b>${Math.round(r.score * 100)}% like the layout</b>${driftLines(r).filter((x) => x[0] !== 'ok').map((x) => `<div><i class="dot warn"></i> ${esc(x[1])}</div>`).join('') || '<div>The picture follows the layout.</div>'}</div>`);
 
 function picturesHtml(ctx) {
-  const sc = sceneOf(ctx), id = ctx.scene, d = sc.data, slots = slotsOf(id, d), stageA = get(R.stage(id)), stage = stageA && stageA.data;
+  const sc = sceneOf(ctx), id = ctx.scene, d = sc.data, multi = clipSpans(d).length > 1, slots = slotsOf(id, d).filter((s) => !multi || s.clip === ctx.clip), stageA = get(R.stage(id)), stage = stageA && stageA.data;
   const own = slots.filter((s) => s.mode !== 'skip' && s.mode !== 'chain'), left = st.budget ? Math.max(0, st.budget.budget - st.budget.spent) : null;
   const errs = Object.entries(SS.err).filter(([k]) => slots.some((s) => s.ref === k));
-  const note = !stageA ? `<p class="sm" style="margin:0 0 8px">There is no layout yet, so the pictures are made without one. ${lk('Set up the stage first', hrefOf('scenes', id, 'stage'))} to make them match.</p>` : stageA.status === 'proposed' ? `<p class="sm" style="margin:0 0 8px">The layout still waits for your review, so pictures are made without it. ${lk('Review the stage first', hrefOf('scenes', id, 'stage'))}.</p>` : '';
+  const note = !stageA ? `<p class="sm" style="margin:0 0 8px">There is no layout yet, so the pictures are made without one. ${lk('Set up the stage first', hrefIn(ctx, 'stage'))} to make them match.</p>` : stageA.status === 'proposed' ? `<p class="sm" style="margin:0 0 8px">The layout still waits for your review, so pictures are made without it. ${lk('Review the stage first', hrefIn(ctx, 'stage'))}.</p>` : '';
   const A = `${note}<span class="lbl" style="margin-top:0">Make the pictures</span>${slots.map((s) => {
     const b = SS.busy[s.ref], n = imgs(s.ref).length;
     return `<div class="arow"><b>${esc(s.label)}</b><div>${s.mode === 'skip' ? `<span class="sm mute">Skipped in the Brief · ${lk('Change in Brief', hrefOf('scenes', id, 'brief'))}</span>` : s.mode === 'chain' ? `<span class="sm">Uses the end picture of the scene before. ${lk('Change in Brief', hrefOf('scenes', id, 'brief'))}</span>` : s.mode === 'own' ? `<span class="sm">Your own picture. ${lk('Change in Brief', hrefOf('scenes', id, 'brief'))}</span>` : `<button class="bt acc sm" data-act="wzs-make" data-ref="${esc(s.ref)}" data-which="${s.which}" data-clip="${s.clip}" ${b ? 'disabled' : ''}>${b ? `Making pictures… ${b.done} of 3` : n ? 'Make 3 more · 3 credits' : 'Make 3 pictures · 3 credits'}</button>`}</div></div>${SS.err[s.ref] ? `<div class="wzs-err" role="alert">${esc(SS.err[s.ref].text)} ${SS.err[s.ref].href ? lk(esc(SS.err[s.ref].go), SS.err[s.ref].href) : ''}</div>` : ''}`;
   }).join('')}${left !== null ? `<div class="sm mute" style="margin-top:8px">Credits left: ${Math.round(left)} of ${st.budget.budget}</div>` : ''}`;
-  const B = slots.map((s) => slotHtml(ctx, s, stage)).join('');
+  const B = slots.length ? slots.map((s) => slotHtml(ctx, s, stage)).join('') : `<p class="sm" style="margin:0">Clip ${ctx.clip} needs no picture of its own: it goes on from the last frame of clip ${ctx.clip - 1}, from the clip you bring back. ${lk(`Go to clip ${Math.min(clipSpans(d).length, ctx.clip + 1)}`, hrefIn(ctx, 'pictures', Math.min(clipSpans(d).length, ctx.clip + 1)))}</p>`;
   const items = own.map((s) => s.ref).filter((r) => get(r));
   const missing = own.filter((s) => !chosenOf(s.ref)).map((s) => s.label.toLowerCase());
   const gate = { ready: !missing.length, reason: missing.length ? `Choose a picture with "Use this" for: ${missing.join(', ')}.` : 'Every picture you need is chosen. You can go on.' };
   const notice = [];
-  if (stage && imgs(slots[0].ref).length) notice.push(['ok', 'Pictures are made from your layout and the anchor faces. "Check against the layout" shows where a picture drifted.']);
+  if (stage && slots[0] && imgs(slots[0].ref).length) notice.push(['ok', 'Pictures are made from your layout and the anchor faces. "Check against the layout" shows where a picture drifted.']);
   for (const [k] of errs) notice.push(['warn', esc(SS.err[k].text)]);
-  return spine(ctx, { head: head(ctx), A, B, items, noun: ['picture', 'pictures'], gate, notice, ai: own.length ? 'I make three pictures for each start and end from your layout. Choose one with "Use this", or click one to say what is off.' : 'No pictures to make for this scene. The Brief decides where they come from.', next: { label: 'Go to Sound →', href: hrefOf('scenes', id, 'sound') }, act: missing.length ? 'A' : 'C' });
+  return spine(ctx, { head: head(ctx), A, B, items, noun: ['picture', 'pictures'], gate, notice, ai: own.length ? 'I make three pictures for each start and end from your layout. Choose one with "Use this", or click one to say what is off.' : 'No pictures to make for this scene. The Brief decides where they come from.', next: { label: 'Go to Sound →', href: hrefIn(ctx, 'sound') }, act: missing.length ? 'A' : 'C' });
 }
 
 // Make 3 pictures for one slot: three requests in parallel (the first alone when the slot has never been made, so the clip shells are not created twice).

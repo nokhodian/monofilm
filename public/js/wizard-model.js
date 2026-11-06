@@ -12,6 +12,7 @@ export const STEPS = [
   { n: 7, key: 'ship', label: 'Ship', group: 'finish', title: 'Cut it and send it' },
 ];
 export const SUBS = [['brief', 'Brief'], ['stage', 'Stage'], ['pictures', 'Pictures'], ['sound', 'Sound'], ['pack', 'Pack']];
+export const CLIP_SUBS = ['stage', 'pictures', 'sound', 'pack']; // the pages that work one clip at a time (the Brief is the whole scene)
 export const NOTE_KEYS = [['happens', 'What happens'], ['mood', 'Mood and pace'], ['cam', 'Camera and motion'], ['sound', 'Sound in the picture'], ['never', 'Must not happen'], ['cont', 'Continuity']];
 export const ANCHOR_MODES = [['stage', 'From the stage'], ['chain', 'Previous scene\'s end'], ['own', 'My own picture'], ['skip', 'Skip it']];
 export const JOINS = [['cont', 'Continue from the last picture of the clip before'], ['cut', 'New view, a cut']];
@@ -64,16 +65,31 @@ export function sceneReadiness(scene, ctx) {
   return [brief, stage, pictures, sound, pack];
 }
 
+// ---- clips: which seconds of the scene each clip covers, and which lines and sounds fall in it ----
+const clipList = (d) => (d.clips && d.clips.length ? d.clips : clipPlan(d.seconds));
+export function clipSpans(d) { let t = 0; return clipList(d).map((c, i) => { const from = t; t += c.seconds; return { n: i + 1, from, to: t, seconds: c.seconds, join: c.join }; }); }
+const clipAt = (spans, t) => { const s = spans.find((x) => t >= x.from && t < x.to); return s ? s.n : t < 0 ? 1 : spans.length; };
+// Each line starts where the line before it ended (a line with no length counts as 2 s, as in the subtitles). A line belongs to the clip it starts in.
+export function linesOfClip(d, n) {
+  const spans = clipSpans(d); let t = 0; const out = [];
+  (d.transcript || []).forEach((l, index) => { const len = Math.max(1, Number(l.sec) || 2), at = t; t += len; if ((l.text || '').trim() && clipAt(spans, at) === n) out.push({ ...l, index, at: Math.round((at - (spans[n - 1] || { from: 0 }).from) * 10) / 10 }); });
+  return out;
+}
+export const cuesOfClip = (d, n) => { const spans = clipSpans(d); return (d.cues || []).map((c, index) => ({ ...c, index })).filter((c) => clipAt(spans, Number(c.at) || 0) === n); };
+
 // The words a generator receives for one clip, built only from approved film canon and this scene's brief. Pure, so the page, the pack and the Worker agree.
 export function composeClip(scene, film, clipIndex = 1) {
-  const d = scene.data || {}, n = d.notes || {}, clips = d.clips && d.clips.length ? d.clips : clipPlan(d.seconds), c = clips[clipIndex - 1] || clips[0];
+  const d = scene.data || {}, n = d.notes || {}, clips = clipList(d), c = clips[clipIndex - 1] || clips[0];
   const look = film.look || {}, never = [...new Set([...(String(n.never || '').split(/[.;\n]/).map((s) => s.trim()).filter(Boolean)), ...(Array.isArray(look.forbidden) ? look.forbidden : String(look.forbidden || '').split(',').map((s) => s.trim()).filter(Boolean)).map((t) => `no ${t}`)])];
-  const lines = (d.transcript || []).filter((l) => l.text);
+  const lines = linesOfClip(d, clipIndex), last = clipIndex === clips.length, endPic = last && d.end && d.end.mode !== 'skip';
   const parts = [n.happens, n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${n.cam}`, n.sound && `Sound: ${n.sound}`,
     `Look: ${look.look || look.base || 'as in the film'}. ${look.aspect || '9:16'}, ${look.fps || 24} fps, ${c.seconds} seconds.`];
   if (lines.length) parts.push(`Dialogue: ${lines.map((l) => `${l.who || 'NARRATOR'} says${film.speech ? `, in ${film.speech},` : ''} "${l.text}"${l.en ? ` (${l.en})` : ''}`).join(' ')}`);
   if (clipIndex > 1) parts.push(c.join === 'cut' ? 'This clip is a cut to a new view. It has its own start picture.' : 'Continue from the last picture of the previous clip.');
-  return { prompt: parts.filter(Boolean).join('\n'), negative: never.join('. '), seconds: c.seconds, join: c.join, clips: clips.length };
+  parts.push(timingLine(c.seconds, endPic));
+  return { prompt: parts.filter(Boolean).join('\n'), negative: never.join('. '), seconds: c.seconds, join: c.join, clips: clips.length, timing: timingLine(c.seconds, endPic) };
 }
+// Generators tend to reach the end picture early and then hold it still. This tells them not to: the end picture is the last frame only, and the action fills the whole clip.
+export const timingLine = (seconds, endPicture) => `Timing: spread the action over the full ${seconds} seconds so nothing is finished early. ${endPicture ? 'The end picture is the very last frame only: arrive at it on the final frame, not before, and never hold it still. ' : ''}Keep the action and the camera moving until the last frame; do not freeze or hold a pose at the end.`;
 
 export const emptyScene = (n, o = {}) => ({ n, name: o.name || `Scene ${n}`, tag: o.tag || '', seconds: o.seconds || 10, place: o.place || null, time: o.time || '', who: o.who || [], transcript: o.transcript || [], notes: { ...emptyNotes(), ...(o.notes || {}) }, start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(o.seconds || 10), overrides: {} });

@@ -6,10 +6,11 @@
 import { $, esc, st, api, P, toast, mediaSrc, copyText } from './core.js';
 import { get, ofKind, threads } from './data.js';
 import { R, TARGETS, MAX_CLIP, ANCHOR_MODES, REFS, clipPlan, composeClip, sceneReadiness, keyOf } from './wizard-model.js';
-import { sceneEntries, buildZip, hashOf, similarity, sceneDir } from './pack.js';
+import { sceneEntries, buildZip, hashOf, similarity, sceneDir, tailHold } from './pack.js';
+import { head as sceneHead } from './w-stage.js';
 import { registerSub } from './w-scenes.js';
 import { registerFix } from './w-fix.js';
-import { itemEl, chipOf, pill, nothing, lk, hrefOf, ownEdit, spine, refresh } from './w-core.js';
+import { itemEl, chipOf, pill, nothing, lk, hrefOf, ownEdit, spine, refresh , hrefIn } from './w-core.js';
 
 // ---------- the person's settings for this production (kept in the browser) ----------
 const SKEY = () => `mf-pack-${st.pid}`;
@@ -42,15 +43,18 @@ export const rctx = () => ({ get, assets: (ref) => (get(ref) || {}).assets || []
 
 // ---------- the frame check: does the clip that came back start and end like the anchor pictures? ----------
 const grab = (img, w = 64, h = 64) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0, w, h); return hashOf(x.getImageData(0, 0, w, h).data, w, h); };
+const grey = (img, w = 32, h = 32) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0, w, h); const p = x.getImageData(0, 0, w, h).data, g = []; for (let i = 0; i < p.length; i += 4) g.push(0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2]); return g; };
 const loadImg = (uri) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = mediaSrc(uri); });
 const seek = (v, t) => new Promise((res) => { const done = () => { v.removeEventListener('seeked', done); res(); }; v.addEventListener('seeked', done); v.currentTime = t; setTimeout(done, 4000); });
 async function frameCheck(file, startUri, endUri) {
   const url = URL.createObjectURL(file), v = document.createElement('video'); v.muted = true; v.preload = 'auto'; v.playsInline = true; v.src = url;
   try {
     await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('I could not open that video.')); });
-    const out = { first: null, last: null };
+    const out = { first: null, last: null, hold: null };
     if (startUri) { await seek(v, 0); out.first = similarity(grab(v), grab(await loadImg(startUri))); }
     if (endUri) { let d = v.duration; if (!isFinite(d)) { await seek(v, 1e6); d = v.currentTime; } await seek(v, Math.max(0, d - 0.05)); out.last = similarity(grab(v), grab(await loadImg(endUri))); }
+    let d = v.duration; if (!isFinite(d)) { await seek(v, 1e6); d = v.currentTime; }
+    if (d > 0.6) { const got = []; for (let t = d - 0.05; t >= Math.max(0, d - 4); t -= 0.25) { await seek(v, t); got.push({ t, g: grey(v) }); } out.hold = tailHold(got, d); } // does it reach the end picture early and stand still?
     return out;
   } finally { URL.revokeObjectURL(url); }
 }
@@ -86,7 +90,7 @@ function htmlPack(ctx) {
   const s = settings(), film = filmOf(), inp = sceneInput(sc, film), d = sc.data, id = ctx.scene, clips = clipsOf(sc), entries = sceneEntries(film, inp, { target: s.target, max: s.max }), takes = takesOf(id);
   const chip = (act, k, v, label, on) => `<span class="ch cl ${on ? 'on' : ''}" tabindex="0" role="button" data-act="${act}" data-v="${esc(v)}" aria-pressed="${on}">${esc(label)}</span>`;
   const plan = `${d.seconds} s, ${clips.length === 1 ? 'one clip' : `${clips.length} clips`} (${clips.map((c) => c.seconds + ' s').join(' + ')})`;
-  const up = clips.map((c, i) => { const n = i + 1, ts = takes.filter((t) => t.data.clip === n); return `<div class="wzp-up" data-drop="${n}"><b>Clip ${n}</b><span class="sm mute">${c.seconds} s · ${ts.length ? `${ts.length} take${ts.length === 1 ? '' : 's'} back` : 'nothing back yet'}</span><span class="sp"></span><label class="bt sm filebtn">Choose the clip file<input type="file" accept="video/*" data-wp-file="${n}"></label><span class="sm wzp-msg" id="wp-msg-${n}" aria-live="polite">${esc(F.msg[`${id}-${n}`] || '')}</span></div>`; }).join('');
+  const multi = clips.length > 1, cur = ctx.clip, up = clips.map((c, i) => { const n = i + 1, ts = takes.filter((t) => t.data.clip === n); if (multi && n !== cur) return ''; return `<div class="wzp-up" data-drop="${n}"><b>Clip ${n}</b><span class="sm mute">${c.seconds} s · ${ts.length ? `${ts.length} take${ts.length === 1 ? '' : 's'} back` : 'nothing back yet'}</span><span class="sp"></span><label class="bt sm filebtn">Choose the clip file<input type="file" accept="video/*" data-wp-file="${n}"></label><span class="sm wzp-msg" id="wp-msg-${n}" aria-live="polite">${esc(F.msg[`${id}-${n}`] || '')}</span></div>`; }).join('');
   const A = `<span class="lbl" style="margin-top:0">What can your generator take?</span>
   <p class="sm mute" style="margin:0 0 8px">This trims the pack to what it accepts, so you are never handed files it will refuse.</p>
   <div>${TARGETS.map(([k, l]) => chip('wp-target', 'target', k, l, s.target === k)).join('')}</div>
@@ -101,6 +105,7 @@ function htmlPack(ctx) {
   const checklist = `<span class="lbl" style="margin-top:0">What is missing</span><div id="wp-checklist">${miss.length ? miss.map((m) => `<span class="ch wzp-miss">${m}</span>`).join('') : pill('Nothing is missing', 'ok')}${mf.length ? `<div class="sm wzp-bad">These files could not be read and are not in the zip: ${mf.map((x) => `<code>${esc(x)}</code>`).join(', ')}</div>` : ''}</div>`;
 
   const perClip = clips.map((c, i) => {
+    if (multi && i + 1 !== cur) return `<div class="cd wzp-clip wzp-other"><h5>Clip ${i + 1} of ${clips.length} · ${c.seconds} s</h5><p class="sm mute" style="margin:0">${lk(`Open clip ${i + 1}`, hrefIn(ctx, 'pack', i + 1))}</p></div>`;
     const n = i + 1, pre = `${sceneDir(inp)}/clip-${String(n).padStart(2, '0')}/`, mine = entries.filter((e) => e.path.startsWith(pre)), p = mine.find((e) => e.path.endsWith('prompt.txt')), ng = mine.find((e) => e.path.endsWith('negative.txt')), cj = mine.find((e) => e.path.endsWith('clip.json'));
     return `<div class="cd wzp-clip"><h5>Clip ${n} of ${clips.length} · ${c.seconds} s${n > 1 ? ` · ${c.join === 'cut' ? 'a cut' : 'continues the clip before'}` : ''}</h5>
     <div class="man">${mine.map((e) => `<div class="dleader"><b>${esc(e.path.slice(pre.length))}</b><span class="mute">${esc(what(e.path))}</span></div>`).join('')}</div>
@@ -112,18 +117,20 @@ function htmlPack(ctx) {
   const sceneFiles = entries.filter((e) => !/\/clip-\d\d\//.test(e.path)).map((e) => `<div class="dleader"><b>${esc(e.path.split('/').pop())}</b><span class="mute">${esc(what(e.path))}</span></div>`).join('');
 
   const open = (t) => threads(t.ref).filter((c) => c.status === 'open' && !c.parent && c.verdict === 'change');
-  const tk = takes.map((t) => { const src = t.assets && t.assets[0] ? mediaSrc(t.assets[0].uri) : '', f = t.data.first, l = t.data.last;
+  const tk = takes.filter((t) => !multi || t.data.clip === cur).map((t) => { const src = t.assets && t.assets[0] ? mediaSrc(t.assets[0].uri) : '', f = t.data.first, l = t.data.last;
     return itemEl(t.ref, `<div class="wzp-take"><video controls preload="metadata" playsinline src="${esc(src)}"></video><div class="ri"><b>Clip ${t.data.clip} · take ${esc(t.ref.slice(-1).toUpperCase())}</b> ${t.data.picked ? pill('in use', 'ok') : ''}
       <div class="sm">${f === null || f === undefined ? '<span class="mute">First frame: there is no start picture to compare.</span>' : `How much the first frame matches your start picture: <b>${f}%</b>`}</div>
       <div class="sm">${l === null || l === undefined ? '<span class="mute">Last frame: there is no end picture to compare.</span>' : `How much the last frame matches your end picture: <b>${l}%</b>`}</div>
+      ${t.data.hold ? `<div class="sm wzp-bad"><b>It stands still for the last ${t.data.hold} s.</b> The end picture was reached early and then held. See "Suggested change" below.</div>` : ''}
       <div class="row" style="margin-top:6px">${chipOf(t.ref)}${t.data.picked ? '' : `<button class="bt sm" data-act="wp-use" data-ref="${esc(t.ref)}">Use this take</button>`}</div></div></div>`, { kind: 'take', name: `Clip ${t.data.clip} take ${t.ref.slice(-1).toUpperCase()}`, cls: 'dn hc' }); }).join('');
   const sug = takes.flatMap((t) => open(t).map((c) => ({ t, c }))).map(({ t, c }) => { const p = (composeClip(sc, film, t.data.clip) || {}).prompt || ''; return `<div class="cd"><div class="sm"><b>Clip ${t.data.clip} · take ${esc(t.ref.slice(-1).toUpperCase())}</b> · ${esc(c.author)} asked for a change</div><pre class="wzp-pre">${esc(`${p}\nAlso: ${c.body || ''}`.trim())}</pre><div class="row"><button class="bt sm acc" data-act="wp-add" data-id="${esc(c.id)}" data-text="${esc(c.body || '')}">Add to the Brief notes</button><span class="sm mute">Adds "Also: ..." to What happens. Nothing is generated here.</span></div></div>`; }).join('');
+  const holdSug = takes.filter((t) => t.data.hold).map((t) => { const text = `Last time the end picture was held still for about ${t.data.hold} s. Spread the action over the whole clip so it lands on the very last frame, with no pause.`; return `<div class="cd"><div class="sm"><b>Clip ${t.data.clip} · take ${esc(t.ref.slice(-1).toUpperCase())}</b> · it stands still for the last ${t.data.hold} s</div><pre class="wzp-pre">${esc(`${(composeClip(sc, film, t.data.clip) || {}).prompt || ''}\nAlso: ${text}`.trim())}</pre><div class="row"><button class="bt sm acc" data-act="wp-add" data-text="${esc(text)}">Add this to the Brief notes</button><span class="sm mute">Then make the clip again in your generator, or trim the end in your editor.</span></div></div>`; }).join('');
   const B = `${checklist}<span class="lbl">The files for this scene</span><p class="sm mute" style="margin:0 0 6px">The pack holds the prompt, what must not show, pictures, stage controls, the spoken lines with captions, and a manifest. Meta has no video or voice generator, so the pack has no video and no audio.</p>
   <div class="man">${sceneFiles}</div>${perClip}
   <div class="row" style="margin:10px 0"><button class="bt sm acc" data-act="wp-zip">Download this scene · .zip</button><button class="bt sm" data-act="wp-copyall">Copy every prompt of this scene</button><span class="sm mute" id="wp-zipmsg">${F.busy === id ? 'Building the zip...' : ''}</span></div>
-  <span class="lbl">Takes that came back${takes.length ? ` · ${takes.length}` : ''}</span>${tk || '<p class="nothing">Nothing to review yet. When your generator has made a clip, bring it back above.</p>'}
-  ${sug ? `<span class="lbl">Suggested change</span>${sug}` : ''}`;
-  return spine(ctx, { A, B, items: takes.map((t) => t.ref), noun: ['take', 'takes'], act: takes.length ? undefined : 'A', ai: 'Here is everything your generator needs for this scene. I cannot make the video or the voice myself. Bring the clip back and I will check it.',
+  <span class="lbl">Takes that came back${multi ? ` for clip ${cur}` : ''}${takes.length ? ` · ${takes.filter((t) => !multi || t.data.clip === cur).length}` : ''}</span>${tk || '<p class="nothing">Nothing to review yet. When your generator has made a clip, bring it back above.</p>'}
+  ${sug || holdSug ? `<span class="lbl">Suggested change</span>${holdSug}${sug}` : ''}`;
+  return spine(ctx, { head: sceneHead(ctx), A, B, items: takes.map((t) => t.ref), noun: ['take', 'takes'], act: takes.length ? undefined : 'A', ai: 'Here is everything your generator needs for this scene. I cannot make the video or the voice myself. Bring the clip back and I will check it.',
     ...(takes.length ? {} : { gate: { ready: true, reason: 'Nothing to review yet. You can carry on.' } }) });
 }
 
@@ -135,13 +142,13 @@ async function bringBack(id, n, file) {
   if (!sc || !file) return;
   if (file.size > 25 * 1024 * 1024) return say('That file is over 25 MB. Make it smaller and try again.');
   try {
-    say('Checking the first and last picture...');
-    const a = anchorsFor(sc, n), chk = await frameCheck(file, a.start, a.end).catch((e) => { toast(`I could not compare the pictures: ${e.message}`); return { first: null, last: null }; });
+    say('Checking the first and last picture, and the end...');
+    const a = anchorsFor(sc, n), chk = await frameCheck(file, a.start, a.end).catch((e) => { toast(`I could not compare the pictures: ${e.message}`); return { first: null, last: null, hold: null }; });
     say('Uploading...');
     const ext = /\.webm$/i.test(file.name) ? 'webm' : 'mp4', name = `take-${id.slice(0, 40)}-c${n}-${Date.now().toString(36)}.${ext}`.replace(/[^A-Za-z0-9._-]/g, '-');
     const r = await fetch(`/api/p/${st.pid}/media/${name}`, { method: 'PUT', headers: { authorization: 'Bearer ' + st.key, 'content-type': file.type || 'video/mp4' }, body: file });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'upload failed');
-    await api(P('/wizard/take'), { method: 'POST', body: { scene: id, clip: n, uri: `media/${st.pid}/${name}`, first: chk.first, last: chk.last, note: '' } });
+    await api(P('/wizard/take'), { method: 'POST', body: { scene: id, clip: n, uri: `media/${st.pid}/${name}`, first: chk.first, last: chk.last, hold: chk.hold, note: '' } });
     say('Saved as a take.'); toast(`Clip ${n} is back as a new take.`); refresh();
   } catch (e) { say(`It did not work: ${e.message}`); }
 }

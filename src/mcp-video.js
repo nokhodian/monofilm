@@ -34,13 +34,14 @@ function clipSpec(c, pid, L, sc, n) {
   return {
     production: pid, scene: id, scene_name: d.name, clip: n, of: clips.length, seconds: p.seconds, aspect: L.film.look.aspect || '9:16', fps: L.film.look.fps || 24,
     prompt: p.prompt, negative_prompt: p.negative, spoken_language: L.film.speech || null,
+    timing: p.timing, // the end picture is the last frame only: land on it on the final frame, never hold it still
     begins: n === 1 ? 'start' : cl.join === 'cut' ? 'cut' : 'continues',
     start_picture: startOk ? pic(c, pid, frame('start')) : null,
     end_picture: endOk ? pic(c, pid, frame('end')) : null,
     continue_from: n > 1 && cl.join !== 'cut' ? `the last frame of clip ${n - 1}, from the take you made for it` : null,
     references: (d.who || []).map((w) => { const cast = L.data(w) || {}, uri = cast.anchor ? L.uriOf(w, cast.anchor) : null; return uri ? { id: keyOf(w), name: cast.name || keyOf(w), ...pic(c, pid, uri) } : null; }).filter(Boolean),
     stage_controls: stage.map((a) => ({ role: a.provenance.role, ...pic(c, pid, a.uri) })),
-    takes: takes.map((t) => ({ ref: t.ref, status: t.status, picked: !!t.data.picked })),
+    takes: takes.map((t) => ({ ref: t.ref, status: t.status, picked: !!t.data.picked, ...(t.data.hold ? { stands_still_at_end_seconds: t.data.hold } : {}) })),
     next: 'Make this clip, then call submit_take with the video.',
   };
 }

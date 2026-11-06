@@ -12,11 +12,11 @@
 //   Re-render without a network call: rerender(). Reload the data then render: refresh(). Both are the studio's existing document events.
 import { $, $$, esc, st, api, P, toast } from './core.js';
 import { get, ofKind, threads } from './data.js';
-import { STEPS, SUBS, review, sceneReadiness, keyOf, REFS } from './wizard-model.js';
+import { STEPS, SUBS, CLIP_SUBS, R, review, sceneReadiness, clipSpans, keyOf, REFS } from './wizard-model.js';
 import { gateReason, progressText } from './w-pure.js';
 import { fixActs, marginHtml, bindFix, placeMargin, selectFirst, markSel } from './w-fix.js';
 
-export const W = { step: 'start', scene: null, sub: 'brief', sel: [], routeKey: '', fresh: false, keepY: 0, pending: null };
+export const W = { step: 'start', scene: null, sub: 'brief', clip: 1, clips: {}, sel: [], routeKey: '', fresh: false, keepY: 0, pending: null };
 const REG = {};
 export const wzActs = { ...fixActs };
 export function registerStep(key, def) { REG[key] = def; if (def.acts) Object.assign(wzActs, def.acts); }
@@ -29,7 +29,10 @@ const TOC_EXTRAS = []; export const registerTocExtra = (f) => { TOC_EXTRAS.push(
 export const refresh = () => document.dispatchEvent(new Event('mf-refresh'));
 
 // ---------- route: #/w/<step>[/<sceneId>[/<sub>]] ----------
-export const hrefOf = (step, scene, sub) => `#/w/${[step, scene, sub].filter(Boolean).map(encodeURIComponent).join('/')}`;
+export const hrefOf = (step, scene, sub, clip) => `#/w/${[step, scene, sub, clip].filter(Boolean).map(encodeURIComponent).join('/')}`;
+// A link to one of a scene's pages. The pages that work clip by clip keep the clip that is open (when the scene has more than one).
+export const nClips = (scene) => { const a = get(R.scene(scene)); return a ? clipSpans(a.data).length : 1; };
+export const hrefIn = (ctx, sub, clip = ctx.clip) => hrefOf('scenes', ctx.scene, sub, CLIP_SUBS.includes(sub) && nClips(ctx.scene) > 1 ? clip : undefined);
 export const wgo = (step, scene, sub) => { location.hash = hrefOf(step, scene, sub); };
 function readRoute() {
   const p = location.hash.replace(/^#\/?/, '').split('/').map((x) => { try { return decodeURIComponent(x); } catch { return x; } });
@@ -37,7 +40,7 @@ function readRoute() {
   let step = STEPS.some((s) => s.key === p[1]) ? p[1] : null;
   if (!step) step = get(REFS.reading) ? 'understand' : 'start'; // #/w alone: carry on where the person is
   const scene = step === 'scenes' && p[2] ? p[2] : null, sub = step === 'scenes' && scene ? (SUBS.some((u) => u[0] === p[3]) ? p[3] : 'brief') : 'brief';
-  return { step, scene, sub };
+  return { step, scene, sub, clip: Math.max(0, parseInt(p[4], 10) || 0) };
 }
 
 // ---------- data helpers for steps ----------
@@ -45,7 +48,7 @@ export const castArts = () => ofKind('canon.cast');
 export const placeArts = () => ofKind('canon.world').filter((a) => a.ref.startsWith('canon.world:place-'));
 export const sceneArts = () => ofKind('scene').sort((a, b) => ((a.data || {}).n || 0) - ((b.data || {}).n || 0));
 export const mats = () => ofKind('reference').filter((r) => (r.data || {}).category === 'material' && !(r.data || {}).removed);
-export const ctxOf = (o = {}) => ({ step: W.step, scene: W.scene, sub: W.sub, d: st.d, get, ofKind, ...o });
+export const ctxOf = (o = {}) => ({ step: W.step, scene: W.scene, sub: W.sub, clip: W.clip, d: st.d, get, ofKind, ...o });
 // A human's own edit of an artifact. If the AI's version still waits for review it stays "To review" (the edit must not approve it by accident); otherwise it is approved at once.
 export async function ownEdit(ref, fn, why = 'Edited in the wizard') {
   // base_version makes the studio refuse the save if the AI or another tab saved in between; we then read again and apply the same change to the newer data.
@@ -115,7 +118,8 @@ function defaultNext(ctx) {
   if (ctx.step === 'scenes') {
     if (!ctx.scene) return scenes.length ? { label: 'Open scene 1 →', href: hrefOf('scenes', keyOf(scenes[0].ref)) } : { label: 'Go to Ship →', href: hrefOf('ship') };
     const k = SUBS.findIndex((u) => u[0] === ctx.sub), si = scenes.findIndex((s) => keyOf(s.ref) === ctx.scene);
-    if (k < SUBS.length - 1) return { label: `Go to ${SUBS[k + 1][1]} →`, href: hrefOf('scenes', ctx.scene, SUBS[k + 1][0]) };
+    if (k < SUBS.length - 1) return { label: `Go to ${SUBS[k + 1][1]} →`, href: hrefIn(ctx, SUBS[k + 1][0]) };
+    if (ctx.clip < nClips(ctx.scene)) return { label: `Go to clip ${ctx.clip + 1} →`, href: hrefIn(ctx, 'stage', ctx.clip + 1) }; // the last page of a clip leads to the first page of the next one
     return si >= 0 && si < scenes.length - 1 ? { label: `Go to scene ${si + 2} →`, href: hrefOf('scenes', keyOf(scenes[si + 1].ref)) } : { label: 'Go to Ship →', href: hrefOf('ship') };
   }
   return { label: `Go to ${STEPS[i + 1].label} →`, href: hrefOf(STEPS[i + 1].key) };
@@ -167,7 +171,8 @@ const placeholder = (ctx) => { const def = STEPS.find((s) => s.key === ctx.step)
 
 // app.js renders this into #view when the hash is #/w...
 export async function vWizard() {
-  const r = readRoute(), key = [r.step, r.scene, r.sub].join('/');
+  const r = readRoute(); if (r.scene) { const n = nClips(r.scene); if (r.clip) W.clips[r.scene] = Math.min(r.clip, n); r.clip = Math.min(W.clips[r.scene] || 1, n); } else r.clip = 1; // the clip last opened in this scene, unless the address says one
+  const key = [r.step, r.scene, r.sub, r.clip].join('/');
   W.fresh = key !== W.routeKey; if (W.fresh) { W.sel = []; W.pending = null; } W.routeKey = key; Object.assign(W, r);
   W.sel = W.sel.filter((s) => get(s.ref)); W.keepY = W.fresh ? 0 : scrollY;
   const ctx = ctxOf(), def = REG[r.step];
