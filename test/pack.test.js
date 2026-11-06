@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sceneEntries, filmEntries, srt, zip, crc32, buildZip, hashOf, similarity, sceneDir, tailHold, smoothness } from '../public/js/pack.js';
+import { sceneEntries, filmEntries, srt, zip, crc32, buildZip, hashOf, similarity, sceneDir, tailHold, smoothness, seedFor, retryAdvice } from '../public/js/pack.js';
 import { clipPlan, emptyNotes, clipSpans, clipBeats, startOf, linesOfClip, cuesOfClip, composeClip, clipLineCheck } from '../public/js/wizard-model.js';
 
 const film = { name: 'Ines teaser', look: { look: 'Muted film', aspect: '9:16', fps: 24, forbidden: ['electric light'] }, speech: 'German', captions: ['English'], anchors: [{ id: 'ines', name: 'Ines', uri: 'media/p/a.png' }], plates: [{ id: 'scaffold', uri: 'media/p/pl.png' }] };
@@ -122,4 +122,14 @@ test('every spoken line is in exactly one clip, and a pack refuses a scene where
   assert.deepEqual(clipLineCheck({ ...d, clips: [{ seconds: 6 }, { seconds: 6 }, { seconds: 6 }] }), []);
   assert.equal(linesOfClip(d, 1).length + linesOfClip(d, 2).length, 4);
   assert.deepEqual(clipLineCheck(d), []);
+});
+
+test('a retry gets a new seed every time, the same one for the same attempt, and stops after three bad takes or a picked one', () => {
+  assert.equal(seedFor('a', 1, 2), seedFor('a', 1, 2)); assert.notEqual(seedFor('a', 1, 1), seedFor('a', 1, 2)); assert.notEqual(seedFor('a', 1, 1), seedFor('a', 2, 1));
+  const fresh = retryAdvice('a', 1, []); assert.equal(fresh.attempt, 1); assert.equal(fresh.try_again, false); assert.equal(fresh.seed, seedFor('a', 1, 1));
+  const held = retryAdvice('a', 1, [{ hold: 2.5 }]); assert.equal(held.try_again, true); assert.equal(held.attempt, 2); assert.match(held.add_to_prompt, /very last frame/); assert.match(held.last_take_problems[0], /2\.5 s/);
+  assert.match(retryAdvice('a', 1, [{ smooth: { flag: true, at: 3.4 } }]).add_to_prompt, /continuous shot/); assert.match(retryAdvice('a', 1, [{ cuts: 2 }]).last_take_problems[0], /2 cuts/);
+  const bad = [{ hold: 1 }, { hold: 1 }, { cuts: 1 }]; assert.equal(retryAdvice('a', 1, bad).try_again, false); assert.match(retryAdvice('a', 1, bad).stop, /Stop and tell the human/);
+  assert.equal(retryAdvice('a', 1, [{ hold: 1, picked: true }]).try_again, false);
+  assert.equal(retryAdvice('a', 1, [{ hold: 0, smooth: { flag: false } }]).try_again, false, 'a clean take needs no retry');
 });

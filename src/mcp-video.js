@@ -2,6 +2,7 @@
 // Everything the model needs comes in one answer, and every file has an absolute url it can fetch with the same bearer token (or get_media returns a picture inline).
 import { HttpError, bad, parseJson } from './util.js';
 import * as S from './store.js';
+import { retryAdvice } from '../public/js/pack.js';
 import { R, REFS, keyOf, clipPlan, composeClip, startOf, hasEnd } from '../public/js/wizard-model.js';
 import { ensureClips, addTake } from './wizard.js';
 
@@ -45,8 +46,9 @@ function clipSpec(c, pid, L, sc, n) {
     references_note: 'Models that only take a start and an end picture cannot use references: the start and end pictures and the character sentences in the prompt are what keep the film consistent.',
     references: (d.who || []).map((w) => { const cast = L.data(w) || {}, uri = cast.anchor ? L.uriOf(w, cast.anchor) : null; return uri ? { id: keyOf(w), name: cast.name || keyOf(w), ...pic(c, pid, uri) } : null; }).filter(Boolean),
     stage_controls: stage.map((a) => ({ role: a.provenance.role, ...pic(c, pid, a.uri) })),
-    takes: takes.map((t) => ({ ref: t.ref, status: t.status, picked: !!t.data.picked, ...(t.data.hold ? { stands_still_at_end_seconds: t.data.hold } : {}), ...(t.data.smooth && t.data.smooth.flag ? { jumps_at_seconds: t.data.smooth.at } : {}) })),
-    next: 'Make this clip, then call submit_take with the video.',
+    takes: takes.map((t) => ({ ref: t.ref, status: t.status, picked: !!t.data.picked, ...(t.data.seed != null ? { seed: t.data.seed } : {}), ...(t.data.cuts ? { cuts: t.data.cuts } : {}), ...(t.data.hold ? { stands_still_at_end_seconds: t.data.hold } : {}), ...(t.data.smooth && t.data.smooth.flag ? { jumps_at_seconds: t.data.smooth.at } : {}) })),
+    retry: retryAdvice(id, n, takes.map((t) => t.data)),
+    next: 'Make this clip with retry.seed, then measure it (npm run measure -- <file>) and call submit_take with the video, the seed and the measures. If retry.try_again is true, add retry.add_to_prompt to the prompt and make it again with the new seed.',
   };
 }
 
@@ -92,9 +94,9 @@ export const VIDEO_TOOLS = [
     return { __content: [{ type: 'image', data: btoa(bin), mimeType: mime }, { type: 'text', text: JSON.stringify({ uri: a.uri, mime, bytes: head.size }) }] };
   }),
   T('submit_take', 'Bring a finished clip back to the studio. Give the video as url (https), data_base64 or uri (media/ already uploaded), up to 25 MB. It is saved as a take for the human to review; nothing is used until they pick it.',
-    { ...prod, scene: str, clip: { ...num, description: 'clip number, from 1' }, url: str, data_base64: str, uri: str, mime: str, note: { ...str, description: 'what you did, or anything the human should know' } }, ['production', 'scene', 'clip'], async (c, a) => {
+    { ...prod, scene: str, clip: { ...num, description: 'clip number, from 1' }, url: str, data_base64: str, uri: str, mime: str, seed: { ...num, description: 'the seed you used' }, hold: { ...num, description: 'seconds it stands still at the end, from the measure script' }, cuts: { ...num, description: 'number of hard cuts, from the measure script' }, smooth: { type: 'object', description: 'the smooth object from the measure script' }, note: { ...str, description: 'what you did, or anything the human should know' } }, ['production', 'scene', 'clip'], async (c, a) => {
       const sc = (await S.listArtifacts(c.db, a.production, { kind: 'scene' })).find((x) => keyOf(x.ref) === a.scene); if (!sc) throw new HttpError(404, `no scene ${a.scene}`);
-      const uri = await storeVideo(c, a.production, a), r = await addTake(c.db, c.actor, a.production, { scene: a.scene, clip: Math.round(Number(a.clip) || 1), uri, note: a.note || '' }, STUDIO);
+      const uri = await storeVideo(c, a.production, a), r = await addTake(c.db, c.actor, a.production, { scene: a.scene, clip: Math.round(Number(a.clip) || 1), uri, seed: Number.isInteger(a.seed) ? a.seed : null, hold: typeof a.hold === 'number' ? a.hold : null, cuts: Number.isInteger(a.cuts) ? a.cuts : null, smooth: a.smooth && typeof a.smooth === 'object' ? a.smooth : null, note: a.note || '' }, STUDIO);
       return { ...r, uri, status: 'proposed', next: 'The human reviews it on the Pack page. Call get_feedback to see their answer.' };
     }),
 ];

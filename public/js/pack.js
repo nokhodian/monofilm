@@ -114,3 +114,18 @@ export function smoothness(steps, interval = 0.2) {
   const sorted = [...steps].sort((a, b) => a - b), median = sorted[Math.floor(sorted.length / 2)], max = Math.max(...steps), at = steps.indexOf(max), r1 = (x) => Math.round(x * 10) / 10;
   return { median: r1(median), max: r1(max), at: r1((at + 1) * interval), flag: max > Math.max(12, 4 * Math.max(median, 1)) };
 }
+
+// ---- trying a clip again ----
+export const MAX_ATTEMPTS = 3;
+// The same scene, clip and attempt always give the same seed, so a retry is repeatable and a new attempt always changes it.
+export function seedFor(scene, clip, attempt) { let h = 2166136261; for (const c of `${scene}:${clip}:${attempt}`) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h % 2147483647; }
+// What a video model should do next for a clip, from the takes already made (each { picked, hold, smooth, cuts }). Nothing is retried once a take is picked, or after MAX_ATTEMPTS.
+export function retryAdvice(scene, clip, takes) {
+  const n = (takes || []).length, last = n ? takes[n - 1] : null, flaws = [];
+  if (last && last.hold) flaws.push(`stood still for the last ${last.hold} s`);
+  if (last && last.smooth && last.smooth.flag) flaws.push(`jumped at about ${last.smooth.at} s`);
+  if (last && last.cuts) flaws.push(`had ${last.cuts} cut${last.cuts === 1 ? '' : 's'}`);
+  const done = (takes || []).some((t) => t.picked);
+  const add = [last && last.hold ? 'Spread the action over the whole clip so it lands on the very last frame, with no pause.' : '', last && ((last.smooth && last.smooth.flag) || last.cuts) ? 'Make it one continuous shot: the same place, light and framing from the first frame to the last. No cuts, no morphing.' : ''].filter(Boolean).join(' ');
+  return { attempt: n + 1, max_attempts: MAX_ATTEMPTS, seed: seedFor(scene, clip, n + 1), try_again: !done && !!flaws.length && n < MAX_ATTEMPTS, last_take_problems: flaws, add_to_prompt: flaws.length ? add : '', stop: done ? 'A take is already picked.' : n >= MAX_ATTEMPTS && flaws.length ? `Already ${n} takes with problems. Stop and tell the human, who can change the brief.` : '' };
+}

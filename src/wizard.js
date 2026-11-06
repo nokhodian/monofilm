@@ -239,13 +239,13 @@ export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, i
 
 // ---- takes: what the outside generator made, brought back ----
 // A human's take is approved at once. A video model working through MCP (an AI agent) proposes the take and the human reviews it; `studio` then sets up the empty clip shells.
-export async function addTake(db, actor, pid, { scene, clip = 1, uri, first = null, last = null, hold = null, smooth = null, note = '' }, studio = null) {
+export async function addTake(db, actor, pid, { scene, clip = 1, uri, first = null, last = null, hold = null, smooth = null, seed = null, cuts = null, note = '' }, studio = null) {
   const isHuman = actor.kind === 'human'; if (!isHuman && !(actor.role === 'agent' && studio)) throw new HttpError(403, 'only a human or a connected video agent brings a clip back');
   const shots = await ensureClips(db, isHuman ? actor : studio, pid, scene), shot = shots[clip - 1]; if (!shot) throw bad(`scene ${scene} has no clip ${clip}`);
   if (typeof uri !== 'string' || !/^media\//.test(uri)) throw bad('upload the clip first, then pass its media/ uri');
   const n = (await S.listArtifacts(db, pid, { kind: 'take', parent: shot })).length + 1, ref = R.take(scene, clip, 'abcdefghij'[n - 1] || n);
   const kf = R.frame(scene, clip, 'start');
-  await S.propose(db, actor, pid, { ref, parent: shot, deps: [kf, REFS.look], data: { scene, clip, first, last, hold: typeof hold === 'number' && hold >= 0 && hold < 600 ? Math.round(hold * 10) / 10 : null, smooth: smooth && [smooth.median, smooth.max, smooth.at].every((x) => typeof x === 'number' && x >= 0 && x < 1e5) ? { median: smooth.median, max: smooth.max, at: smooth.at, flag: !!smooth.flag } : null, note: text(note, 300), picked: false }, rationale: isHuman ? 'Clip brought back from the video generator.' : `Clip made by ${actor.name} and sent through MCP.${note ? ' ' + text(note, 200) : ''}`, auto_approve: isHuman });
+  await S.propose(db, actor, pid, { ref, parent: shot, deps: [kf, REFS.look], data: { scene, clip, first, last, hold: typeof hold === 'number' && hold >= 0 && hold < 600 ? Math.round(hold * 10) / 10 : null, smooth: smooth && [smooth.median, smooth.max, smooth.at].every((x) => typeof x === 'number' && x >= 0 && x < 1e5) ? { median: smooth.median, max: smooth.max, at: smooth.at, flag: !!smooth.flag } : null, seed: Number.isInteger(seed) && seed >= 0 && seed < 2 ** 32 ? seed : null, cuts: Number.isInteger(cuts) && cuts >= 0 && cuts < 100 ? cuts : null, note: text(note, 300), picked: false }, rationale: isHuman ? 'Clip brought back from the video generator.' : `Clip made by ${actor.name} and sent through MCP.${note ? ' ' + text(note, 200) : ''}`, auto_approve: isHuman });
   await S.attachAsset(db, actor, pid, { ref, uri, mime: 'video/mp4', provenance: { tool: 'external-generator', ...(isHuman ? {} : { generator: actor.name }) } });
   return { ref };
 }

@@ -174,9 +174,12 @@ test('a video model connects over MCP: list clips, read one, fetch its picture, 
   assert.equal((await call('get_clip', { scene: 'the-beam' })).isError, undefined);
   const img = await call('get_media', { uri: clip.start_picture.uri }); assert.equal(img.content[0].type, 'image');
   assert.equal((await call('submit_take', { scene: 'the-beam' })).isError, true, 'clip is required');
-  const r = (await call('submit_take', { scene: 'the-beam', clip: 1, url: 'https://gen.test/a.mp4', note: 'first try' })).structuredContent;
+  const r = (await call('submit_take', { scene: 'the-beam', clip: 1, url: 'https://gen.test/a.mp4', seed: 42, hold: 2.5, cuts: 1, smooth: { median: 5, max: 60, at: 3, flag: true }, note: 'first try' })).structuredContent;
   assert.equal(r.ref, 'take:the-beam-c1-a'); assert.match(r.uri, new RegExp(`^media/${t.id}/take-`));
   const take = await S.getArtifact(t.db, t.id, r.ref); assert.deepEqual([take.status, take.author, take.assets.length, take.assets[0].provenance.generator], ['proposed', 'videobot', 1, 'videobot']);
   assert.equal((await call('submit_take', { scene: 'the-beam', clip: 1, url: 'http://gen.test/a.mp4' })).isError, true, 'https only');
   assert.equal((await call('get_clip', { scene: 'the-beam', clip: 1 })).structuredContent.takes[0].status, 'proposed');
+  assert.deepEqual([take.data.seed, take.data.hold, take.data.cuts, take.data.smooth.flag], [42, 2.5, 1, true]);
+  const again = (await call('get_clip', { scene: 'the-beam', clip: 1 })).structuredContent;
+  assert.deepEqual([again.takes[0].seed, again.takes[0].cuts, again.retry.attempt, again.retry.try_again], [42, 1, 2, true]); assert.match(again.retry.add_to_prompt, /continuous shot/);
 });
