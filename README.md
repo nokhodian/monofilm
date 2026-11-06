@@ -10,6 +10,8 @@
 
 <img src="public/shots/hero.png" alt="Monofilm: one page to write or paste a story, with a guide on the left and the AI's questions on the right" width="860">
 
+> **Hackathon submission:** the version submitted on 4 November 2026 is commit [`d9363db`](https://github.com/nokhodian/monofilm/commit/d9363db). Commits after it are fixes and features made after the deadline (accounts with approval, Roll camera on the server, clip-by-clip pages, the Connect an AI agent page, and a second address, `monofilm.monoes.me`). The live studio runs the latest code.
+
 </div>
 
 ---
