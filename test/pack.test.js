@@ -5,8 +5,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sceneEntries, filmEntries, srt, zip, crc32, buildZip, hashOf, similarity, sceneDir, tailHold } from '../public/js/pack.js';
-import { clipPlan, emptyNotes, clipSpans, linesOfClip, cuesOfClip, composeClip } from '../public/js/wizard-model.js';
+import { sceneEntries, filmEntries, srt, zip, crc32, buildZip, hashOf, similarity, sceneDir, tailHold, smoothness } from '../public/js/pack.js';
+import { clipPlan, emptyNotes, clipSpans, clipBeats, startOf, linesOfClip, cuesOfClip, composeClip } from '../public/js/wizard-model.js';
 
 const film = { name: 'Ines teaser', look: { look: 'Muted film', aspect: '9:16', fps: 24, forbidden: ['electric light'] }, speech: 'German', captions: ['English'], anchors: [{ id: 'ines', name: 'Ines', uri: 'media/p/a.png' }], plates: [{ id: 'scaffold', uri: 'media/p/pl.png' }] };
 const scene = { ref: 'scene:the-beam', data: { n: 1, name: 'The beam', seconds: 12, clips: clipPlan(12, 8, [null, 'cut']), who: ['canon.cast:ines'], start: { mode: 'stage' }, end: { mode: 'stage' }, notes: { ...emptyNotes(), happens: 'She looks up.', never: 'No collapse' }, transcript: [{ who: 'INES', text: 'Hallo', en: 'Hi', sec: 2 }, { who: '', text: '', sec: 1 }] },
@@ -62,13 +62,43 @@ test('clips: each one covers its own seconds, and gets its own lines and sounds'
   assert.deepEqual(linesOfClip(d, 2).map((l) => [l.text, l.at, l.index]), [['three', 1, 3]], 'a line belongs to the clip it starts in, timed from that clip\'s start');
   assert.deepEqual(cuesOfClip(d, 1).map((c) => c.name), ['wind']); assert.deepEqual(cuesOfClip(d, 2).map((c) => c.name), ['bell']);
 });
-test('the generator is told to land on the end picture on the last frame and never hold it', () => {
-  const sc = { data: { seconds: 12, clips: clipPlan(12, 8), notes: { happens: 'She looks up.' }, start: { mode: 'stage' }, end: { mode: 'stage' }, transcript: [{ who: 'A', text: 'hello', sec: 2 }, { who: 'B', text: 'bye', sec: 2 }] } };
+test('the generator is told to fill the clip, land on the end picture on the last frame and never hold it', () => {
+  const sc = { data: { seconds: 12, clips: clipPlan(12, 8), notes: { happens: 'She looks up. She steps back.' }, start: { mode: 'stage' }, end: { mode: 'stage' }, transcript: [{ who: 'A', text: 'hello', sec: 2 }, { who: 'B', text: 'bye', sec: 2 }] } };
+  for (const n of [1, 2]) { const t = composeClip(sc, {}, n); assert.match(t.prompt, /Timing: fill the full 6 seconds/); assert.match(t.prompt, /Arrive at the end picture on the very last frame, not before, and never hold it still/); assert.match(t.prompt, /Do not add events that are not listed/); assert.doesNotMatch(t.prompt, /keep the camera moving/i); }
+  assert.match(composeClip(sc, {}, 1).prompt, /hello/); assert.match(composeClip(sc, {}, 1).prompt, /bye/, 'both lines start inside the first 6 seconds');
+  const skip = composeClip({ data: { ...sc.data, end: { mode: 'skip' } } }, {}, 2); assert.doesNotMatch(skip.prompt, /end picture/); assert.match(skip.prompt, /Timing: move gently for the full 6 seconds. Do not add new events/);
+});
+test('each clip is asked to do only its own part, and told what the clip before ended on', () => {
+  const sc = { data: { seconds: 15, clips: clipPlan(15), notes: { happens: 'Mira hops. Mira trips. Mira knocks the tower over.', cam: 'slow crane back' }, start: { mode: 'stage' }, end: { mode: 'stage' } } };
+  assert.deepEqual(clipBeats(sc.data), ['Mira hops. Mira trips.', 'Mira knocks the tower over.'], 'the sentences are shared out in order');
   const a = composeClip(sc, {}, 1), b = composeClip(sc, {}, 2);
-  assert.match(a.prompt, /Timing: spread the action over the full 6 seconds/); assert.doesNotMatch(a.prompt, /end picture is the very last frame/, 'only the last clip ends on the end picture');
-  assert.match(b.prompt, /end picture is the very last frame only: arrive at it on the final frame, not before, and never hold it still/); assert.match(b.prompt, /do not freeze or hold a pose/);
-  assert.match(a.prompt, /hello/); assert.match(a.prompt, /bye/, 'both lines start inside the first 6 seconds'); 
-  const skip = composeClip({ data: { ...sc.data, end: { mode: 'skip' } } }, {}, 2); assert.doesNotMatch(skip.prompt, /end picture is the very last frame/, 'no end picture, nothing to land on');
+  assert.equal(a.prompt.split('\n')[0], 'Mira hops. Mira trips.'); assert.doesNotMatch(a.prompt, /knocks the tower/); assert.equal(b.prompt.split('\n')[0], 'Mira knocks the tower over.'); assert.doesNotMatch(b.prompt.split('\n')[0], /hops/);
+  assert.match(b.prompt, /The clip before ended on: Mira hops\. Mira trips\. Do not repeat it\./); assert.match(b.prompt, /It begins from the end picture of the clip before/);
+  const own = composeClip({ data: { ...sc.data, beats: ['She hops.', 'She trips and falls.'] } }, {}, 2); assert.equal(own.prompt.split('\n')[0], 'She trips and falls.', 'written lines win');
+  assert.deepEqual(clipBeats({ ...sc.data, beats: ['one', ''] }), ['Mira hops. Mira trips.', 'Mira knocks the tower over.'], 'a half-written set is ignored');
+  assert.deepEqual(clipBeats({ ...sc.data, clips: clipPlan(7), notes: { happens: 'One. Two.' } }), ['One. Two.'], 'one clip does everything');
+});
+test('the look stays constant, characters are described the same way each time, and silent clips are asked for as silent', () => {
+  const film = { look: { look: 'felt stop-motion', aspect: '16:9', fps: 24 }, cast: { 'canon.cast:mira': { name: 'Mira', desc: 'A small alpaca with a long neck, cream wool and one pink ear.' }, 'canon.cast:x': { name: 'X', desc: '' } } };
+  const quiet = { data: { seconds: 6, clips: clipPlan(6), who: ['canon.cast:mira', 'canon.cast:x'], notes: { happens: 'She walks.' }, start: { mode: 'stage' }, end: { mode: 'stage' } } };
+  const a = composeClip(quiet, film, 1); assert.match(a.prompt, /Characters \(keep each one exactly as in its reference picture\): Mira: A small alpaca with a long neck/); assert.doesNotMatch(a.prompt, /X:/);
+  assert.match(a.prompt, /Look: felt stop-motion\. 16:9, 24 fps, 6 seconds\. The medium, colours, exposure and time of day stay exactly the same for the whole clip\. No scene change, no cuts, no text on screen\./);
+  assert.equal(a.audio, 'silent'); assert.match(a.prompt, /Audio: none\. No speech, no voices, no music\./);
+  assert.equal(composeClip({ data: { ...quiet.data, notes: { happens: 'x', sound: 'rain' } } }, film, 1).audio, 'ambient');
+  const talk = composeClip({ data: { ...quiet.data, transcript: [{ who: 'MIRA', text: 'Hi', sec: 2 }] } }, film, 1); assert.equal(talk.audio, 'dialogue'); assert.match(talk.prompt, /Audio: only the spoken lines above/);
+});
+test('every clip gets a start and an end picture of its own to aim for, and the next clip starts from the end picture before it', () => {
+  const d = { n: 2, name: 'Two', seconds: 15, clips: clipPlan(15), who: [], start: { mode: 'stage' }, end: { mode: 'stage' }, notes: emptyNotes(), transcript: [] };
+  assert.deepEqual([startOf(d, 1), startOf(d, 2), startOf({ ...d, clips: clipPlan(15, 8, [null, 'cut']) }, 2), startOf({ ...d, end: { mode: 'skip' } }, 2), startOf({ ...d, start: { mode: 'skip' } }, 1)], ['start', 'prev-end', 'own', 'prev-frame', null]);
+  const sc = { ref: 'scene:two', data: d, frames: { '1-start': 'media/p/a.png', '1-end': 'media/p/b.png', '2-end': 'media/p/c.png' }, stage: [], anchors: [] }, e = sceneEntries(film, sc, { target: 'both' }), get = (p) => e.find((x) => x.path.endsWith(p));
+  assert.equal(get('clip-01/end.png').uri, 'media/p/b.png'); assert.equal(get('clip-02/start.png').uri, 'media/p/b.png', 'the same picture ends clip 1 and starts clip 2'); assert.equal(get('clip-02/end.png').uri, 'media/p/c.png');
+  const c2 = JSON.parse(get('clip-02/clip.json').text); assert.deepEqual([c2.start_from, c2.ends_with, c2.audio_policy, JSON.parse(get('clip-01/clip.json').text).transition_in], ['end picture of clip 01 (the same picture)', 'end picture', 'silent', 'cut']);
+  const chain = sceneEntries(film, { ...sc, data: { ...d, start: { mode: 'chain' } } }, { target: 'both' }); assert.equal(JSON.parse(chain.find((x) => x.path.endsWith('clip-01/clip.json')).text).transition_in, 'continues from the previous scene');
+});
+test('a clip that cuts or morphs inside is caught by its own step sizes', () => {
+  assert.equal(smoothness([1, 2, 1, 2, 1, 2]).flag, false); assert.equal(smoothness([3, 3, 4, 3, 3]).flag, false, 'steady motion');
+  const j = smoothness([2, 2, 3, 2, 40, 2, 2], 0.2); assert.deepEqual([j.flag, j.max, j.median, j.at], [true, 40, 2, 1], 'one big step among small ones, about 1 s in');
+  assert.equal(smoothness([9, 10, 11, 12, 18]).flag, false, 'fast but not a jump'); assert.equal(smoothness([1, 2]), null);
 });
 test('the pack gives each clip its own lines, timed from the clip start, and the timing rule', () => {
   const sc = { ...scene, data: { ...scene.data, seconds: 12, clips: clipPlan(12, 8, [null, 'cont']), transcript: [{ who: 'A', text: 'first', sec: 4 }, { who: 'B', text: 'second', sec: 4 }, { who: 'A', text: 'third', sec: 4 }] } };

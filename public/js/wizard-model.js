@@ -56,8 +56,7 @@ export function sceneReadiness(scene, ctx) {
   const done = (a) => a && ['approved', 'locked'].includes(a.status) && !a.stale;
   const brief = !filled ? 0 : filled === NOTE_KEYS.length && done(scene) ? 2 : 1;
   const stage = ctx.get(R.stage(id)) ? (done(ctx.get(R.stage(id))) ? 2 : 1) : 0;
-  const plan = (d.clips || []).length || 1, frames = [];
-  for (let n = 1; n <= plan; n++) { if (n === 1 && d.start && d.start.mode !== 'skip') frames.push(ctx.get(R.frame(id, 1, 'start'))); if (n === plan && d.end && d.end.mode !== 'skip') frames.push(ctx.get(R.frame(id, n, 'end'))); }
+  const frames = slotsOf(id, d).filter((x) => x.mode !== 'skip' && x.mode !== 'chain').map((x) => ctx.get(x.ref));
   const chosen = (f) => f && f.data && f.data.chosen;
   const pictures = !frames.length ? (d.start || d.end ? 2 : 0) : frames.every(chosen) ? 2 : frames.some((f) => f && (ctx.assets(f.ref) || []).length) ? 1 : 0;
   const sound = !(d.transcript || []).length ? (brief ? 2 : 0) : (d.transcript || []).every((l) => (l.text || '').trim()) ? 2 : 1;
@@ -77,19 +76,61 @@ export function linesOfClip(d, n) {
 }
 export const cuesOfClip = (d, n) => { const spans = clipSpans(d); return (d.cues || []).map((c, index) => ({ ...c, index })).filter((c) => clipAt(spans, Number(c.at) || 0) === n); };
 
-// The words a generator receives for one clip, built only from approved film canon and this scene's brief. Pure, so the page, the pack and the Worker agree.
-export function composeClip(scene, film, clipIndex = 1) {
-  const d = scene.data || {}, n = d.notes || {}, clips = clipList(d), c = clips[clipIndex - 1] || clips[0];
-  const look = film.look || {}, never = [...new Set([...(String(n.never || '').split(/[.;\n]/).map((s) => s.trim()).filter(Boolean)), ...(Array.isArray(look.forbidden) ? look.forbidden : String(look.forbidden || '').split(',').map((s) => s.trim()).filter(Boolean)).map((t) => `no ${t}`)])];
-  const lines = linesOfClip(d, clipIndex), last = clipIndex === clips.length, endPic = last && d.end && d.end.mode !== 'skip';
-  const parts = [n.happens, n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${n.cam}`, n.sound && `Sound: ${n.sound}`,
-    `Look: ${look.look || look.base || 'as in the film'}. ${look.aspect || '9:16'}, ${look.fps || 24} fps, ${c.seconds} seconds.`];
-  if (lines.length) parts.push(`Dialogue: ${lines.map((l) => `${l.who || 'NARRATOR'} says${film.speech ? `, in ${film.speech},` : ''} "${l.text}"${l.en ? ` (${l.en})` : ''}`).join(' ')}`);
-  if (clipIndex > 1) parts.push(c.join === 'cut' ? 'This clip is a cut to a new view. It has its own start picture.' : 'Continue from the last picture of the previous clip.');
-  parts.push(timingLine(c.seconds, endPic));
-  return { prompt: parts.filter(Boolean).join('\n'), negative: never.join('. '), seconds: c.seconds, join: c.join, clips: clips.length, timing: timingLine(c.seconds, endPic) };
+// What happens in each clip, so no clip is asked to do the whole scene. Written beats win (one per clip). Otherwise the scene's "What happens" is cut into sentences and each
+// sentence goes to the clip its share of the time falls in. Returns one string per clip (empty when a clip has nothing of its own).
+export function clipBeats(d) {
+  const spans = clipSpans(d), n = spans.length, own = Array.isArray(d.beats) && d.beats.length === n && d.beats.every((x) => String(x || '').trim()) ? d.beats.map((x) => String(x).trim()) : null;
+  if (own) return own;
+  const happens = String((d.notes || {}).happens || '').replace(/\s+/g, ' ').trim();
+  if (!happens) return spans.map(() => '');
+  if (n === 1) return [happens];
+  const sent = happens.split(/(?<=[.!?])\s+/).filter(Boolean), out = spans.map(() => []);
+  sent.forEach((x, i) => out[Math.min(n - 1, Math.floor((i * n) / sent.length))].push(x)); // an even share of the sentences for each clip, in order
+  return out.map((x) => x.join(' '));
 }
-// Generators tend to reach the end picture early and then hold it still. This tells them not to: the end picture is the last frame only, and the action fills the whole clip.
-export const timingLine = (seconds, endPicture) => `Timing: spread the action over the full ${seconds} seconds so nothing is finished early. ${endPicture ? 'The end picture is the very last frame only: arrive at it on the final frame, not before, and never hold it still. ' : ''}Keep the action and the camera moving until the last frame; do not freeze or hold a pose at the end.`;
+// A clip has an end picture unless the scene's end pictures are skipped. The last clip ends on the scene's end picture; a clip in the middle ends on a picture of its own, and the next clip starts from it.
+export const hasEnd = (d) => (d.end || {}).mode !== 'skip';
+// Where a clip begins: the scene's start picture, a picture of its own (after a cut), or the end picture of the clip before.
+export function startOf(d, n) {
+  const c = clipSpans(d)[n - 1] || {};
+  if (n === 1) return (d.start || {}).mode !== 'skip' ? 'start' : null;
+  if (c.join === 'cut') return 'own';
+  return hasEnd(d) ? 'prev-end' : 'prev-frame';
+}
+// The pictures a scene needs: [{ which, clip, ref, mode, label }]. Start of clip 1, the start of a clip that follows a cut, and the end of every clip.
+export function slotsOf(id, d) {
+  const spans = clipSpans(d), out = [], multi = spans.length > 1;
+  spans.forEach((c) => {
+    const n = c.n, last = n === spans.length;
+    if (n === 1) out.push({ which: 'start', clip: 1, ref: R.frame(id, 1, 'start'), mode: (d.start || {}).mode || 'stage', label: 'Start picture' });
+    else if (c.join === 'cut') out.push({ which: 'start', clip: n, ref: R.frame(id, n, 'start'), mode: 'stage', label: `Start of clip ${n} (a cut)` });
+    if (last) out.push({ which: 'end', clip: n, ref: R.frame(id, n, 'end'), mode: (d.end || {}).mode || 'stage', label: multi ? `End of clip ${n} (the scene's end)` : 'End picture' });
+    else out.push({ which: 'end', clip: n, ref: R.frame(id, n, 'end'), mode: hasEnd(d) ? 'stage' : 'skip', label: `End of clip ${n}` });
+  });
+  return out;
+}
+// Sound policy for a clip, so a silent clip is asked for as silent (generators invent speech and music otherwise).
+export function audioPolicy(d, n) { return linesOfClip(d, n).length ? 'dialogue' : String((d.notes || {}).sound || '').trim() ? 'ambient' : 'silent'; }
+const AUDIO_TEXT = { dialogue: 'Audio: only the spoken lines above, with quiet room sound. No music.', ambient: 'Audio: only the ambient sound described above. No speech, no music.', silent: 'Audio: none. No speech, no voices, no music.' };
+
+// The words a generator receives for one clip, built only from approved film canon and this scene's brief. Pure, so the page, the pack and the Worker agree.
+// film = { look, speech, cast: { '<canon.cast ref>': { name, desc } } }
+export function composeClip(scene, film, clipIndex = 1) {
+  const d = scene.data || {}, n = d.notes || {}, spans = clipSpans(d), c = spans[clipIndex - 1] || spans[0], k = c.n;
+  const look = film.look || {}, never = [...new Set([...(String(n.never || '').split(/[.;\n]/).map((s) => s.trim()).filter(Boolean)), ...(Array.isArray(look.forbidden) ? look.forbidden : String(look.forbidden || '').split(',').map((s) => s.trim()).filter(Boolean)).map((t) => `no ${t}`)])];
+  const lines = linesOfClip(d, k), beats = clipBeats(d), endPic = hasEnd(d), policy = audioPolicy(d, k), cast = film.cast || {};
+  const who = (d.who || []).map((r) => cast[r]).filter((p) => p && p.desc);
+  const parts = [beats[k - 1] || (spans.length > 1 ? 'Carry on calmly from the clip before.' : n.happens), k > 1 && beats[k - 2] ? `The clip before ended on: ${beats[k - 2]} Do not repeat it.` : '', n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${n.cam}`, n.sound && `Sound: ${n.sound}`,
+    who.length ? `Characters (keep each one exactly as in its reference picture): ${who.map((p) => `${p.name}: ${p.desc}`).join(' ')}` : '',
+    `Look: ${look.look || look.base || 'as in the film'}. ${look.aspect || '9:16'}, ${look.fps || 24} fps, ${c.seconds} seconds. The medium, colours, exposure and time of day stay exactly the same for the whole clip. No scene change, no cuts, no text on screen.`];
+  if (lines.length) parts.push(`Dialogue: ${lines.map((l) => `${l.who || 'NARRATOR'} says${film.speech ? `, in ${film.speech},` : ''} "${l.text}"${l.en ? ` (${l.en})` : ''}`).join(' ')}`);
+  if (k > 1) parts.push(c.join === 'cut' ? 'This clip is a cut to a new view. It has its own start picture.' : endPic ? 'It begins from the end picture of the clip before.' : 'Continue from the last picture of the previous clip.');
+  parts.push(AUDIO_TEXT[policy], timingLine(c.seconds, endPic));
+  return { prompt: parts.filter(Boolean).join('\n'), negative: never.join('. '), seconds: c.seconds, join: c.join, clips: spans.length, beat: beats[k - 1] || '', audio: policy, timing: timingLine(c.seconds, endPic) };
+}
+// Generators tend to reach the end picture early and then hold it still, or to pile on extra events. This asks for the whole length to be used, with the end picture reached on the last frame.
+export const timingLine = (seconds, endPicture) => (endPicture
+  ? `Timing: fill the full ${seconds} seconds. Arrive at the end picture on the very last frame, not before, and never hold it still. Do not add events that are not listed.`
+  : `Timing: move gently for the full ${seconds} seconds. Do not add new events, stay in the same place and light, and do not freeze at the end.`);
 
 export const emptyScene = (n, o = {}) => ({ n, name: o.name || `Scene ${n}`, tag: o.tag || '', seconds: o.seconds || 10, place: o.place || null, time: o.time || '', who: o.who || [], transcript: o.transcript || [], notes: { ...emptyNotes(), ...(o.notes || {}) }, start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(o.seconds || 10), overrides: {} });

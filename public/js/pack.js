@@ -1,6 +1,6 @@
 // The export pack: what an outside video generator needs, as a folder or a .zip. Pure functions, so the page and the tests use the same code.
 // Meta has no video generator, so nothing here generates video. It writes the prompt, the anchor pictures, the stage controls and a manifest for whichever generator the person uses.
-import { composeClip, clipPlan, linesOfClip, NOTE_KEYS, slug, keyOf, MAX_CLIP } from './wizard-model.js';
+import { composeClip, clipPlan, linesOfClip, startOf, hasEnd, NOTE_KEYS, slug, keyOf, MAX_CLIP } from './wizard-model.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 const ext = (uri, mime) => (/\.(png|jpe?g|webp|gif|mp4|webm|wav|mp3|json)$/i.exec(uri || '') || [, ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4' })[mime] || 'png'])[1].toLowerCase();
@@ -34,16 +34,17 @@ export function sceneEntries(film, scene, { target = 'both', max = MAX_CLIP, roo
     const n = i + 1, last = n === clips.length, c1 = `clip-${pad(n)}`, p = composeClip(scene, film, n), files = [];
     E(`${c1}/prompt.txt`, p.prompt); E(`${c1}/negative.txt`, p.negative); files.push('prompt.txt', 'negative.txt');
     const cl = linesOfClip(d, n); if (cl.length) { E(`${c1}/transcript.json`, JSON.stringify(cl.map(({ who, text, en, at, sec }) => ({ who, text, en, at, sec })), null, 2)); E(`${c1}/transcript.srt`, srt(cl.map((l) => ({ ...l, sec: l.sec })))); files.push('transcript.json', 'transcript.srt'); } // the lines spoken in this clip, timed from its own start
-    let startFrom = null;
+    let startFrom = null; const sf = scene.frames, from = startOf(d, n), putStart = (uri, what) => { U(`${c1}/start.${ext(uri)}`, uri); files.push('start'); startFrom = what; };
     if (w.start) {
-      if (n === 1 && d.start && d.start.mode !== 'skip' && scene.frames[`${n}-start`]) { U(`${c1}/start.${ext(scene.frames[`${n}-start`])}`, scene.frames[`${n}-start`]); files.push('start'); startFrom = 'start picture'; }
-      else if (n > 1 && c.join === 'cut' && scene.frames[`${n}-start`]) { U(`${c1}/start.${ext(scene.frames[`${n}-start`])}`, scene.frames[`${n}-start`]); files.push('start'); startFrom = 'own start picture'; }
+      if (from === 'start' && sf[`${n}-start`]) putStart(sf[`${n}-start`], 'start picture');
+      else if (from === 'own' && sf[`${n}-start`]) putStart(sf[`${n}-start`], 'own start picture');
+      else if (from === 'prev-end' && sf[`${n - 1}-end`]) putStart(sf[`${n - 1}-end`], `end picture of clip ${pad(n - 1)} (the same picture)`);
       else if (n > 1) startFrom = `last frame of clip ${pad(n - 1)}, taken from the clip you bring back`;
     }
-    if (w.end && last && d.end && d.end.mode !== 'skip' && scene.frames[`${n}-end`]) { U(`${c1}/end.${ext(scene.frames[`${n}-end`])}`, scene.frames[`${n}-end`]); files.push('end'); }
+    if (w.end && hasEnd(d) && sf[`${n}-end`]) { U(`${c1}/end.${ext(sf[`${n}-end`])}`, sf[`${n}-end`]); files.push('end'); }
     if (w.stage) for (const s of (scene.stage || []).filter((x) => !x.shot || x.shot.endsWith(`-c${n}`) || n === 1)) { U(`${c1}/stage/${s.role}.${ext(s.uri)}`, s.uri); files.push(`stage/${s.role}`); }
     if (w.refs) for (const a of scene.anchors || []) { U(`${c1}/refs/${slug(a.id)}.${ext(a.uri)}`, a.uri); refs.push(a.id); files.push(`refs/${slug(a.id)}`); }
-    E(`${c1}/clip.json`, JSON.stringify({ film: film.name, scene: d.n, scene_name: d.name, clip: n, of: clips.length, seconds: p.seconds, aspect: (film.look && film.look.aspect) || '9:16', fps: (film.look && film.look.fps) || 24, target, begins: n === 1 ? 'start' : c.join === 'cut' ? 'cut' : 'continues', start_from: startFrom, ends_with: last && w.end && d.end && d.end.mode !== 'skip' ? 'end picture' : null, timing: p.timing, files, depends_on: [scene.ref, 'canon.style:look', ...(d.who || [])] }, null, 2));
+    E(`${c1}/clip.json`, JSON.stringify({ film: film.name, scene: d.n, scene_name: d.name, clip: n, of: clips.length, seconds: p.seconds, aspect: (film.look && film.look.aspect) || '9:16', fps: (film.look && film.look.fps) || 24, target, begins: n === 1 ? 'start' : c.join === 'cut' ? 'cut' : 'continues', start_from: startFrom, ends_with: w.end && hasEnd(d) && sf[`${n}-end`] ? 'end picture' : null, timing: p.timing, beat: p.beat, audio_policy: p.audio, transition_in: n === 1 ? (d.start && d.start.mode === 'chain' ? 'continues from the previous scene' : 'cut') : null, files, depends_on: [scene.ref, 'canon.style:look', ...(d.who || [])] }, null, 2));
   });
   return out;
 }
@@ -103,4 +104,12 @@ export function tailHold(samples, duration, tol = 2.5) {
   const last = samples[0].g; let hold = 0;
   for (const s of samples.slice(1)) { const diff = s.g.reduce((a, v, i) => a + Math.abs(v - last[i]), 0) / last.length; if (diff > tol) break; hold = Math.max(hold, duration - s.t); }
   return hold >= 0.4 ? Math.round(hold * 10) / 10 : 0;
+}
+
+// Does a returned clip jump? steps: the mean absolute difference between pictures taken every `interval` seconds (small greyscale pictures). A cut or a morph shows as one step far above the
+// clip's own usual step. Returns { median, max, at (seconds), flag } or null when there is too little to judge.
+export function smoothness(steps, interval = 0.2) {
+  if (!steps || steps.length < 4) return null;
+  const sorted = [...steps].sort((a, b) => a - b), median = sorted[Math.floor(sorted.length / 2)], max = Math.max(...steps), at = steps.indexOf(max), r1 = (x) => Math.round(x * 10) / 10;
+  return { median: r1(median), max: r1(max), at: r1((at + 1) * interval), flag: max > Math.max(12, 4 * Math.max(median, 1)) };
 }

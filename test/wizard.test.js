@@ -103,7 +103,8 @@ test('the model: clip plans, the prompt, review states and scene readiness', () 
   const ctx = (m) => ({ get: (r) => m[r], assets: () => [] });
   const sc = { ref: 'scene:x', status: 'approved', data: { ...scene.data, start: { mode: 'stage' }, end: { mode: 'skip' } } };
   assert.deepEqual(sceneReadiness(sc, ctx({})).slice(0, 3), [2, 0, 0]);
-  assert.equal(sceneReadiness(sc, ctx({ 'keyframe:x-c1-start': { data: { chosen: 'a1' } } }))[2], 2);
+  assert.notEqual(sceneReadiness(sc, ctx({ 'keyframe:x-c1-start': { data: { chosen: 'a1' } } }))[2], 2, 'the cut also needs its own start picture');
+  assert.equal(sceneReadiness(sc, ctx({ 'keyframe:x-c1-start': { data: { chosen: 'a1' } }, 'keyframe:x-c2-start': { data: { chosen: 'a2' } } }))[2], 2);
 });
 
 test('three faces made at the same moment are all kept: a clash is retried, not lost or a 500', async () => {

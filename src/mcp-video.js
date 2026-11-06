@@ -2,7 +2,7 @@
 // Everything the model needs comes in one answer, and every file has an absolute url it can fetch with the same bearer token (or get_media returns a picture inline).
 import { HttpError, bad, parseJson } from './util.js';
 import * as S from './store.js';
-import { R, REFS, keyOf, clipPlan, composeClip } from '../public/js/wizard-model.js';
+import { R, REFS, keyOf, clipPlan, composeClip, startOf, hasEnd } from '../public/js/wizard-model.js';
 import { ensureClips, addTake } from './wizard.js';
 
 const MAX_VIDEO = 25 * 1024 * 1024, MAX_INLINE = 4 * 1024 * 1024;
@@ -19,7 +19,7 @@ async function load(c, pid) {
   const by = Object.fromEntries(arts.map((a) => [a.ref, a])), data = (ref) => (by[ref] ? by[ref].data : null);
   const uriOf = (ref, id) => { const x = (assets[ref] || []).find((a) => a.id === id); return x ? x.uri : null; };
   const fmt = (data(REFS.story) || {}).format || {}, look = data(REFS.look) || {};
-  const film = { look, speech: fmt.speech || '', captions: fmt.captions || [] };
+  const cast = Object.fromEntries(arts.filter((a) => a.kind === 'canon.cast').map((a) => [a.ref, { name: a.data.name, desc: a.data.desc || '' }])), film = { look, speech: fmt.speech || '', captions: fmt.captions || [], cast };
   return { arts, assets, by, data, uriOf, film };
 }
 const sceneList = (L, only) => L.arts.filter((a) => a.kind === 'scene' && (!only || keyOf(a.ref) === only)).sort((a, b) => (a.data.n || 0) - (b.data.n || 0));
@@ -27,8 +27,8 @@ const sceneList = (L, only) => L.arts.filter((a) => a.kind === 'scene' && (!only
 function clipSpec(c, pid, L, sc, n) {
   const id = keyOf(sc.ref), d = sc.data, clips = d.clips && d.clips.length ? d.clips : clipPlan(d.seconds), cl = clips[n - 1];
   if (!cl) throw new HttpError(404, `scene ${id} has no clip ${n} (it has ${clips.length})`);
-  const p = composeClip(sc, L.film, n), last = n === clips.length, frame = (which) => { const f = L.data(R.frame(id, n, which)); return f && f.chosen ? L.uriOf(R.frame(id, n, which), f.chosen) : null; };
-  const startOk = (n === 1 && d.start && d.start.mode !== 'skip') || (n > 1 && cl.join === 'cut'), endOk = last && d.end && d.end.mode !== 'skip';
+  const p = composeClip(sc, L.film, n), last = n === clips.length, frame2 = (k, which) => { const f = L.data(R.frame(id, k, which)); return f && f.chosen ? L.uriOf(R.frame(id, k, which), f.chosen) : null; }, frame = (which) => frame2(n, which);
+  const from = startOf(d, n), startUri = from === 'start' || from === 'own' ? frame2(n, 'start') : from === 'prev-end' ? frame2(n - 1, 'end') : null, endOk = hasEnd(d);
   const takes = L.arts.filter((a) => a.kind === 'take' && a.data.scene === id && a.data.clip === n);
   const stage = (L.assets[R.stage(id)] || []).filter((a) => a.provenance && a.provenance.role && (!a.provenance.shot || a.provenance.shot.endsWith(`-c${n}`) || n === 1));
   return {
@@ -36,12 +36,16 @@ function clipSpec(c, pid, L, sc, n) {
     prompt: p.prompt, negative_prompt: p.negative, spoken_language: L.film.speech || null,
     timing: p.timing, // the end picture is the last frame only: land on it on the final frame, never hold it still
     begins: n === 1 ? 'start' : cl.join === 'cut' ? 'cut' : 'continues',
-    start_picture: startOk ? pic(c, pid, frame('start')) : null,
-    end_picture: endOk ? pic(c, pid, frame('end')) : null,
-    continue_from: n > 1 && cl.join !== 'cut' ? `the last frame of clip ${n - 1}, from the take you made for it` : null,
+    start_picture: startUri ? pic(c, pid, startUri) : null,
+    end_picture: endOk && frame('end') ? pic(c, pid, frame('end')) : null,
+    continue_from: n > 1 && cl.join !== 'cut' ? (from === 'prev-end' ? `the end picture of clip ${n - 1} (it is this clip's start_picture)` : `the last frame of clip ${n - 1}, from the take you made for it`) : null,
+    beat: p.beat, // what happens in this clip only; the clip before covers the rest
+    audio_policy: p.audio, // silent, ambient or dialogue: ask the model for exactly that and nothing more
+    transition_in: n === 1 ? (d.start && d.start.mode === 'chain' ? 'continues from the previous scene' : 'cut') : null,
+    references_note: 'Models that only take a start and an end picture cannot use references: the start and end pictures and the character sentences in the prompt are what keep the film consistent.',
     references: (d.who || []).map((w) => { const cast = L.data(w) || {}, uri = cast.anchor ? L.uriOf(w, cast.anchor) : null; return uri ? { id: keyOf(w), name: cast.name || keyOf(w), ...pic(c, pid, uri) } : null; }).filter(Boolean),
     stage_controls: stage.map((a) => ({ role: a.provenance.role, ...pic(c, pid, a.uri) })),
-    takes: takes.map((t) => ({ ref: t.ref, status: t.status, picked: !!t.data.picked, ...(t.data.hold ? { stands_still_at_end_seconds: t.data.hold } : {}) })),
+    takes: takes.map((t) => ({ ref: t.ref, status: t.status, picked: !!t.data.picked, ...(t.data.hold ? { stands_still_at_end_seconds: t.data.hold } : {}), ...(t.data.smooth && t.data.smooth.flag ? { jumps_at_seconds: t.data.smooth.at } : {}) })),
     next: 'Make this clip, then call submit_take with the video.',
   };
 }

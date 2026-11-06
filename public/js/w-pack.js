@@ -5,8 +5,8 @@
 // Also exports the helpers Ship uses (settings, filmOf, sceneInput, fetchBytes, saveBlob).
 import { $, esc, st, api, P, toast, mediaSrc, copyText } from './core.js';
 import { get, ofKind, threads } from './data.js';
-import { R, TARGETS, MAX_CLIP, ANCHOR_MODES, REFS, clipPlan, composeClip, sceneReadiness, keyOf } from './wizard-model.js';
-import { sceneEntries, buildZip, hashOf, similarity, sceneDir, tailHold } from './pack.js';
+import { R, TARGETS, MAX_CLIP, ANCHOR_MODES, REFS, clipPlan, composeClip, sceneReadiness, startOf, hasEnd, keyOf } from './wizard-model.js';
+import { sceneEntries, buildZip, hashOf, similarity, sceneDir, tailHold, smoothness } from './pack.js';
 import { head as sceneHead } from './w-stage.js';
 import { registerSub } from './w-scenes.js';
 import { registerFix } from './w-fix.js';
@@ -23,7 +23,8 @@ export function filmOf() {
   const prod = (st.prods || []).find((p) => p.id === st.pid) || {}, fmt = ((get(REFS.story) || {}).data || {}).format || {}, look = ((get(REFS.look) || {}).data) || {};
   const anchors = ofKind('canon.cast').map((a) => ({ id: keyOf(a.ref), name: a.data.name, uri: assetUri(a.ref, a.data.anchor) })).filter((a) => a.uri);
   const plates = ofKind('canon.world').map((a) => ({ id: keyOf(a.ref), name: a.data.name, uri: assetUri(a.ref, a.data.anchor || a.data.chosen) })).filter((a) => a.uri);
-  return { name: prod.name || 'film', look, speech: fmt.speech || '', captions: fmt.captions || [], anchors, plates };
+  const cast = Object.fromEntries(ofKind('canon.cast').map((a) => [a.ref, { name: a.data.name, desc: a.data.desc || '' }]));
+  return { name: prod.name || 'film', look, speech: fmt.speech || '', captions: fmt.captions || [], anchors, plates, cast };
 }
 export const clipsOf = (sc, max = settings().max) => { const d = sc.data || {}; return d.clips && d.clips.length ? d.clips : clipPlan(d.seconds, max); };
 export function sceneInput(sc, film = filmOf()) {
@@ -50,19 +51,24 @@ async function frameCheck(file, startUri, endUri) {
   const url = URL.createObjectURL(file), v = document.createElement('video'); v.muted = true; v.preload = 'auto'; v.playsInline = true; v.src = url;
   try {
     await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('I could not open that video.')); });
-    const out = { first: null, last: null, hold: null };
+    const out = { first: null, last: null, hold: null, smooth: null };
     if (startUri) { await seek(v, 0); out.first = similarity(grab(v), grab(await loadImg(startUri))); }
     if (endUri) { let d = v.duration; if (!isFinite(d)) { await seek(v, 1e6); d = v.currentTime; } await seek(v, Math.max(0, d - 0.05)); out.last = similarity(grab(v), grab(await loadImg(endUri))); }
     let d = v.duration; if (!isFinite(d)) { await seek(v, 1e6); d = v.currentTime; }
-    if (d > 0.6) { const got = []; for (let t = d - 0.05; t >= Math.max(0, d - 4); t -= 0.25) { await seek(v, t); got.push({ t, g: grey(v) }); } out.hold = tailHold(got, d); } // does it reach the end picture early and stand still?
+    if (d > 0.6) { // a small picture every 0.2 s, to see whether the clip jumps and whether it stands still at the end
+      const all = []; for (let t = 0.1; t < d - 0.1; t += 0.2) { await seek(v, t); all.push({ t, g: grey(v) }); } await seek(v, d - 0.05); all.push({ t: d - 0.05, g: grey(v) });
+      const step = (a, b) => a.g.reduce((s, x, i) => s + Math.abs(x - b.g[i]), 0) / a.g.length;
+      out.smooth = smoothness(all.slice(1).map((s, i) => step(all[i], s)));
+      out.hold = tailHold(all.filter((s) => s.t >= d - 4).reverse(), d);
+    }
     return out;
   } finally { URL.revokeObjectURL(url); }
 }
 // Which anchor pictures does clip n have to match? Same rule as pack.js: only the first clip (or a cut) has a start picture, only the last clip an end picture.
 export function anchorsFor(sc, n) {
-  const id = keyOf(sc.ref), d = sc.data, clips = clipsOf(sc), c = clips[n - 1] || {}, last = n === clips.length;
-  const sf = get(R.frame(id, n, 'start')), ef = get(R.frame(id, n, 'end')), uri = (f) => (f && f.data && f.data.chosen ? assetUri(f.ref, f.data.chosen) : null);
-  return { start: (n === 1 && d.start && d.start.mode !== 'skip') || (n > 1 && c.join === 'cut') ? uri(sf) : null, end: last && d.end && d.end.mode !== 'skip' ? uri(ef) : null };
+  const id = keyOf(sc.ref), d = sc.data, from = startOf(d, n), uri = (f) => (f && f.data && f.data.chosen ? assetUri(f.ref, f.data.chosen) : null);
+  const start = from === 'start' || from === 'own' ? uri(get(R.frame(id, n, 'start'))) : from === 'prev-end' ? uri(get(R.frame(id, n - 1, 'end'))) : null;
+  return { start, end: hasEnd(d) ? uri(get(R.frame(id, n, 'end'))) : null };
 }
 
 // ---------- plain words for each file ----------
@@ -122,14 +128,16 @@ function htmlPack(ctx) {
       <div class="sm">${f === null || f === undefined ? '<span class="mute">First frame: there is no start picture to compare.</span>' : `How much the first frame matches your start picture: <b>${f}%</b>`}</div>
       <div class="sm">${l === null || l === undefined ? '<span class="mute">Last frame: there is no end picture to compare.</span>' : `How much the last frame matches your end picture: <b>${l}%</b>`}</div>
       ${t.data.hold ? `<div class="sm wzp-bad"><b>It stands still for the last ${t.data.hold} s.</b> The end picture was reached early and then held. See "Suggested change" below.</div>` : ''}
+      ${t.data.smooth && t.data.smooth.flag ? `<div class="sm wzp-bad"><b>It jumps at about ${t.data.smooth.at} s.</b> A cut or a morph: one step is ${t.data.smooth.max}, the clip's usual step is ${t.data.smooth.median}. See "Suggested change" below.</div>` : ''}
       <div class="row" style="margin-top:6px">${chipOf(t.ref)}${t.data.picked ? '' : `<button class="bt sm" data-act="wp-use" data-ref="${esc(t.ref)}">Use this take</button>`}</div></div></div>`, { kind: 'take', name: `Clip ${t.data.clip} take ${t.ref.slice(-1).toUpperCase()}`, cls: 'dn hc' }); }).join('');
   const sug = takes.flatMap((t) => open(t).map((c) => ({ t, c }))).map(({ t, c }) => { const p = (composeClip(sc, film, t.data.clip) || {}).prompt || ''; return `<div class="cd"><div class="sm"><b>Clip ${t.data.clip} · take ${esc(t.ref.slice(-1).toUpperCase())}</b> · ${esc(c.author)} asked for a change</div><pre class="wzp-pre">${esc(`${p}\nAlso: ${c.body || ''}`.trim())}</pre><div class="row"><button class="bt sm acc" data-act="wp-add" data-id="${esc(c.id)}" data-text="${esc(c.body || '')}">Add to the Brief notes</button><span class="sm mute">Adds "Also: ..." to What happens. Nothing is generated here.</span></div></div>`; }).join('');
   const holdSug = takes.filter((t) => t.data.hold).map((t) => { const text = `Last time the end picture was held still for about ${t.data.hold} s. Spread the action over the whole clip so it lands on the very last frame, with no pause.`; return `<div class="cd"><div class="sm"><b>Clip ${t.data.clip} · take ${esc(t.ref.slice(-1).toUpperCase())}</b> · it stands still for the last ${t.data.hold} s</div><pre class="wzp-pre">${esc(`${(composeClip(sc, film, t.data.clip) || {}).prompt || ''}\nAlso: ${text}`.trim())}</pre><div class="row"><button class="bt sm acc" data-act="wp-add" data-text="${esc(text)}">Add this to the Brief notes</button><span class="sm mute">Then make the clip again in your generator, or trim the end in your editor.</span></div></div>`; }).join('');
+  const jumpSug = takes.filter((t) => t.data.smooth && t.data.smooth.flag).map((t) => { const text = `Last time the clip jumped at about ${t.data.smooth.at} s, like a cut or a morph. Make it one continuous shot: the same place, light and framing from the first frame to the last, with no cut and no new events.`; return `<div class="cd"><div class="sm"><b>Clip ${t.data.clip} · take ${esc(t.ref.slice(-1).toUpperCase())}</b> · it jumps at about ${t.data.smooth.at} s</div><pre class="wzp-pre">${esc(`${(composeClip(sc, film, t.data.clip) || {}).prompt || ''}\nAlso: ${text}`.trim())}</pre><div class="row"><button class="bt sm acc" data-act="wp-add" data-text="${esc(text)}">Add this to the Brief notes</button><span class="sm mute">Then make the clip again, ideally with a few seeds, and keep the smoothest.</span></div></div>`; }).join('');
   const B = `${checklist}<span class="lbl">The files for this scene</span><p class="sm mute" style="margin:0 0 6px">The pack holds the prompt, what must not show, pictures, stage controls, the spoken lines with captions, and a manifest. Meta has no video or voice generator, so the pack has no video and no audio.</p>
   <div class="man">${sceneFiles}</div>${perClip}
   <div class="row" style="margin:10px 0"><button class="bt sm acc" data-act="wp-zip">Download this scene · .zip</button><button class="bt sm" data-act="wp-copyall">Copy every prompt of this scene</button><span class="sm mute" id="wp-zipmsg">${F.busy === id ? 'Building the zip...' : ''}</span></div>
   <span class="lbl">Takes that came back${multi ? ` for clip ${cur}` : ''}${takes.length ? ` · ${takes.filter((t) => !multi || t.data.clip === cur).length}` : ''}</span>${tk || '<p class="nothing">Nothing to review yet. When your generator has made a clip, bring it back above.</p>'}
-  ${sug || holdSug ? `<span class="lbl">Suggested change</span>${holdSug}${sug}` : ''}`;
+  ${sug || holdSug || jumpSug ? `<span class="lbl">Suggested change</span>${holdSug}${jumpSug}${sug}` : ''}`;
   return spine(ctx, { head: sceneHead(ctx), A, B, items: takes.map((t) => t.ref), noun: ['take', 'takes'], act: takes.length ? undefined : 'A', ai: 'Here is everything your generator needs for this scene. I cannot make the video or the voice myself. Bring the clip back and I will check it.',
     ...(takes.length ? {} : { gate: { ready: true, reason: 'Nothing to review yet. You can carry on.' } }) });
 }
@@ -143,12 +151,12 @@ async function bringBack(id, n, file) {
   if (file.size > 25 * 1024 * 1024) return say('That file is over 25 MB. Make it smaller and try again.');
   try {
     say('Checking the first and last picture, and the end...');
-    const a = anchorsFor(sc, n), chk = await frameCheck(file, a.start, a.end).catch((e) => { toast(`I could not compare the pictures: ${e.message}`); return { first: null, last: null, hold: null }; });
+    const a = anchorsFor(sc, n), chk = await frameCheck(file, a.start, a.end).catch((e) => { toast(`I could not compare the pictures: ${e.message}`); return { first: null, last: null, hold: null, smooth: null }; });
     say('Uploading...');
     const ext = /\.webm$/i.test(file.name) ? 'webm' : 'mp4', name = `take-${id.slice(0, 40)}-c${n}-${Date.now().toString(36)}.${ext}`.replace(/[^A-Za-z0-9._-]/g, '-');
     const r = await fetch(`/api/p/${st.pid}/media/${name}`, { method: 'PUT', headers: { authorization: 'Bearer ' + st.key, 'content-type': file.type || 'video/mp4' }, body: file });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'upload failed');
-    await api(P('/wizard/take'), { method: 'POST', body: { scene: id, clip: n, uri: `media/${st.pid}/${name}`, first: chk.first, last: chk.last, hold: chk.hold, note: '' } });
+    await api(P('/wizard/take'), { method: 'POST', body: { scene: id, clip: n, uri: `media/${st.pid}/${name}`, first: chk.first, last: chk.last, hold: chk.hold, smooth: chk.smooth, note: '' } });
     say('Saved as a take.'); toast(`Clip ${n} is back as a new take.`); refresh();
   } catch (e) { say(`It did not work: ${e.message}`); }
 }

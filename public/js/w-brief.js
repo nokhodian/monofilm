@@ -5,7 +5,7 @@
 // Edits are applied to the page's snapshot at once and saved a moment later with ownEdit (like w-start.js). Typing never re-renders the page, so the cursor stays; only part B is repainted in place.
 import { $, esc, api, P, toast } from './core.js';
 import { get } from './data.js';
-import { R, REFS, SUBS, NOTE_KEYS, ANCHOR_MODES, JOINS, MAX_CLIP, FORMAT_DEFAULT, sceneBounds, clampScene, clipPlan, clipSpans, linesOfClip, cuesOfClip, emptyScene, sceneReadiness, keyOf, slug } from './wizard-model.js';
+import { R, REFS, SUBS, NOTE_KEYS, ANCHOR_MODES, JOINS, MAX_CLIP, FORMAT_DEFAULT, sceneBounds, clampScene, clipPlan, clipSpans, clipBeats, linesOfClip, cuesOfClip, emptyScene, sceneReadiness, keyOf, slug } from './wizard-model.js';
 import { gateReason } from './w-pure.js';
 import { W, spine, itemEl, chipOf, statusOf, pill, nothing, ownEdit, sceneArts, rerender, hrefOf, hrefIn } from './w-core.js';
 import { clipBar } from './w-clips.js';
@@ -33,11 +33,12 @@ export function flush() {
   return Q.chain;
 }
 addEventListener('hashchange', () => { flush(); });
-const setSeconds = (v) => (d) => { const n = clampScene(v, fmtOf()); d.seconds = n; d.clips = clipPlan(n, MAX_CLIP, (d.clips || []).map((c) => c.join)); return d; };
+const setSeconds = (v) => (d) => { const n = clampScene(v, fmtOf()); d.seconds = n; d.clips = clipPlan(n, MAX_CLIP, (d.clips || []).map((c) => c.join)); if ((d.beats || []).length !== d.clips.length) d.beats = []; return d; };
 // "n:happens" a note, "l:<id>:text" a line, "c:<id>:name" a cue, "s:name|seconds|tag" the scene itself
 function setter(key, v) {
   const [k, a, b] = key.split(':');
   if (k === 'n') return (d) => { d.notes = d.notes || {}; d.notes[a] = v; return d; };
+  if (k === 'b') return (d) => { const arr = clipBeats(d); arr[Number(a) - 1] = v; d.beats = arr; return d; }; // what happens in clip <a>; the others keep what they had
   if (k === 'l') return (d) => { const l = (d.transcript || []).find((x) => x.id === a); if (l) l[b] = b === 'sec' ? Number(v) || 0 : v; return d; };
   if (k === 'c') return (d) => { const c = (d.cues || []).find((x) => x.id === a); if (c) c[b] = b === 'at' ? Number(v) || 0 : v; return d; };
   if (k === 's') return a === 'seconds' ? setSeconds(v) : (d) => { d[a] = v; return d; };
@@ -117,8 +118,10 @@ function clipsA(d) {
   const clips = d.clips && d.clips.length ? d.clips : clipPlan(d.seconds);
   return `<span class="lbl">Length and clips</span><div class="row"><label class="row"><b>Scene length</b> ${field('s:seconds', d.seconds, { type: 'number', min: sceneBounds(fmtOf())[0], max: sceneBounds(fmtOf())[1], step: 1, label: 'Scene length in seconds', cls: 'wzb-num' })} s</label><span class="mute sm">Video makers make short clips (up to ${MAX_CLIP} s), so I split the scene.</span></div>
   <div class="clips" role="img" aria-label="${clips.map((c, i) => `clip ${i + 1}: ${c.seconds} seconds`).join(', ')}">${clips.map((c, i) => `<i style="flex:${c.seconds}">clip ${i + 1} · ${c.seconds} s</i>`).join('')}</div>
-  ${clips.length > 1 ? clips.slice(1).map((c, k) => `<div class="wzb-join"><span class="wk">How clip ${k + 2} begins</span><div>${JOINS.map((j) => `<span class="ch cl ${c.join === j[0] ? 'on' : ''}" tabindex="0" role="button" aria-pressed="${c.join === j[0]}" data-act="wb-join" data-i="${k + 1}" data-v="${j[0]}">${j[1]}</span>`).join('')}</div><div class="sm mute">${c.join === 'cut' ? 'A new view. This clip gets its own start picture.' : 'Same view, place and people. No jump.'}</div></div>`).join('') : '<div class="sm mute">One clip. No split needed.</div>'}`;
+  ${clips.length > 1 ? clips.slice(1).map((c, k) => `<div class="wzb-join"><span class="wk">How clip ${k + 2} begins</span><div>${JOINS.map((j) => `<span class="ch cl ${c.join === j[0] ? 'on' : ''}" tabindex="0" role="button" aria-pressed="${c.join === j[0]}" data-act="wb-join" data-i="${k + 1}" data-v="${j[0]}">${j[1]}</span>`).join('')}</div><div class="sm mute">${c.join === 'cut' ? 'A new view. This clip gets its own start picture.' : 'Same view, place and people. No jump.'}</div></div>`).join('') : '<div class="sm mute">One clip. No split needed.</div>'}${clips.length > 1 ? beatsA(d, clips) : ''}`;
 }
+// What happens in each clip, so no clip is asked to do the whole scene. Shared out from "What happens" until the person writes their own.
+const beatsA = (d, clips) => `<span class="lbl">What happens in each clip</span><p class="sm mute" style="margin:0 0 6px">${Array.isArray(d.beats) && d.beats.length === clips.length ? 'Your own lines, one for each clip.' : 'Shared out from What happens, in order. Change a line to write your own.'} Each clip is asked to do only its own part, so it does not rush, repeat or cut.</p><div class="notes">${clipBeats(d).map((b, i) => `<div class="dn"><label class="nm" for="wzb-b-${i + 1}">Clip ${i + 1} · ${clips[i].seconds} s</label><textarea id="wzb-b-${i + 1}" data-wbf="b:${i + 1}" rows="2" placeholder="Nothing of its own: it carries on calmly.">${esc(b)}</textarea></div>`).join('')}</div>`;
 function scriptB(a) {
   const d = a.data, ref = a.ref, sp = fmtOf().speech, place = d.place ? nameOf(d.place) : '', hap = (d.notes || {}).happens || '';
   const slugl = [place, d.time && d.time !== 'none' ? d.time : ''].filter(Boolean).join(' · ').toUpperCase() || esc(d.name).toUpperCase();

@@ -1,5 +1,5 @@
 // Pure helpers for the wizard's Stage and Pictures pages (no DOM, so node can test them: test/wizard-stage.test.js).
-import { R, keyOf, clipPlan } from './wizard-model.js';
+import { R, keyOf, clipPlan, slotsOf } from './wizard-model.js';
 import { moveEnd, MOVES } from './stage-math.js';
 
 export const STEP = 0.2; // metres per nudge click (the margin card's planOf says the same)
@@ -50,17 +50,8 @@ export function nudgeStage(stage, part, v = {}) {
   return true;
 }
 
-// The pictures a scene needs. The start picture belongs to clip 1, the end picture to the last clip; a later clip that begins with a cut has its own start picture.
-export function slotsOf(id, d) {
-  const clips = clipsOf(d), out = [];
-  clips.forEach((c, i) => {
-    const n = i + 1;
-    if (n === 1) out.push({ which: 'start', clip: 1, ref: R.frame(id, 1, 'start'), mode: (d.start || {}).mode || 'stage', label: 'Start picture' });
-    else if (c.join === 'cut') out.push({ which: 'start', clip: n, ref: R.frame(id, n, 'start'), mode: 'stage', label: `Start of clip ${n} (a cut)` });
-    if (n === clips.length) out.push({ which: 'end', clip: n, ref: R.frame(id, n, 'end'), mode: (d.end || {}).mode || 'stage', label: 'End picture' });
-  });
-  return out;
-}
+// The pictures a scene needs live in wizard-model.js (the model and the pages share them).
+export { slotsOf };
 
 // What a failed picture request means, in plain words, and where to go to fix it. id = the scene id.
 export function plainError(msg, id) {

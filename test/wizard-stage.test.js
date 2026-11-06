@@ -16,9 +16,11 @@ test('nudge moves a person by 0.2 m per click', () => {
   assert.ok(nudgeStage(s, 'obj:a', { dx: 2, dz: -1 })); assert.equal(s.characters[0].pos[2], Math.round((z - 0.2) * 100) / 100);
   assert.equal(nudgeStage(s, 'obj:nobody', { dx: 1 }), false);
 });
-test('slots: start of clip 1, cuts, end of the last clip', () => {
-  assert.deepEqual(slotsOf('x', d).map((s) => s.ref), ['keyframe:x-c1-start', 'keyframe:x-c2-end']);
-  assert.equal(slotsOf('x', { ...d, clips: [{ seconds: 6 }, { seconds: 6, join: 'cut' }] }).length, 3);
+test('slots: start of clip 1, a start after a cut, and an end for every clip', () => {
+  assert.deepEqual(slotsOf('x', d).map((s) => s.ref), ['keyframe:x-c1-start', 'keyframe:x-c1-end', 'keyframe:x-c2-end'], 'clip 2 starts from the end picture of clip 1, so it has no start picture of its own');
+  assert.deepEqual(slotsOf('x', { ...d, clips: [{ seconds: 6 }, { seconds: 6, join: 'cut' }] }).map((s) => s.ref), ['keyframe:x-c1-start', 'keyframe:x-c1-end', 'keyframe:x-c2-start', 'keyframe:x-c2-end']);
+  assert.deepEqual(slotsOf('x', { ...d, end: { mode: 'skip' } }).map((s) => [s.ref, s.mode]), [['keyframe:x-c1-start', 'stage'], ['keyframe:x-c1-end', 'skip'], ['keyframe:x-c2-end', 'skip']], 'skipping end pictures skips them for every clip');
+  assert.equal(slotsOf('x', { ...d, clips: [{ seconds: 6 }] }).length, 2);
 });
 test('plain errors', () => {
   assert.match(plainError('Approve the look (step 3) first.', 'x').href, /look/);

@@ -31,7 +31,7 @@ export function localRead(story) {
     questions: [], invented: [], looks: [{ name: 'Muted film', sub: 'soft light, fine grain', desc: 'Muted film, fine grain, natural light' }, { name: 'Hard noir', sub: 'high contrast', desc: 'Hard noir, high contrast, deep shadows' }, { name: 'Warm fresco', sub: 'painted warmth', desc: 'Warm fresco, painted colours' }], forbidden: [] };
 }
 const READ_SYSTEM = `You read a story for a film studio and set it up for a human to review. Output JSON with: title, summary (2 sentences), tone (list of short words), period (string), language (spoken language),
-people (list of {name, role, desc (face, age, clothes), voice (how they sound), invented (true if the story never names them)}), places (list of {name, desc, time}), beats (list of {text}, 4 to 8 short story beats),
+people (list of {name, role, desc (ONE sentence a picture maker can draw the same way every time: what kind of being or animal it is, the silhouette and size, the main colours and markings, and one feature that makes it unmistakable; for a person also age and clothes), voice (how they sound), invented (true if the story never names them)}), places (list of {name, desc, time}), beats (list of {text}, 4 to 8 short story beats),
 questions (up to 3 {q, options (2 to 3 short answers)} about things the story does not settle), invented (list of things you had to make up), looks (exactly 3 {name, sub, desc}: different visual styles that suit the period), forbidden (list of things that must never be on screen for this period).`;
 
 async function ensure(db, actor, pid, ref, data, extra = {}) {
@@ -67,7 +67,7 @@ export async function readStory(env, db, actor, pid, f) {
   }
   if (!(await row(db, pid, REFS.look))) {
     const looks = (o.looks || []).slice(0, 3).map((l, i) => ({ id: `l${i + 1}`, name: text(l.name, 40), sub: text(l.sub, 60), desc: text(l.desc, 300) }));
-    await put(REFS.look, { aspect: fmt.aspect, shot_seconds: 6, fps: 24, lens: 35, look: looks[0] ? looks[0].desc : '', period: text(o.period, 80), forbidden: (o.forbidden || []).map((x) => text(x, 40)), rules: '', options: looks, chosen: looks[0] ? looks[0].id : null }, 'Three looks that suit your story. The first is my pick.');
+    await put(REFS.look, { aspect: fmt.aspect, shot_seconds: MAX_CLIP, fps: 24, lens: 35, look: looks[0] ? looks[0].desc : '', period: text(o.period, 80), forbidden: (o.forbidden || []).map((x) => text(x, 40)), rules: '', options: looks, chosen: looks[0] ? looks[0].id : null }, 'Three looks that suit your story. The first is my pick.');
   }
   await S.logEvent(db, pid, REFS.reading, 'wizard_read', actor, `${made.length} items proposed`);
   return { made, via: metaConfigured(env) ? 'muse-spark' : 'local' };
@@ -76,7 +76,8 @@ export async function readStory(env, db, actor, pid, f) {
 // ---- 6: scenes ----
 const SCENES_SYSTEM = `You turn a story into scenes for a short film that will be made clip by clip with a video generator. Output JSON {scenes: [...]} with 3 to 8 scenes. Each scene: name, tag (one word for its job: hook, crash, price, title...), seconds (a whole number between the shortest and longest scene length given; all scenes add up to the film length),
 place (the name of one of the places given), time (dawn, day, dusk, night or none), who (names from the people given; may be empty), transcript (list of {who (UPPERCASE name or NARRATOR), text (in the spoken language), en (English meaning), sec}; may be empty),
-notes {happens (2 to 4 sentences: who is where, what moves, what is seen), mood (mood and pace), cam (camera and motion), sound (sound in the picture), never (what must not happen), cont (how it connects to the scene before and after)}.`;
+notes {happens (2 to 4 sentences: who is where, what moves, what is seen), mood (mood and pace), cam (camera and motion), sound (sound in the picture), never (what must not happen), cont (how it connects to the scene before and after)},
+beats (a list with ONE short action line for each clip of the scene, in order: a scene of up to 8 seconds has 1 line, 9 to 16 seconds has 2, 17 to 24 seconds has 3, and so on. Each line says only what happens in that clip; no event appears in two lines, and each clip ends where the next one begins).`;
 const castOf = async (db, pid) => (await S.listArtifacts(db, pid, { kind: 'canon.cast' }));
 const placesOf = async (db, pid) => (await S.listArtifacts(db, pid, { kind: 'canon.world' })).filter((a) => a.ref.startsWith('canon.world:place-'));
 const localScenes = (bible, fmt) => { const beats = (bible.beats || []).slice(0, 5), per = clampScene(fmt.seconds / Math.max(1, beats.length), fmt); return beats.map((b, i) => ({ name: `Scene ${i + 1}`, tag: '', seconds: per, place: '', time: 'day', who: [], transcript: [], notes: { happens: b.text, mood: '', cam: '', sound: '', never: '', cont: '' } })); };
@@ -86,7 +87,7 @@ function sceneFrom(o, i, people, places, fmt) {
   const seconds = clampScene(o.seconds || 10, fmt);
   return { n: i + 1, name: text(o.name, 60) || `Scene ${i + 1}`, tag: text(o.tag, 20), seconds, place: pl ? pl.ref : null, time: text(o.time, 20), who, overrides: {},
     transcript: (o.transcript || []).slice(0, 20).map((l, k) => ({ id: `l${k + 1}`, who: text(l.who, 40).toUpperCase(), text: text(l.text, 400), en: text(l.en, 400), sec: Number(l.sec) || 0 })),
-    notes: Object.fromEntries(NOTE_KEYS.map(([k]) => [k, text((o.notes || {})[k], 700)])), start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(seconds) };
+    notes: Object.fromEntries(NOTE_KEYS.map(([k]) => [k, text((o.notes || {})[k], 700)])), start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(seconds), beats: ((b, n) => (Array.isArray(b) && b.length === n && b.every((x) => String(x || '').trim()) ? b.map((x) => text(x, 400)) : []))(o.beats, clipPlan(seconds).length) }; // one line per clip, or none (the page then shares the scene's action out itself)
 }
 export async function draftScenes(env, db, actor, pid, f) {
   human(actor);
@@ -153,7 +154,7 @@ export async function ensureClips(db, actor, pid, sceneId) {
   const out = [];
   for (const [i, c] of clips.entries()) {
     const n = i + 1, shot = R.shot(sceneId, n);
-    await ensure(db, actor, pid, shot, { title: `${d.name} · clip ${n}`, seconds: c.seconds, clip: n, prompt: composeClip({ data: d }, {}, n).prompt }, { parent: R.scene(sceneId), deps: [REFS.look] });
+    await ensure(db, actor, pid, shot, { title: `${d.name} · clip ${n}`, seconds: c.seconds, clip: n }, { parent: R.scene(sceneId), deps: [REFS.look] });
     for (const which of ['start', 'end']) await ensure(db, actor, pid, R.frame(sceneId, n, which), { role: which, scene: sceneId, clip: n, chosen: null }, { parent: shot, deps: [REFS.look] });
     out.push(shot);
   }
@@ -205,7 +206,14 @@ export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, i
   const anchors = []; for (const w of sd.who || []) { const p = dataOf(await row(db, pid, w)); const cand = p && (p.candidates || []).find((x) => x.id === p.anchor); if (cand) { const a = await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, cand.id).first(); if (a) anchors.push({ id: keyOf(w), uri: a.uri }); } }
   const stageRef = R.stage(scene), st = await row(db, pid, stageRef), stageData = dataOf(st), staged = st && ['approved', 'locked'].includes(st.status) && stageData && (stageData.shots || {})[shot];
   const place = sd.place && dataOf(await row(db, pid, sd.place));
-  const prompt = [`${which === 'start' ? 'The first frame' : 'The last frame'} of a ${c.seconds} second film clip.`, c.prompt.split('\n')[0], place && place.desc && `Place: ${place.name}. ${place.desc}`, await lookText(db, pid), instruction].filter(Boolean).join(' ');
+  // The first picture of a scene follows the previous scene's last picture: it goes in as a reference, so the light, colours and time of day carry across the cut.
+  let prevNote = '';
+  if (which === 'start' && clip === 1 && (sd.start || {}).mode !== 'chain') {
+    const prev = (await S.listArtifacts(db, pid, { kind: 'scene' })).find((a) => (a.data || {}).n === sd.n - 1);
+    if (prev) { const k = (prev.data.clips && prev.data.clips.length ? prev.data.clips : clipPlan(prev.data.seconds)).length, kf = dataOf(await row(db, pid, R.frame(keyOf(prev.ref), k, 'end')));
+      const a = kf && kf.chosen && await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, kf.chosen).first(); if (a) { anchors.push({ id: 'previous-scene', uri: a.uri }); prevNote = "Match the light, colours and time of day of the previous scene's last picture."; } }
+  }
+  const prompt = [`${which === 'start' ? 'The first frame' : 'The last frame'} of a ${c.seconds} second film clip.`, c.prompt.split('\n')[0], place && place.desc && `Place: ${place.name}. ${place.desc}`, await lookText(db, pid), prevNote, instruction].filter(Boolean).join(' ');
   const shape = String(((dataOf(await row(db, pid, REFS.look)) || {}).aspect) || '9:16').split(':').map(Number), aspect = shape.length === 2 && shape.every((n) => n > 0 && n < 100) ? shape : [9, 16]; // the pictures follow the film's shape, not always portrait
   const r = await paint(env, db, actor, pid, fr, { prompt, aspect, anchors, tag: `${which}`, ...(staged ? { stage: { ref: stageRef, shot } } : {}) }, f);
   return { asset: r.asset, ref: fr, staged: !!staged };
@@ -213,13 +221,13 @@ export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, i
 
 // ---- takes: what the outside generator made, brought back ----
 // A human's take is approved at once. A video model working through MCP (an AI agent) proposes the take and the human reviews it; `studio` then sets up the empty clip shells.
-export async function addTake(db, actor, pid, { scene, clip = 1, uri, first = null, last = null, hold = null, note = '' }, studio = null) {
+export async function addTake(db, actor, pid, { scene, clip = 1, uri, first = null, last = null, hold = null, smooth = null, note = '' }, studio = null) {
   const isHuman = actor.kind === 'human'; if (!isHuman && !(actor.role === 'agent' && studio)) throw new HttpError(403, 'only a human or a connected video agent brings a clip back');
   const shots = await ensureClips(db, isHuman ? actor : studio, pid, scene), shot = shots[clip - 1]; if (!shot) throw bad(`scene ${scene} has no clip ${clip}`);
   if (typeof uri !== 'string' || !/^media\//.test(uri)) throw bad('upload the clip first, then pass its media/ uri');
   const n = (await S.listArtifacts(db, pid, { kind: 'take', parent: shot })).length + 1, ref = R.take(scene, clip, 'abcdefghij'[n - 1] || n);
   const kf = R.frame(scene, clip, 'start');
-  await S.propose(db, actor, pid, { ref, parent: shot, deps: [kf, REFS.look], data: { scene, clip, first, last, hold: typeof hold === 'number' && hold >= 0 && hold < 600 ? Math.round(hold * 10) / 10 : null, note: text(note, 300), picked: false }, rationale: isHuman ? 'Clip brought back from the video generator.' : `Clip made by ${actor.name} and sent through MCP.${note ? ' ' + text(note, 200) : ''}`, auto_approve: isHuman });
+  await S.propose(db, actor, pid, { ref, parent: shot, deps: [kf, REFS.look], data: { scene, clip, first, last, hold: typeof hold === 'number' && hold >= 0 && hold < 600 ? Math.round(hold * 10) / 10 : null, smooth: smooth && [smooth.median, smooth.max, smooth.at].every((x) => typeof x === 'number' && x >= 0 && x < 1e5) ? { median: smooth.median, max: smooth.max, at: smooth.at, flag: !!smooth.flag } : null, note: text(note, 300), picked: false }, rationale: isHuman ? 'Clip brought back from the video generator.' : `Clip made by ${actor.name} and sent through MCP.${note ? ' ' + text(note, 200) : ''}`, auto_approve: isHuman });
   await S.attachAsset(db, actor, pid, { ref, uri, mime: 'video/mp4', provenance: { tool: 'external-generator', ...(isHuman ? {} : { generator: actor.name }) } });
   return { ref };
 }
