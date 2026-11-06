@@ -90,12 +90,21 @@ export function clipBeats(d) {
 }
 // A clip has an end picture unless the scene's end pictures are skipped. The last clip ends on the scene's end picture; a clip in the middle ends on a picture of its own, and the next clip starts from it.
 export const hasEnd = (d) => (d.end || {}).mode !== 'skip';
+// Clips in the middle only get an end picture of their own when the scene asks for every clip (the default). With d.ends === 'last' only the scene's last clip has one, which costs fewer credits.
+export const midEnds = (d) => hasEnd(d) && d.ends !== 'last';
+// Every spoken line must fall in exactly one clip. Returns plain-words problems, empty when it is right.
+export function clipLineCheck(d) {
+  const n = clipSpans(d).length, seen = {}, out = [];
+  for (let k = 1; k <= n; k++) for (const l of linesOfClip(d, k)) (seen[l.index] = seen[l.index] || []).push(k);
+  (d.transcript || []).forEach((l, i) => { if (!(l.text || '').trim()) return; const at = seen[i] || []; if (at.length !== 1) out.push(at.length ? `line ${i + 1} is in clips ${at.join(' and ')}` : `line ${i + 1} is in no clip`); });
+  return out;
+}
 // Where a clip begins: the scene's start picture, a picture of its own (after a cut), or the end picture of the clip before.
 export function startOf(d, n) {
   const c = clipSpans(d)[n - 1] || {};
   if (n === 1) return (d.start || {}).mode !== 'skip' ? 'start' : null;
   if (c.join === 'cut') return 'own';
-  return hasEnd(d) ? 'prev-end' : 'prev-frame';
+  return midEnds(d) ? 'prev-end' : 'prev-frame';
 }
 // The pictures a scene needs: [{ which, clip, ref, mode, label }]. Start of clip 1, the start of a clip that follows a cut, and the end of every clip.
 export function slotsOf(id, d) {
@@ -105,7 +114,7 @@ export function slotsOf(id, d) {
     if (n === 1) out.push({ which: 'start', clip: 1, ref: R.frame(id, 1, 'start'), mode: (d.start || {}).mode || 'stage', label: 'Start picture' });
     else if (c.join === 'cut') out.push({ which: 'start', clip: n, ref: R.frame(id, n, 'start'), mode: 'stage', label: `Start of clip ${n} (a cut)` });
     if (last) out.push({ which: 'end', clip: n, ref: R.frame(id, n, 'end'), mode: (d.end || {}).mode || 'stage', label: multi ? `End of clip ${n} (the scene's end)` : 'End picture' });
-    else out.push({ which: 'end', clip: n, ref: R.frame(id, n, 'end'), mode: hasEnd(d) ? 'stage' : 'skip', label: `End of clip ${n}` });
+    else out.push({ which: 'end', clip: n, ref: R.frame(id, n, 'end'), mode: midEnds(d) ? 'stage' : 'skip', label: `End of clip ${n}` });
   });
   return out;
 }
@@ -118,7 +127,7 @@ const AUDIO_TEXT = { dialogue: 'Audio: only the spoken lines above, with quiet r
 export function composeClip(scene, film, clipIndex = 1) {
   const d = scene.data || {}, n = d.notes || {}, spans = clipSpans(d), c = spans[clipIndex - 1] || spans[0], k = c.n;
   const look = film.look || {}, never = [...new Set([...(String(n.never || '').split(/[.;\n]/).map((s) => s.trim()).filter(Boolean)), ...(Array.isArray(look.forbidden) ? look.forbidden : String(look.forbidden || '').split(',').map((s) => s.trim()).filter(Boolean)).map((t) => `no ${t}`)])];
-  const lines = linesOfClip(d, k), beats = clipBeats(d), endPic = hasEnd(d), policy = audioPolicy(d, k), cast = film.cast || {};
+  const lines = linesOfClip(d, k), beats = clipBeats(d), endPic = k === spans.length ? hasEnd(d) : midEnds(d), policy = audioPolicy(d, k), cast = film.cast || {};
   const who = (d.who || []).map((r) => cast[r]).filter((p) => p && p.desc);
   const parts = [beats[k - 1] || (spans.length > 1 ? 'Carry on calmly from the clip before.' : n.happens), k > 1 && beats[k - 2] ? `The clip before ended on: ${beats[k - 2]} Do not repeat it.` : '', n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${n.cam}`, n.sound && `Sound: ${n.sound}`,
     who.length ? `Characters (keep each one exactly as in its reference picture): ${who.map((p) => `${p.name}: ${p.desc}`).join(' ')}` : '',
@@ -134,3 +143,6 @@ export const timingLine = (seconds, endPicture) => (endPicture
   : `Timing: move gently for the full ${seconds} seconds. Do not add new events, stay in the same place and light, and do not freeze at the end.`);
 
 export const emptyScene = (n, o = {}) => ({ n, name: o.name || `Scene ${n}`, tag: o.tag || '', seconds: o.seconds || 10, place: o.place || null, time: o.time || '', who: o.who || [], transcript: o.transcript || [], notes: { ...emptyNotes(), ...(o.notes || {}) }, start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(o.seconds || 10), overrides: {} });
+
+// How many pictures the studio still has to draw for a scene (one credit each).
+export const pictureCount = (id, d) => slotsOf(id, d).filter((x) => x.mode === 'stage').length;

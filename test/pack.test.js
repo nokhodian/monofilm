@@ -6,7 +6,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sceneEntries, filmEntries, srt, zip, crc32, buildZip, hashOf, similarity, sceneDir, tailHold, smoothness } from '../public/js/pack.js';
-import { clipPlan, emptyNotes, clipSpans, clipBeats, startOf, linesOfClip, cuesOfClip, composeClip } from '../public/js/wizard-model.js';
+import { clipPlan, emptyNotes, clipSpans, clipBeats, startOf, linesOfClip, cuesOfClip, composeClip, clipLineCheck } from '../public/js/wizard-model.js';
 
 const film = { name: 'Ines teaser', look: { look: 'Muted film', aspect: '9:16', fps: 24, forbidden: ['electric light'] }, speech: 'German', captions: ['English'], anchors: [{ id: 'ines', name: 'Ines', uri: 'media/p/a.png' }], plates: [{ id: 'scaffold', uri: 'media/p/pl.png' }] };
 const scene = { ref: 'scene:the-beam', data: { n: 1, name: 'The beam', seconds: 12, clips: clipPlan(12, 8, [null, 'cut']), who: ['canon.cast:ines'], start: { mode: 'stage' }, end: { mode: 'stage' }, notes: { ...emptyNotes(), happens: 'She looks up.', never: 'No collapse' }, transcript: [{ who: 'INES', text: 'Hallo', en: 'Hi', sec: 2 }, { who: '', text: '', sec: 1 }] },
@@ -114,4 +114,12 @@ test('a clip that reaches its end picture early and stands still is caught, to t
   assert.equal(tailHold([{ t: 9.95, g: g(100) }, { t: 9.7, g: g(160) }, { t: 9.45, g: g(100) }], 10), 0, 'a clip still moving at the end');
   assert.equal(tailHold([{ t: 9.95, g: g(100) }, { t: 9.7, g: g(100) }], 10), 0, 'a quarter second is not worth a warning');
   assert.equal(tailHold([], 10), 0);
+});
+
+test('every spoken line is in exactly one clip, and a pack refuses a scene where that is not true', () => {
+  const d = { n: 1, name: 'x', seconds: 12, clips: [{ seconds: 6 }, { seconds: 6 }], transcript: [{ text: 'a', sec: 4 }, { text: 'b', sec: 4 }, { text: 'c', sec: 4 }, { text: '', sec: 4 }, { text: 'late', sec: 9 }], notes: {} };
+  assert.deepEqual(clipLineCheck(d), []);
+  assert.deepEqual(clipLineCheck({ ...d, clips: [{ seconds: 6 }, { seconds: 6 }, { seconds: 6 }] }), []);
+  assert.equal(linesOfClip(d, 1).length + linesOfClip(d, 2).length, 4);
+  assert.deepEqual(clipLineCheck(d), []);
 });

@@ -5,7 +5,7 @@
 // Edits are applied to the page's snapshot at once and saved a moment later with ownEdit (like w-start.js). Typing never re-renders the page, so the cursor stays; only part B is repainted in place.
 import { $, esc, api, P, toast } from './core.js';
 import { get } from './data.js';
-import { R, REFS, SUBS, NOTE_KEYS, ANCHOR_MODES, JOINS, MAX_CLIP, FORMAT_DEFAULT, sceneBounds, clampScene, clipPlan, clipSpans, clipBeats, linesOfClip, cuesOfClip, emptyScene, sceneReadiness, keyOf, slug } from './wizard-model.js';
+import { R, REFS, SUBS, NOTE_KEYS, ANCHOR_MODES, JOINS, MAX_CLIP, FORMAT_DEFAULT, sceneBounds, clampScene, clipPlan, clipSpans, clipBeats, midEnds, hasEnd, pictureCount, linesOfClip, cuesOfClip, emptyScene, sceneReadiness, keyOf, slug } from './wizard-model.js';
 import { gateReason } from './w-pure.js';
 import { W, spine, itemEl, chipOf, statusOf, pill, nothing, ownEdit, sceneArts, rerender, hrefOf, hrefIn } from './w-core.js';
 import { clipBar } from './w-clips.js';
@@ -118,10 +118,13 @@ function clipsA(d) {
   const clips = d.clips && d.clips.length ? d.clips : clipPlan(d.seconds);
   return `<span class="lbl">Length and clips</span><div class="row"><label class="row"><b>Scene length</b> ${field('s:seconds', d.seconds, { type: 'number', min: sceneBounds(fmtOf())[0], max: sceneBounds(fmtOf())[1], step: 1, label: 'Scene length in seconds', cls: 'wzb-num' })} s</label><span class="mute sm">Video makers make short clips (up to ${MAX_CLIP} s), so I split the scene.</span></div>
   <div class="clips" role="img" aria-label="${clips.map((c, i) => `clip ${i + 1}: ${c.seconds} seconds`).join(', ')}">${clips.map((c, i) => `<i style="flex:${c.seconds}">clip ${i + 1} · ${c.seconds} s</i>`).join('')}</div>
-  ${clips.length > 1 ? clips.slice(1).map((c, k) => `<div class="wzb-join"><span class="wk">How clip ${k + 2} begins</span><div>${JOINS.map((j) => `<span class="ch cl ${c.join === j[0] ? 'on' : ''}" tabindex="0" role="button" aria-pressed="${c.join === j[0]}" data-act="wb-join" data-i="${k + 1}" data-v="${j[0]}">${j[1]}</span>`).join('')}</div><div class="sm mute">${c.join === 'cut' ? 'A new view. This clip gets its own start picture.' : 'Same view, place and people. No jump.'}</div></div>`).join('') : '<div class="sm mute">One clip. No split needed.</div>'}${clips.length > 1 ? beatsA(d, clips) : ''}`;
+  ${clips.length > 1 ? clips.slice(1).map((c, k) => `<div class="wzb-join"><span class="wk">How clip ${k + 2} begins</span><div>${JOINS.map((j) => `<span class="ch cl ${c.join === j[0] ? 'on' : ''}" tabindex="0" role="button" aria-pressed="${c.join === j[0]}" data-act="wb-join" data-i="${k + 1}" data-v="${j[0]}">${j[1]}</span>`).join('')}</div><div class="sm mute">${c.join === 'cut' ? 'A new view. This clip gets its own start picture.' : 'Same view, place and people. No jump.'}</div></div>`).join('') : '<div class="sm mute">One clip. No split needed.</div>'}${clips.length > 1 ? endsA(d) + beatsA(d, clips) : ''}`;
 }
+// Where the clips get an end picture. Each picture is one credit, so the choice shows what the scene costs.
+const endsA = (d) => { const id = keyOf((scn({ scene: W.scene }) || {}).ref || ''), every = midEnds(d), full = pictureCount(id, { ...d, ends: 'every' }), cheap = pictureCount(id, { ...d, ends: 'last' });
+  return hasEnd(d) ? `<span class="lbl">End pictures</span><div><span class="ch cl ${every ? 'on' : ''}" tabindex="0" role="button" aria-pressed="${every}" data-act="wb-ends" data-v="every">Every clip · ${full} credits</span><span class="ch cl ${every ? '' : 'on'}" tabindex="0" role="button" aria-pressed="${!every}" data-act="wb-ends" data-v="last">Only the scene's end · ${cheap} credits</span></div><div class="sm mute">${every ? 'Smoothest: each clip ends on a picture and the next one starts from it.' : 'Cheaper: a clip carries on from the last frame of the one before, which can drift a little.'}</div>` : ''; };
 // What happens in each clip, so no clip is asked to do the whole scene. Shared out from "What happens" until the person writes their own.
-const beatsA = (d, clips) => `<span class="lbl">What happens in each clip</span><p class="sm mute" style="margin:0 0 6px">${Array.isArray(d.beats) && d.beats.length === clips.length ? 'Your own lines, one for each clip.' : 'Shared out from What happens, in order. Change a line to write your own.'} Each clip is asked to do only its own part, so it does not rush, repeat or cut.</p><div class="notes">${clipBeats(d).map((b, i) => `<div class="dn"><label class="nm" for="wzb-b-${i + 1}">Clip ${i + 1} · ${clips[i].seconds} s</label><textarea id="wzb-b-${i + 1}" data-wbf="b:${i + 1}" rows="2" placeholder="Nothing of its own: it carries on calmly.">${esc(b)}</textarea></div>`).join('')}</div>`;
+const beatsA = (d, clips) => `<span class="lbl">What happens in each clip</span><p class="sm mute" style="margin:0 0 6px">${Array.isArray(d.beats) && d.beats.length === clips.length ? 'Your own lines, one for each clip.' : 'Shared out from What happens, in order. Change a line to write your own.'} Each clip is asked to do only its own part, so it does not rush, repeat or cut.</p><div class="row"><button class="bt" data-act="wb-beats">Write these for me</button></div><div class="notes">${clipBeats(d).map((b, i) => `<div class="dn"><label class="nm" for="wzb-b-${i + 1}">Clip ${i + 1} · ${clips[i].seconds} s</label><textarea id="wzb-b-${i + 1}" data-wbf="b:${i + 1}" rows="2" placeholder="Nothing of its own: it carries on calmly.">${esc(b)}</textarea></div>`).join('')}</div>`;
 function scriptB(a) {
   const d = a.data, ref = a.ref, sp = fmtOf().speech, place = d.place ? nameOf(d.place) : '', hap = (d.notes || {}).happens || '';
   const slugl = [place, d.time && d.time !== 'none' ? d.time : ''].filter(Boolean).join(' · ').toUpperCase() || esc(d.name).toUpperCase();
@@ -221,6 +224,14 @@ const acts = {
   'wb-crm'(el) { return act(scn({ scene: W.scene }).ref, (d) => { d.cues = (d.cues || []).filter((c) => c.id !== el.dataset.id); return d; }); },
   'wb-anchor'(el) { return act(scn({ scene: W.scene }).ref, (d) => { d[el.dataset.w] = { ...(d[el.dataset.w] || {}), mode: el.dataset.v }; return d; }); },
   'wb-join'(el) { return act(scn({ scene: W.scene }).ref, (d) => { const i = +el.dataset.i; d.clips = clipPlan(d.seconds, MAX_CLIP, (d.clips || []).map((c) => c.join)); if (d.clips[i]) d.clips[i].join = el.dataset.v; return d; }); },
+  'wb-ends'(el) { return act(scn({ scene: W.scene }).ref, (d) => { if (el.dataset.v === 'last') d.ends = 'last'; else delete d.ends; return d; }); },
+  async 'wb-beats'(el) {
+    const a = scn({ scene: W.scene }); if (!a || S.redo) return;
+    S.redo = true; el.disabled = true; el.textContent = 'Writing…';
+    try { await flush(); await api(P('/wizard/beats'), { method: 'POST', body: { scene: keyOf(a.ref) } }); toast('I wrote one action for each clip. Please review them.'); }
+    catch (e) { toast(`I could not write them: ${bad(e)}`); }
+    S.redo = false; return 'refresh';
+  },
   async 'wb-redo'(el) {
     const a = scn({ scene: W.scene }), ins = ($('#wb-instr') || {}).value || ''; if (!a || S.redo) return;
     S.redo = true; el.disabled = true; el.textContent = 'Redoing…';

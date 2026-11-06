@@ -5,7 +5,7 @@ import * as S from './store.js';
 import { spark, outputText, metaConfigured } from './meta.js';
 import { AGENT } from './agent.js';
 import { registerTool, callTool } from './tools.js';
-import { REFS, R, slug, keyOf, clipPlan, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP, sceneBounds, clampScene } from '../public/js/wizard-model.js';
+import { REFS, R, slug, keyOf, clipPlan, clipBeats, clipSpans, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP, sceneBounds, clampScene } from '../public/js/wizard-model.js';
 
 const row = (db, pid, ref) => db.prepare('SELECT * FROM artifacts WHERE production=? AND ref=?').bind(pid, ref).first();
 const dataOf = (r) => (r ? parseJson(r.data) : null);
@@ -118,6 +118,24 @@ export async function draftBrief(env, db, actor, pid, { scene, instruction = '' 
   const ids = (await S.listComments(db, pid, { ref: cur.ref, status: 'open' })).map((c) => c.id);
   await S.propose(db, AGENT, pid, { ref: cur.ref, parent: REFS.episode, data: { ...d, name: s.name || d.name, tag: s.tag || d.tag, notes: s.notes, transcript: s.transcript.length ? s.transcript : d.transcript }, rationale: `Rewrote the brief${instruction ? `: ${text(instruction, 120)}` : ''}.`, addresses: ids });
   return { ref: cur.ref };
+}
+
+// Write one action line for each clip of a scene, so no clip is asked to do the whole scene. Proposed for the person to review, like any other brief change.
+const BEATS_SYSTEM = 'You split ONE film scene into its clips. You get the scene, the number of clips and each clip\'s length. Output JSON {beats: [...]} with exactly one string per clip, in order. Each string is ONE short present-tense sentence of the action that happens only in that clip. Together they cover everything in "what happens", in order, with nothing repeated in two clips and nothing invented. Do not mention cuts, camera or sound.';
+export async function draftBeats(env, db, actor, pid, { scene }, f) {
+  human(actor);
+  const cur = await must(db, pid, R.scene(scene), `scene ${scene}`), d = dataOf(cur), spans = clipSpans(d);
+  if (spans.length < 2) throw bad('This scene is one clip, so it has nothing to split.');
+  if (cur.status === 'locked') throw new HttpError(409, `${cur.ref} is locked. Unlock it first.`);
+  if (!String((d.notes || {}).happens || '').trim()) throw bad('Write what happens in the scene first.');
+  let beats = clipBeats(d), via = 'shared';
+  if (metaConfigured(env)) {
+    const o = await askJson(env, BEATS_SYSTEM, `Scene: ${d.name}\nWhat happens: ${d.notes.happens}\nClips: ${spans.map((c) => `${c.n} (${c.seconds} s)`).join(', ')}`, f), b = Array.isArray(o.beats) ? o.beats.map((x) => text(x, 400).trim()) : [];
+    if (b.length === spans.length && b.every(Boolean)) { beats = b; via = 'muse-spark'; }
+  }
+  if (!beats.every((x) => String(x).trim())) throw new HttpError(502, 'I could not split this scene into one action for each clip. Write them yourself, or add more to What happens.');
+  await S.propose(db, AGENT, pid, { ref: cur.ref, parent: REFS.episode, data: { ...d, beats }, rationale: 'One action for each clip, written from What happens.' });
+  return { ref: cur.ref, beats, via };
 }
 
 // ---- revising one item after feedback: the AI rewrites only the text fields a person may complain about, never ids, marks or answers ----

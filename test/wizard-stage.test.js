@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { starterStage, camFor, nudgeStage, slotsOf, plainError } from '../public/js/w-stage-pure.js';
+import { startOf, pictureCount, composeClip } from '../public/js/wizard-model.js';
 import { checkStage } from '../public/js/stage-math.js';
 
 const d = { who: ['canon.cast:a', 'canon.cast:b'], place: 'p', notes: { happens: 'A beam creaks.', cam: 'slow push-in' }, clips: [{ seconds: 6, join: null }, { seconds: 6, join: 'cont' }], seconds: 12 };
@@ -21,6 +22,13 @@ test('slots: start of clip 1, a start after a cut, and an end for every clip', (
   assert.deepEqual(slotsOf('x', { ...d, clips: [{ seconds: 6 }, { seconds: 6, join: 'cut' }] }).map((s) => s.ref), ['keyframe:x-c1-start', 'keyframe:x-c1-end', 'keyframe:x-c2-start', 'keyframe:x-c2-end']);
   assert.deepEqual(slotsOf('x', { ...d, end: { mode: 'skip' } }).map((s) => [s.ref, s.mode]), [['keyframe:x-c1-start', 'stage'], ['keyframe:x-c1-end', 'skip'], ['keyframe:x-c2-end', 'skip']], 'skipping end pictures skips them for every clip');
   assert.equal(slotsOf('x', { ...d, clips: [{ seconds: 6 }] }).length, 2);
+});
+test('ends: last keeps only the scene end, so a middle clip carries on from the last frame and costs less', () => {
+  const c = { ...d, ends: 'last' };
+  assert.deepEqual(slotsOf('x', c).map((s) => [s.ref, s.mode]), [['keyframe:x-c1-start', 'stage'], ['keyframe:x-c1-end', 'skip'], ['keyframe:x-c2-end', 'stage']]);
+  assert.equal(startOf(c, 2), 'prev-frame'); assert.equal(startOf(d, 2), 'prev-end');
+  assert.equal(pictureCount('x', c), 2); assert.equal(pictureCount('x', d), 3);
+  assert.match(composeClip({ data: c }, {}, 1).prompt, /do not freeze at the end/); assert.match(composeClip({ data: c }, {}, 2).prompt, /Arrive at the end picture/);
 });
 test('plain errors', () => {
   assert.match(plainError('Approve the look (step 3) first.', 'x').href, /look/);

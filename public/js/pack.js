@@ -1,6 +1,6 @@
 // The export pack: what an outside video generator needs, as a folder or a .zip. Pure functions, so the page and the tests use the same code.
 // Meta has no video generator, so nothing here generates video. It writes the prompt, the anchor pictures, the stage controls and a manifest for whichever generator the person uses.
-import { composeClip, clipPlan, linesOfClip, startOf, hasEnd, NOTE_KEYS, slug, keyOf, MAX_CLIP } from './wizard-model.js';
+import { composeClip, clipPlan, clipLineCheck, linesOfClip, startOf, hasEnd, NOTE_KEYS, slug, keyOf, MAX_CLIP } from './wizard-model.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 const ext = (uri, mime) => (/\.(png|jpe?g|webp|gif|mp4|webm|wav|mp3|json)$/i.exec(uri || '') || [, ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4' })[mime] || 'png'])[1].toLowerCase();
@@ -21,6 +21,7 @@ export const WANTS = { both: { start: true, end: true, refs: false, stage: true 
 // scene = { ref, data, frames: { '<clip>-start'|'<clip>-end': uri }, stage: [{ role, uri, shot }], anchors: [{ id, name, uri }], take... }
 export function sceneEntries(film, scene, { target = 'both', max = MAX_CLIP, root = '' } = {}) {
   const w = WANTS[target] || WANTS.both, d = scene.data, dir = (root ? root + '/' : '') + sceneDir(scene), clips = (d.clips && d.clips.length ? d.clips : clipPlan(d.seconds, max)), out = [];
+  const bad = clipLineCheck(d); if (bad.length) throw new Error(`Scene ${d.n}: the lines do not fit the clips (${bad.join('; ')}). Fix the script before packing.`);
   const E = (path, text) => out.push({ path: `${dir}/${path}`, text });
   const U = (path, uri) => out.push({ path: `${dir}/${path}`, uri });
   E('brief.md', [`# ${d.name}`, '', `${d.seconds} s · ${d.place ? 'place: ' + keyOf(d.place) : 'no set place'} · ${d.time || 'no time of day'}`, '', ...NOTE_KEYS.map(([k, label]) => `## ${label}\n${(d.notes || {})[k] || '-'}\n`)].join('\n'));
