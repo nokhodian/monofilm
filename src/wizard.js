@@ -4,6 +4,7 @@ import { HttpError, bad, parseJson } from './util.js';
 import * as S from './store.js';
 import { spark, outputText, metaConfigured } from './meta.js';
 import { AGENT } from './agent.js';
+import { checkPicture } from './picturecheck.js';
 import { registerTool, callTool } from './tools.js';
 import { REFS, R, slug, keyOf, mediumOf, beingOf, clipPlan, clipBeats, clipSpans, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP, sceneBounds, clampScene } from '../public/js/wizard-model.js';
 
@@ -185,6 +186,12 @@ async function ensureMuse(db) {
 }
 const lookText = async (db, pid) => { const l = dataOf(await row(db, pid, REFS.look)) || {}; return [l.look, l.period && `Period: ${l.period}`, l.forbidden && (l.forbidden.length ? `Never show: ${[].concat(l.forbidden).join(', ')}` : '')].filter(Boolean).join('. '); };
 const VARIANT = ['', 'A slightly different person: different face shape.', 'A third, clearly different person: different age and features.'];
+// Draw, look at the result, and draw once more with the correction if it is not what was asked for. The last picture is kept either way, with what the check saw.
+async function drawChecked(env, db, actor, pid, ref, input, expect, f) {
+  let r = await paint(env, db, actor, pid, ref, input, f), check = await checkPicture(env, r.asset.uri, expect, f), redrew = false;
+  if (!check.ok) { redrew = true; r = await paint(env, db, actor, pid, ref, { ...input, prompt: `${input.prompt} Correction: ${check.problem || 'it was not what was asked for'}. It must show: ${expect}` }, f).catch(() => r); check = await checkPicture(env, r.asset.uri, expect, f); }
+  return { r, check: { ok: check.ok, seen: check.seen || '', problem: check.problem || '', redrew, skipped: !!check.skipped } };
+}
 async function paint(env, db, actor, pid, ref, input, f) {
   if (!metaConfigured(env)) throw new HttpError(503, 'MODEL_API_KEY is not set, so Muse Image is off.');
   await ensureMuse(db);
@@ -204,17 +211,18 @@ export async function makeFace(env, db, actor, pid, { id, variant = 0, instructi
   const cur = await must(db, pid, R.cast(id), `person ${id}`), d = dataOf(cur), letter = 'ABC'[variant % 3];
   const look = dataOf(await row(db, pid, REFS.look)) || {}, medium = mediumOf(look), thing = beingOf(d.desc || d.role) === 'person' ? 'person' : 'character';
   const prompt = [`Portrait ${medium} of one ${thing} for a film. ${thing === 'person' ? 'Head and shoulders' : 'Head and upper body'}, plain neutral background, ${thing === 'person' ? 'looking slightly off camera' : 'facing slightly off camera'}, no text.`, thing === 'character' ? 'Draw the character itself, not a person holding or dressed as it, and not a toy.' : '', d.desc || d.role, await lookText(db, pid), thing === 'person' ? VARIANT[variant % 3] : ['', 'A slightly different design of the same kind of character.', 'A third, clearly different design of the same kind of character.'][variant % 3], instruction].filter(Boolean).join(' ');
-  const r = await paint(env, db, actor, pid, cur.ref, { prompt, aspect: [3, 4], tag: `face:${letter}` }, f);
-  await merge(db, pid, cur.ref, (fresh) => ({ ...fresh, candidates: [...(fresh.candidates || []).filter((c) => c.letter !== letter), { id: r.asset.id, letter }] }), `Made face ${letter}.`);
-  return { asset: r.asset, letter };
+  const expect = `Medium: ${medium}. Exactly one ${thing === 'person' ? 'person' : 'character'}: ${d.desc || d.role}. Nothing else in the picture: no other people, and no person holding, wearing or posing with the character.`;
+  const { r, check } = await drawChecked(env, db, actor, pid, cur.ref, { prompt, aspect: [3, 4], tag: `face:${letter}`, medium }, expect, f);
+  await merge(db, pid, cur.ref, (fresh) => ({ ...fresh, candidates: [...(fresh.candidates || []).filter((c) => c.letter !== letter), { id: r.asset.id, letter, check }] }), `Made face ${letter}.`);
+  return { asset: r.asset, letter, check };
 }
 export async function makePlate(env, db, actor, pid, { id, instruction = '' }, f) {
   human(actor);
   const cur = await must(db, pid, R.place(id), `place ${id}`), d = dataOf(cur);
   const medium = mediumOf(dataOf(await row(db, pid, REFS.look)) || {}), prompt = [`${medium === 'photograph' ? 'Photograph' : 'Illustration'} of a film location, no people or characters, wide establishing view.`, d.name, d.desc, d.time && `Time of day: ${d.time}.`, (d.must_keep || []).length && `It must clearly show: ${d.must_keep.join(', ')}.`, await lookText(db, pid), instruction].filter(Boolean).join(' ');
-  const r = await paint(env, db, actor, pid, cur.ref, { prompt, aspect: [16, 9], tag: 'plate' }, f);
-  await merge(db, pid, cur.ref, (fresh) => ({ ...fresh, source: fresh.source === 'photo' ? 'photo' : 'made', plates: [...(fresh.plates || []), { id: r.asset.id }] }), 'Made a place plate.');
-  return { asset: r.asset };
+  const { r, check } = await drawChecked(env, db, actor, pid, cur.ref, { prompt, aspect: [16, 9], tag: 'plate', medium }, `Medium: ${medium}. A place with no people and no characters: ${d.name}. ${d.desc || ''}`, f);
+  await merge(db, pid, cur.ref, (fresh) => ({ ...fresh, source: fresh.source === 'photo' ? 'photo' : 'made', plates: [...(fresh.plates || []), { id: r.asset.id, check }] }), 'Made a place plate.');
+  return { asset: r.asset, check };
 }
 // A start or end picture. Built from the stage layout when the scene has one with a camera for this clip, and always from the film's anchor faces.
 export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, instruction = '' }, f) {
@@ -234,8 +242,9 @@ export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, i
   }
   const prompt = [`${which === 'start' ? 'The first frame' : 'The last frame'} of a ${c.seconds} second film clip.`, c.prompt.split('\n')[0], chars.length && `Only these appear, exactly as in their reference pictures: ${chars.join(' ')}`, mediumOf(lookRow) === 'illustration' && 'Drawn in the film\'s own style, not a photograph, and no people unless listed.', place && place.desc && `Place: ${place.name}. ${place.desc}`, await lookText(db, pid), prevNote, instruction].filter(Boolean).join(' ');
   const shape = String(((dataOf(await row(db, pid, REFS.look)) || {}).aspect) || '9:16').split(':').map(Number), aspect = shape.length === 2 && shape.every((n) => n > 0 && n < 100) ? shape : [9, 16]; // the pictures follow the film's shape, not always portrait
-  const r = await paint(env, db, actor, pid, fr, { prompt, aspect, anchors, tag: `${which}`, ...(staged ? { stage: { ref: stageRef, shot } } : {}) }, f);
-  return { asset: r.asset, ref: fr, staged: !!staged };
+  const expect = `Medium: ${mediumOf(lookRow)}. ${chars.length ? `Only these characters appear, and each is exactly the kind of being described: ${chars.join(' ')} Nobody else appears.` : 'No people or characters.'}${place && place.desc ? ` Place: ${place.desc}` : ''}`;
+  const { r, check } = await drawChecked(env, db, actor, pid, fr, { prompt, aspect, anchors, tag: `${which}`, medium: mediumOf(lookRow), ...(staged ? { stage: { ref: stageRef, shot } } : {}) }, expect, f);
+  return { asset: r.asset, ref: fr, staged: !!staged, check };
 }
 
 // ---- takes: what the outside generator made, brought back ----

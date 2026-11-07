@@ -51,15 +51,16 @@ async function exec(env, db, actor, pid, a, d) {
       catch (e) { if (!/changed while you were saving/.test(String(e.message)) || i >= 4) throw e; }
     }
   };
+  const worry = (r, what) => { if (r && r.check && !r.check.ok) throw new Error(`I stopped because ${what} does not look right, even after drawing it again: ${r.check.problem || r.check.seen}. Look at it, change the description or redraw it, then press Resume.`); return r; };
   switch (a.type) {
     case 'read': return retry(() => W.readStory(env, db, actor, pid));
     case 'approve': { let ok = 0, last; for (const ref of a.refs) { try { await S.decide(db, actor, pid, { ref, action: 'approve', comment: 'Approved by Roll camera' }); ok++; } catch (e) { last = e; } } if (!ok) throw last; return; }
-    case 'face': return retry(() => W.makeFace(env, db, actor, pid, { id: a.id, variant: 0 }));
+    case 'face': return worry(await retry(() => W.makeFace(env, db, actor, pid, { id: a.id, variant: 0 })), `the picture of ${a.name}`);
     case 'anchor': return edit(a.ref, (x) => ({ ...x, anchor: a.assetId }), 'Main face chosen by Roll camera');
-    case 'plate': return retry(() => W.makePlate(env, db, actor, pid, { id: a.id }));
+    case 'plate': return worry(await retry(() => W.makePlate(env, db, actor, pid, { id: a.id })), `the picture of ${a.name}`);
     case 'scenes': return retry(() => W.draftScenes(env, db, actor, pid));
     case 'stage': { const sc = d.by[R.scene(a.scene)]; return S.propose(db, actor, pid, { ref: R.stage(a.scene), data: starterStage(a.scene, sc.data, (r) => (d.by[r] || {}).data, (r) => (r && d.by[r] || {}).data || null), parent: R.scene(a.scene), deps: [], auto_approve: true, rationale: 'A first layout made by Roll camera' }); }
-    case 'frame': return retry(() => W.makeFrame(env, db, actor, pid, { scene: a.scene, clip: a.clip, which: a.which }));
+    case 'frame': return worry(await retry(() => W.makeFrame(env, db, actor, pid, { scene: a.scene, clip: a.clip, which: a.which })), `the ${a.which} picture for scene ${a.n}, ${a.name}`);
     case 'pick': return edit(a.ref, (x) => ({ ...x, chosen: a.assetId }), 'Picture put in use by Roll camera');
     default: throw new Error(`I do not know how to do "${a.type}".`);
   }

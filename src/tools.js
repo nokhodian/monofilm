@@ -37,8 +37,8 @@ async function metaImage(tool, target, input, env, f, ctx) {
   const refs = [], notes = [], [aw, ah] = input.aspect || [9, 16];
   // The layout goes first: the edit endpoint has no size field, so the first picture sets the frame.
   const layout = (input.files || []).find((x) => x.role === 'layout'), lu = layout && await read(layout.uri);
-  if (lu) { refs.push(lu); notes.push(`Image 1 is a flat layout of the scene. Make a ${aw}:${ah} photograph with exactly this camera angle and framing, and put the people and objects where it shows them. Do not copy its flat colours.`); }
-  for (const a of (input.anchors || []).slice(0, 4)) { const u = await read(a.uri); if (u) { refs.push(u); notes.push(`Image ${refs.length} is the character ${a.id}. Keep their face, hair and clothes exactly.`); } }
+  if (lu) { refs.push(lu); notes.push(`Image 1 is a flat layout of the scene. Make a ${aw}:${ah} ${input.medium || 'photograph'} with exactly this camera angle and framing, and put the people and objects where it shows them. Do not copy its flat colours.`); }
+  for (const a of (input.anchors || []).slice(0, 4)) { const u = await read(a.uri); if (u) { refs.push(u); notes.push(`Image ${refs.length} is the character ${a.id}. Keep this character exactly: the same face, shape, colours, markings and clothes.`); } }
   const prompt = [input.prompt, ...notes].filter(Boolean).join('\n\n');
   if (!prompt) throw new Error('nothing to generate from: pass a prompt or a stage');
   const [W, H] = frame((input.aspect || [9, 16]).join(':'), 1536), [img] = await museImage(env, { prompt, images: refs, size: `${W}x${H}` }, f);
