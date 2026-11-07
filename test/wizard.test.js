@@ -172,6 +172,8 @@ test('a video model connects over MCP: list clips, read one, fetch its picture, 
   assert.match(clip.prompt, /Dialogue/); assert.equal(clip.aspect, '9:16'); assert.match(clip.start_picture.url, /^https:\/\/mf\.test\/api\/p\/.+\/media\//);
   assert.equal((await call('get_clip', { scene: 'the-beam', clip: 9 })).isError, true);
   assert.equal((await call('get_clip', { scene: 'the-beam' })).isError, undefined);
+  const gen = (await call('get_clip', { scene: 'the-beam', clip: 1, generator: 'minimax-h3' })).structuredContent; assert.equal(gen.generator.id, 'minimax-h3'); assert.equal(gen.negative_prompt, '');
+  assert.ok((await call('list_generators', {})).structuredContent.generators.some((g) => g.id === 'minimax-h3'));
   const img = await call('get_media', { uri: clip.start_picture.uri }); assert.equal(img.content[0].type, 'image');
   assert.equal((await call('submit_take', { scene: 'the-beam' })).isError, true, 'clip is required');
   const r = (await call('submit_take', { scene: 'the-beam', clip: 1, url: 'https://gen.test/a.mp4', seed: 42, hold: 2.5, cuts: 1, smooth: { median: 5, max: 60, at: 3, flag: true }, note: 'first try' })).structuredContent;

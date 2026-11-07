@@ -3,7 +3,7 @@
 import { HttpError, bad, parseJson } from './util.js';
 import * as S from './store.js';
 import { retryAdvice } from '../public/js/pack.js';
-import { R, REFS, keyOf, clipPlan, composeClip, startOf, hasEnd } from '../public/js/wizard-model.js';
+import { R, REFS, keyOf, clipPlan, composeClip, startOf, hasEnd, forGenerator, GENERATORS } from '../public/js/wizard-model.js';
 import { ensureClips, addTake } from './wizard.js';
 
 const MAX_VIDEO = 25 * 1024 * 1024, MAX_INLINE = 4 * 1024 * 1024;
@@ -79,10 +79,12 @@ export const VIDEO_TOOLS = [
     return sceneList(L, a.scene).flatMap((sc) => { const id = keyOf(sc.ref), clips = sc.data.clips && sc.data.clips.length ? sc.data.clips : clipPlan(sc.data.seconds);
       return clips.map((cl, i) => { const s = clipSpec(c, a.production, L, sc, i + 1); return { scene: id, scene_name: sc.data.name, scene_status: sc.status, clip: i + 1, of: clips.length, seconds: cl.seconds, ready: ['approved', 'locked'].includes(sc.status), start_picture: !!s.start_picture, end_picture: !!s.end_picture, takes: s.takes.length }; }); });
   }),
-  T('get_clip', 'Everything needed to make one clip: the prompt, what must not show, length, shape, fps, the start picture and end picture (with urls), reference pictures of the people, stage control images, and the takes already made.', { ...prod, scene: str, clip: { ...num, description: 'clip number, from 1' } }, ['production', 'scene'], async (c, a) => {
+  T('get_clip', 'Everything needed to make one clip: the prompt, what must not show, length, shape, fps, the start picture and end picture (with urls), reference pictures of the people, stage control images, and the takes already made.', { ...prod, scene: str, clip: { ...num, description: 'clip number, from 1' }, generator: { ...str, description: 'the video model you use, from list_generators (for example minimax-h3), so the words fit it' } }, ['production', 'scene'], async (c, a) => {
     const L = await load(c, a.production), sc = sceneList(L, a.scene)[0]; if (!sc) throw new HttpError(404, `no scene ${a.scene}`);
-    return clipSpec(c, a.production, L, sc, Math.round(Number(a.clip) || 1));
+    const spec = clipSpec(c, a.production, L, sc, Math.round(Number(a.clip) || 1)), g = forGenerator({ prompt: spec.prompt, negative: spec.negative_prompt }, a.generator);
+    return { ...spec, prompt: g.prompt, negative_prompt: g.negative, generator: g.generator };
   }),
+  T('list_generators', 'The video models the studio knows, with what each can take and its quirks. Pass the id as generator to get_clip so the words fit your model.', {}, [], async () => ({ generators: Object.entries(GENERATORS).map(([id, g]) => ({ id, ...g })) })),
   T('get_media', 'Read a picture of this production (a media/ uri from get_clip) and get it back inline so you can look at it. Pictures up to 4 MB. For video use the url with your bearer token.', { ...prod, uri: str }, ['production', 'uri'], async (c, a) => {
     const m = new RegExp(`^media/${a.production}/([A-Za-z0-9._-]{1,100})$`).exec(a.uri || ''); if (!m) throw bad(`uri must look like media/${a.production}/<file>`);
     if (!c.env.MEDIA) throw new HttpError(501, 'media storage is not configured');

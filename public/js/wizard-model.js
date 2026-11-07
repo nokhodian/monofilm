@@ -122,6 +122,14 @@ export function slotsOf(id, d) {
 export function audioPolicy(d, n) { return linesOfClip(d, n).length ? 'dialogue' : String((d.notes || {}).sound || '').trim() ? 'ambient' : 'silent'; }
 const AUDIO_TEXT = { dialogue: 'Audio: only the spoken lines above, with quiet room sound. No music.', ambient: 'Audio: only the ambient sound described above. No speech, no music.', silent: 'Audio: none. No speech, no voices, no music.' };
 
+// A generator cuts when the camera line lists several shots ("close on hands, then her face"). A clip gets only the first move.
+export const oneMove = (cam) => String(cam || '').split(/[,;.]?\s+(?:and then|then|followed by|cut to|next|after that|before)\s+/i)[0].replace(/\bshots\b/i, 'shot').trim();
+// What a video generator can take. A clip's words are adapted to it; an unknown generator gets the plain prompt.
+export const GENERATORS = {
+  'minimax-h3': { name: 'MiniMax H3 (local, ComfyUI)', negative: false, end_picture: true, native_audio: true, max_seconds: 8, notes: 'No negative prompt input (it is added to the prompt as "Do not show"). Cuts when the prompt lists several shots. Natural walking and consistent voices across clips are weak.' },
+  generic: { name: 'Any generator', negative: true, end_picture: true, native_audio: true, max_seconds: 8, notes: '' },
+};
+export const forGenerator = (clip, id) => { const g = GENERATORS[id] || GENERATORS.generic; return { ...clip, generator: { id: GENERATORS[id] ? id : 'generic', ...g }, prompt: !g.negative && clip.negative ? `${clip.prompt}\nDo not show: ${clip.negative}.` : clip.prompt, negative: g.negative ? clip.negative : '' }; };
 // The words a generator receives for one clip, built only from approved film canon and this scene's brief. Pure, so the page, the pack and the Worker agree.
 // film = { look, speech, cast: { '<canon.cast ref>': { name, desc } } }
 export function composeClip(scene, film, clipIndex = 1) {
@@ -129,17 +137,17 @@ export function composeClip(scene, film, clipIndex = 1) {
   const look = film.look || {}, never = [...new Set([...(String(n.never || '').split(/[.;\n]/).map((s) => s.trim()).filter(Boolean)), ...(Array.isArray(look.forbidden) ? look.forbidden : String(look.forbidden || '').split(',').map((s) => s.trim()).filter(Boolean)).map((t) => `no ${t}`)])];
   const lines = linesOfClip(d, k), beats = clipBeats(d), endPic = k === spans.length ? hasEnd(d) : midEnds(d), policy = audioPolicy(d, k), cast = film.cast || {};
   const who = (d.who || []).map((r) => cast[r]).filter((p) => p && p.desc);
-  const parts = [beats[k - 1] || (spans.length > 1 ? 'Carry on calmly from the clip before.' : n.happens), k > 1 && beats[k - 2] ? `The clip before ended on: ${beats[k - 2]} Do not repeat it.` : '', n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${n.cam}`, n.sound && `Sound: ${n.sound}`,
+  const parts = [beats[k - 1] || (spans.length > 1 ? 'Carry on calmly from the clip before.' : n.happens), k > 1 && beats[k - 2] ? `The clip before ended on: ${beats[k - 2]} Do not repeat it.` : '', n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${oneMove(n.cam)}, one continuous shot`, n.sound && `Sound: ${n.sound}`,
     who.length ? `Characters (keep each one exactly as in its reference picture): ${who.map((p) => `${p.name}: ${p.desc}`).join(' ')}` : '',
     `Look: ${look.look || look.base || 'as in the film'}. ${look.aspect || '9:16'}, ${look.fps || 24} fps, ${c.seconds} seconds. The medium, colours, exposure and time of day stay exactly the same for the whole clip. No scene change, no cuts, no text on screen.`];
-  if (lines.length) parts.push(`Dialogue: ${lines.map((l) => `${l.who || 'NARRATOR'} says${film.speech ? `, in ${film.speech},` : ''} "${l.text}"${l.en ? ` (${l.en})` : ''}`).join(' ')}`);
+  if (lines.length) parts.push(`Dialogue: ${lines.map((l) => `${l.who || 'NARRATOR'} says${film.speech ? `, in ${film.speech},` : ''} "${l.text}"${l.en && String(l.en).trim().toLowerCase() !== String(l.text).trim().toLowerCase() ? ` (${l.en})` : ''}`).join(' ')}`);
   if (k > 1) parts.push(c.join === 'cut' ? 'This clip is a cut to a new view. It has its own start picture.' : endPic ? 'It begins from the end picture of the clip before.' : 'Continue from the last picture of the previous clip.');
   parts.push(AUDIO_TEXT[policy], timingLine(c.seconds, endPic));
   return { prompt: parts.filter(Boolean).join('\n'), negative: never.join('. '), seconds: c.seconds, join: c.join, clips: spans.length, beat: beats[k - 1] || '', audio: policy, timing: timingLine(c.seconds, endPic) };
 }
 // Generators tend to reach the end picture early and then hold it still, or to pile on extra events. This asks for the whole length to be used, with the end picture reached on the last frame.
 export const timingLine = (seconds, endPicture) => (endPicture
-  ? `Timing: fill the full ${seconds} seconds. Arrive at the end picture on the very last frame, not before, and never hold it still. Do not add events that are not listed.`
+  ? `Timing: use the full ${seconds} seconds with slow, steady movement the whole time, and reach the end picture on the very last frame, not before. Do not add events that are not listed.`
   : `Timing: move gently for the full ${seconds} seconds. Do not add new events, stay in the same place and light, and do not freeze at the end.`);
 
 export const emptyScene = (n, o = {}) => ({ n, name: o.name || `Scene ${n}`, tag: o.tag || '', seconds: o.seconds || 10, place: o.place || null, time: o.time || '', who: o.who || [], transcript: o.transcript || [], notes: { ...emptyNotes(), ...(o.notes || {}) }, start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(o.seconds || 10), overrides: {} });

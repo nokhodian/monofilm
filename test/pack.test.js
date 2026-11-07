@@ -64,7 +64,7 @@ test('clips: each one covers its own seconds, and gets its own lines and sounds'
 });
 test('the generator is told to fill the clip, land on the end picture on the last frame and never hold it', () => {
   const sc = { data: { seconds: 12, clips: clipPlan(12, 8), notes: { happens: 'She looks up. She steps back.' }, start: { mode: 'stage' }, end: { mode: 'stage' }, transcript: [{ who: 'A', text: 'hello', sec: 2 }, { who: 'B', text: 'bye', sec: 2 }] } };
-  for (const n of [1, 2]) { const t = composeClip(sc, {}, n); assert.match(t.prompt, /Timing: fill the full 6 seconds/); assert.match(t.prompt, /Arrive at the end picture on the very last frame, not before, and never hold it still/); assert.match(t.prompt, /Do not add events that are not listed/); assert.doesNotMatch(t.prompt, /keep the camera moving/i); }
+  for (const n of [1, 2]) { const t = composeClip(sc, {}, n); assert.match(t.prompt, /Timing: use the full 6 seconds/); assert.match(t.prompt, /reach the end picture on the very last frame, not before/); assert.match(t.prompt, /Do not add events that are not listed/); assert.doesNotMatch(t.prompt, /keep the camera moving/i); }
   assert.match(composeClip(sc, {}, 1).prompt, /hello/); assert.match(composeClip(sc, {}, 1).prompt, /bye/, 'both lines start inside the first 6 seconds');
   const skip = composeClip({ data: { ...sc.data, end: { mode: 'skip' } } }, {}, 2); assert.doesNotMatch(skip.prompt, /end picture/); assert.match(skip.prompt, /Timing: move gently for the full 6 seconds. Do not add new events/);
 });
@@ -97,7 +97,7 @@ test('every clip gets a start and an end picture of its own to aim for, and the 
 });
 test('a clip that cuts or morphs inside is caught by its own step sizes', () => {
   assert.equal(smoothness([1, 2, 1, 2, 1, 2]).flag, false); assert.equal(smoothness([3, 3, 4, 3, 3]).flag, false, 'steady motion');
-  const j = smoothness([2, 2, 3, 2, 40, 2, 2], 0.2); assert.deepEqual([j.flag, j.max, j.median, j.at], [true, 40, 2, 1], 'one big step among small ones, about 1 s in');
+  const j = smoothness([2, 2, 3, 2, 60, 2, 2], 0.2); assert.deepEqual([j.flag, j.max, j.median, j.at], [true, 60, 2, 1], 'one big step among small ones, about 1 s in'); assert.equal(smoothness([2, 2, 3, 2, 40, 2, 2], 0.2).flag, false, 'a moderate flash on a quiet shot is not a cut');
   assert.equal(smoothness([9, 10, 11, 12, 18]).flag, false, 'fast but not a jump'); assert.equal(smoothness([1, 2]), null);
 });
 test('the pack gives each clip its own lines, timed from the clip start, and the timing rule', () => {
@@ -105,7 +105,7 @@ test('the pack gives each clip its own lines, timed from the clip start, and the
   const e = sceneEntries(film, sc, { target: 'both' }), get = (p) => e.find((x) => x.path.endsWith(p));
   assert.deepEqual(JSON.parse(get('clip-01/transcript.json').text).map((l) => l.text), ['first', 'second']); assert.deepEqual(JSON.parse(get('clip-02/transcript.json').text).map((l) => [l.text, l.at]), [['third', 2]]);
   assert.match(get('clip-02/transcript.srt').text, /00:00:02,000 --> 00:00:06,000\nA: third/);
-  assert.match(JSON.parse(get('clip-02/clip.json').text).timing, /never hold it still/); assert.match(get('clip-01/prompt.txt').text, /Timing:/);
+  assert.match(JSON.parse(get('clip-02/clip.json').text).timing, /slow, steady movement/); assert.match(get('clip-01/prompt.txt').text, /Timing:/);
 });
 
 test('a clip that reaches its end picture early and stands still is caught, to the tenth of a second', () => {

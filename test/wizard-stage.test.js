@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { starterStage, camFor, nudgeStage, slotsOf, plainError } from '../public/js/w-stage-pure.js';
-import { startOf, pictureCount, composeClip } from '../public/js/wizard-model.js';
+import { startOf, pictureCount, composeClip, oneMove, forGenerator } from '../public/js/wizard-model.js';
 import { checkStage } from '../public/js/stage-math.js';
 
 const d = { who: ['canon.cast:a', 'canon.cast:b'], place: 'p', notes: { happens: 'A beam creaks.', cam: 'slow push-in' }, clips: [{ seconds: 6, join: null }, { seconds: 6, join: 'cont' }], seconds: 12 };
@@ -28,7 +28,17 @@ test('ends: last keeps only the scene end, so a middle clip carries on from the 
   assert.deepEqual(slotsOf('x', c).map((s) => [s.ref, s.mode]), [['keyframe:x-c1-start', 'stage'], ['keyframe:x-c1-end', 'skip'], ['keyframe:x-c2-end', 'stage']]);
   assert.equal(startOf(c, 2), 'prev-frame'); assert.equal(startOf(d, 2), 'prev-end');
   assert.equal(pictureCount('x', c), 2); assert.equal(pictureCount('x', d), 3);
-  assert.match(composeClip({ data: c }, {}, 1).prompt, /do not freeze at the end/); assert.match(composeClip({ data: c }, {}, 2).prompt, /Arrive at the end picture/);
+  assert.match(composeClip({ data: c }, {}, 1).prompt, /do not freeze at the end/); assert.match(composeClip({ data: c }, {}, 2).prompt, /reach the end picture on the very last frame/);
+});
+test('a clip gets one camera move, an English line has no repeated gloss, and a generator without a negative prompt gets it in the words', () => {
+  assert.equal(oneMove('Close handheld shots of hands, pages, then her face'), 'Close handheld shot of hands, pages');
+  assert.equal(oneMove('Over shoulder to wide sea, then hard zoom to tiny blinking dot'), 'Over shoulder to wide sea');
+  assert.equal(oneMove('slow push-in'), 'slow push-in'); assert.equal(oneMove(''), '');
+  const sc = { data: { seconds: 6, notes: { happens: 'A speaks.', cam: 'static wide, then cut to a close-up', never: 'no crowds' }, transcript: [{ who: 'A', text: 'Hello there.', en: 'Hello there.', sec: 2 }, { who: 'A', text: 'Hallo.', en: 'Hello.', sec: 2 }] } };
+  const p = composeClip(sc, { speech: 'German' }, 1).prompt;
+  assert.match(p, /Camera: static wide, one continuous shot/); assert.doesNotMatch(p, /close-up/); assert.match(p, /"Hello there\."(?! \()/); assert.match(p, /"Hallo\." \(Hello\.\)/);
+  const g = forGenerator(composeClip(sc, {}, 1), 'minimax-h3'); assert.match(g.prompt, /Do not show: no crowds/); assert.equal(g.negative, ''); assert.equal(g.generator.id, 'minimax-h3');
+  assert.equal(forGenerator(composeClip(sc, {}, 1), 'nope').generator.id, 'generic');
 });
 test('plain errors', () => {
   assert.match(plainError('Approve the look (step 3) first.', 'x').href, /look/);
