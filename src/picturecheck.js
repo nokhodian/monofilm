@@ -3,7 +3,7 @@
 import { spark, outputText, dataUrl } from './meta.js';
 import { parseJson } from './util.js';
 
-const SYSTEM = 'You check ONE picture made for a film against a short list of what it must show. Output JSON {ok, major, seen, problem}. ok is true only if the picture matches every point, especially the kind of being and the medium (a photograph is not an illustration). seen is one short sentence about what is really in the picture. major is true only when the kind of being or the medium is wrong, or a character is missing or someone extra is there; it is false for a small detail such as a colour, a pattern or an accessory. problem is one short sentence saying what is wrong, or an empty string when ok.';
+const SYSTEM = 'You check ONE picture made for a film against a short list of what it must show. Output JSON {ok, major, seen, problem}. ok is true only if the picture matches every point, especially the kind of being and the medium (a photograph is not an illustration). seen is one short sentence about what is really in the picture. major is true only when the kind of being or the medium is wrong, a character is missing or someone extra is there, or a thing is at the wrong stage or the wrong size for the moment described (a plant where there should only be soil, a carrot far too big); it is false for a small detail such as a colour, a pattern or an accessory. problem is one short sentence saying what is wrong, or an empty string when ok.';
 
 export async function checkPicture(env, uri, expect, f) {
   try {

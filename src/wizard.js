@@ -6,7 +6,7 @@ import { spark, outputText, metaConfigured } from './meta.js';
 import { AGENT } from './agent.js';
 import { checkPicture } from './picturecheck.js';
 import { registerTool, callTool } from './tools.js';
-import { REFS, R, slug, keyOf, mediumOf, beingOf, clipPlan, clipBeats, clipSpans, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP, sceneBounds, clampScene } from '../public/js/wizard-model.js';
+import { REFS, R, slug, keyOf, mediumOf, beingOf, clipStates, propsOf, clipPlan, clipBeats, clipSpans, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP, sceneBounds, clampScene } from '../public/js/wizard-model.js';
 
 const row = (db, pid, ref) => db.prepare('SELECT * FROM artifacts WHERE production=? AND ref=?').bind(pid, ref).first();
 const dataOf = (r) => (r ? parseJson(r.data) : null);
@@ -78,6 +78,8 @@ export async function readStory(env, db, actor, pid, f) {
 const SCENES_SYSTEM = `You turn a story into scenes for a short film that will be made clip by clip with a video generator. Output JSON {scenes: [...]} with 3 to 8 scenes. Each scene: name, tag (one word for its job: hook, crash, price, title...), seconds (a whole number between the shortest and longest scene length given; all scenes add up to the film length),
 place (the name of one of the places given), time (dawn, day, dusk, night or none), who (names from the people given; may be empty), transcript (list of {who (UPPERCASE name or NARRATOR), text (in the spoken language), en (English meaning), sec}; may be empty),
 notes {happens (2 to 4 sentences: who is where, what moves, what is seen), mood (mood and pace), cam (ONE continuous camera move for the whole scene, such as "slow push-in" or "static wide"; never a list of shots, and never the words then, cut or shots), sound (sound in the picture), never (what must not happen), cont (how it connects to the scene before and after)},
+props (the things in this scene that change or that must look the same every time, such as a seed, a plant, a carrot, a watering can: a list of {name, look (colour, shape and size compared with a character, for example "a carrot as long as Mimi's arm"; use the SAME words for the same thing in every scene)}),
+states (a list of N+1 sentences for a scene of N clips: states[0] is how the scene looks at its first frame, states[k] is how it looks at the last frame of clip k. Each sentence is a frozen picture: who stands where, what each prop looks like right then and how big it is, the light and time of day. A thing can only be in a stage it has reached: a plant cannot be there before the seed is planted, growth goes through every stage in order and never jumps, and the last state of a scene is the first state of the next scene unless the film cuts to a new place),
 beats (a list with ONE short action line for each clip of the scene, in order: a scene of up to 8 seconds has 1 line, 9 to 16 seconds has 2, 17 to 24 seconds has 3, and so on. Each line says only what happens in that clip; no event appears in two lines, and each clip ends where the next one begins).`;
 const castOf = async (db, pid) => (await S.listArtifacts(db, pid, { kind: 'canon.cast' }));
 const placesOf = async (db, pid) => (await S.listArtifacts(db, pid, { kind: 'canon.world' })).filter((a) => a.ref.startsWith('canon.world:place-'));
@@ -88,7 +90,24 @@ function sceneFrom(o, i, people, places, fmt) {
   const seconds = clampScene(o.seconds || 10, fmt);
   return { n: i + 1, name: text(o.name, 60) || `Scene ${i + 1}`, tag: text(o.tag, 20), seconds, place: pl ? pl.ref : null, time: text(o.time, 20), who, overrides: {},
     transcript: (o.transcript || []).slice(0, 20).map((l, k) => ({ id: `l${k + 1}`, who: text(l.who, 40).toUpperCase(), text: text(l.text, 400), en: text(l.en, 400), sec: Number(l.sec) || 0 })),
-    notes: Object.fromEntries(NOTE_KEYS.map(([k]) => [k, text((o.notes || {})[k], 700)])), start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(seconds), beats: ((b, n) => (Array.isArray(b) && b.length === n && b.every((x) => String(x || '').trim()) ? b.map((x) => text(x, 400)) : []))(o.beats, clipPlan(seconds).length) }; // one line per clip, or none (the page then shares the scene's action out itself)
+    notes: Object.fromEntries(NOTE_KEYS.map(([k]) => [k, text((o.notes || {})[k], 700)])), start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(seconds), states: ((b, n) => (Array.isArray(b) && b.length === n + 1 && b.every((x) => String(x || '').trim()) ? b.map((x) => text(x, 400)) : []))(o.states, clipPlan(seconds).length), props: (Array.isArray(o.props) ? o.props : []).slice(0, 8).map((p) => ({ name: text(p && p.name, 40), look: text(p && p.look, 200) })).filter((p) => p.name && p.look), beats: ((b, n) => (Array.isArray(b) && b.length === n && b.every((x) => String(x || '').trim()) ? b.map((x) => text(x, 400)) : []))(o.beats, clipPlan(seconds).length) }; // one line per clip, or none (the page then shares the scene's action out itself)
+}
+// A second look at the whole scene list with fresh eyes, as a director would before shooting: does every thing exist before it is used, does it grow through its stages in order,
+// does it keep one size and colour, does each scene start where the one before ended, and does each clip hold ONE event? The model returns corrected states for the scenes that fail.
+const CONTINUITY_SYSTEM = `You are the continuity supervisor of a short film. You get every scene in order, each with its props and states (states[0] is the first frame, states[k] the last frame of clip k). Find continuity errors: a thing used before it exists or before it was introduced (a plant before its seed is planted), a stage skipped (a seed that becomes a huge plant in one clip), a prop that changes size or colour, a scene whose first state does not follow the last state of the scene before, a state that shows two events at once, or light and time of day that jump without a reason. Output JSON {issues: [{scene (number), problem}], fixes: [{scene (number), states (the full corrected list, the same length as before), props (optional corrected list)}]}. Fix only scenes with a problem, change as little as possible, and keep every sentence a frozen picture. If there are no errors output {issues: [], fixes: []}.`;
+export async function reviewContinuity(env, scenes, f) {
+  const usable = scenes.filter((s) => Array.isArray(s.states) && s.states.length);
+  if (!metaConfigured(env) || usable.length < 2) return { issues: [], fixed: 0 };
+  try {
+    const o = await askJson(env, CONTINUITY_SYSTEM, scenes.map((s) => JSON.stringify({ scene: s.n, name: s.name, time: s.time, props: s.props, states: s.states, happens: (s.notes || {}).happens })).join('\n'), f);
+    let fixed = 0;
+    for (const x of Array.isArray(o.fixes) ? o.fixes : []) {
+      const s = scenes.find((y) => y.n === Number(x.scene)); if (!s || !Array.isArray(x.states) || x.states.length !== s.states.length) continue;
+      const st = x.states.map((v) => text(v, 400).trim()); if (!st.every(Boolean)) continue;
+      s.states = st; if (Array.isArray(x.props)) { const pr = x.props.slice(0, 8).map((p) => ({ name: text(p && p.name, 40), look: text(p && p.look, 200) })).filter((p) => p.name && p.look); if (pr.length) s.props = pr; } fixed++;
+    }
+    return { issues: (Array.isArray(o.issues) ? o.issues : []).slice(0, 12).map((i) => ({ scene: Number(i.scene) || 0, problem: text(i.problem, 240) })), fixed };
+  } catch (e) { return { issues: [], fixed: 0 }; }
 }
 export async function draftScenes(env, db, actor, pid, f) {
   human(actor);
@@ -98,14 +117,14 @@ export async function draftScenes(env, db, actor, pid, f) {
   const prompt = `Story:\n${text(sd.text, 8000)}\n\nBeats: ${(bd.beats || []).map((b) => b.text).join(' | ')}\nPeople: ${people.map((p) => `${p.data.name} (${p.data.role})`).join('; ')}\nPlaces: ${places.map((p) => p.data.name).join('; ')}\nFilm length: ${fmt.seconds} seconds. Every scene is between ${sceneBounds(fmt)[0]} and ${sceneBounds(fmt)[1]} seconds long. Spoken language: ${fmt.speech}. Each scene ends up as clips of at most ${MAX_CLIP} seconds.`;
   const o = metaConfigured(env) ? await askJson(env, SCENES_SYSTEM, prompt, f) : { scenes: localScenes(bd, fmt) };
   const list = (o.scenes || []).slice(0, 12); if (!list.length) throw new HttpError(502, 'the AI made no scenes. Try again.');
-  const made = [], used = new Set();
+  const drafted = list.map((s, i) => sceneFrom(s, i, people, places, fmt)), review = await reviewContinuity(env, drafted, f), made = [], used = new Set();
   for (const [i, s] of list.entries()) {
     let id = slug(s.name) || `scene-${i + 1}`; while (used.has(id)) id += '-2'; used.add(id);
     const cur = await row(db, pid, R.scene(id)); if (cur && cur.status === 'locked') continue;
-    await S.propose(db, AGENT, pid, { ref: R.scene(id), parent: REFS.episode, data: sceneFrom(s, i, people, places, fmt), rationale: 'A scene drafted from your story. Please review its brief.' }); made.push(R.scene(id));
+    await S.propose(db, AGENT, pid, { ref: R.scene(id), parent: REFS.episode, data: drafted[i], rationale: `A scene drafted from your story. Please review its brief.${(review.issues.find((x) => x.scene === i + 1) || {}).problem ? ` Continuity fixed: ${review.issues.find((x) => x.scene === i + 1).problem}` : ''}` }); made.push(R.scene(id));
   }
   await S.logEvent(db, pid, REFS.episode, 'wizard_scenes', actor, `${made.length} scenes proposed`);
-  return { made, via: metaConfigured(env) ? 'muse-spark' : 'local' };
+  return { made, via: metaConfigured(env) ? 'muse-spark' : 'local', continuity: review };
 }
 // Redo one scene's brief, taking any open feedback on it into account.
 export async function draftBrief(env, db, actor, pid, { scene, instruction = '' }, f) {
@@ -117,7 +136,7 @@ export async function draftBrief(env, db, actor, pid, { scene, instruction = '' 
   const o = await askJson(env, SCENES_SYSTEM.replace('Output JSON {scenes: [...]} with 3 to 8 scenes.', 'Output JSON {scenes: [one scene]} with exactly this one scene, rewritten.'), `Rewrite this scene, keeping what is good.\nCurrent: ${JSON.stringify({ name: d.name, seconds: d.seconds, notes: d.notes, transcript: d.transcript })}\nFeedback: ${[instruction, ...open].filter(Boolean).join(' | ') || 'none'}\nPeople: ${people.map((p) => p.data.name).join('; ')}. Places: ${places.map((p) => p.data.name).join('; ')}.`, f);
   const s = sceneFrom((o.scenes || [])[0] || {}, d.n - 1, people, places, fmt);
   const ids = (await S.listComments(db, pid, { ref: cur.ref, status: 'open' })).map((c) => c.id);
-  await S.propose(db, AGENT, pid, { ref: cur.ref, parent: REFS.episode, data: { ...d, name: s.name || d.name, tag: s.tag || d.tag, notes: s.notes, transcript: s.transcript.length ? s.transcript : d.transcript }, rationale: `Rewrote the brief${instruction ? `: ${text(instruction, 120)}` : ''}.`, addresses: ids });
+  await S.propose(db, AGENT, pid, { ref: cur.ref, parent: REFS.episode, data: { ...d, name: s.name || d.name, tag: s.tag || d.tag, notes: s.notes, transcript: s.transcript.length ? s.transcript : d.transcript, states: s.states.length ? s.states : d.states, props: s.props.length ? s.props : d.props }, rationale: `Rewrote the brief${instruction ? `: ${text(instruction, 120)}` : ''}.`, addresses: ids });
   return { ref: cur.ref };
 }
 
@@ -240,9 +259,9 @@ export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, i
     if (prev) { const k = (prev.data.clips && prev.data.clips.length ? prev.data.clips : clipPlan(prev.data.seconds)).length, kf = dataOf(await row(db, pid, R.frame(keyOf(prev.ref), k, 'end')));
       const a = kf && kf.chosen && await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, kf.chosen).first(); if (a) { anchors.push({ id: 'previous-scene', uri: a.uri }); prevNote = "Match the light, colours and time of day of the previous scene's last picture."; } }
   }
-  const prompt = [`${which === 'start' ? 'The first frame' : 'The last frame'} of a ${c.seconds} second film clip.`, c.prompt.split('\n')[0], chars.length && `Only these appear, exactly as in their reference pictures: ${chars.join(' ')}`, mediumOf(lookRow) === 'illustration' && 'Drawn in the film\'s own style, not a photograph, and no people unless listed.', place && place.desc && `Place: ${place.name}. ${place.desc}`, await lookText(db, pid), prevNote, instruction].filter(Boolean).join(' ');
+  const sts = clipStates(sd), state = sts ? (which === 'start' ? sts[clip - 1] : sts[clip]) : '', pr = propsOf(sd), prompt = [`${which === 'start' ? 'The first frame' : 'The last frame'} of a ${c.seconds} second film clip.`, state || c.prompt.split('\n')[0], pr.length && `Things in the picture, exactly like this: ${pr.map((p) => `${p.name}: ${p.look}`).join('; ')}.`, chars.length && `Only these appear, exactly as in their reference pictures: ${chars.join(' ')}`, mediumOf(lookRow) === 'illustration' && 'Drawn in the film\'s own style, not a photograph, and no people unless listed.', place && place.desc && `Place: ${place.name}. ${place.desc}`, await lookText(db, pid), prevNote, instruction].filter(Boolean).join(' ');
   const shape = String(((dataOf(await row(db, pid, REFS.look)) || {}).aspect) || '9:16').split(':').map(Number), aspect = shape.length === 2 && shape.every((n) => n > 0 && n < 100) ? shape : [9, 16]; // the pictures follow the film's shape, not always portrait
-  const expect = `Medium: ${mediumOf(lookRow)}. ${chars.length ? `Only these characters appear, and each is exactly the kind of being described: ${chars.join(' ')} Nobody else appears.` : 'No people or characters.'}${place && place.desc ? ` Place: ${place.desc}` : ''}`;
+  const expect = `${state ? `This exact moment: ${state} ` : ''}Medium: ${mediumOf(lookRow)}. ${chars.length ? `Only these characters appear, and each is exactly the kind of being described: ${chars.join(' ')} Nobody else appears.` : 'No people or characters.'}${place && place.desc ? ` Place: ${place.desc}` : ''}`;
   const { r, check } = await drawChecked(env, db, actor, pid, fr, { prompt, aspect, anchors, tag: `${which}`, medium: mediumOf(lookRow), ...(staged ? { stage: { ref: stageRef, shot } } : {}) }, expect, f);
   return { asset: r.asset, ref: fr, staged: !!staged, check };
 }

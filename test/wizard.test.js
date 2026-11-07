@@ -203,3 +203,14 @@ test('a one-off "model was not found" from Meta is tried again, a real failure i
   const gone = async () => new Response(JSON.stringify({ error: { message: 'The requested model was not found.' } }), { status: 404 });
   await assert.rejects(spark({ MODEL_API_KEY: 'k', MODEL_SPARK: 'nope' }, { input: 'hi' }, gone), /404/);
 });
+
+test('the continuity review corrects the states of a scene that skips a stage, and leaves the rest', async () => {
+  const mk = (n, states) => ({ n, name: `S${n}`, time: 'day', notes: { happens: 'x' }, props: [{ name: 'plant', look: 'a green plant' }], states });
+  const scenes = [mk(1, ['Soil.', 'Soil with a seed.']), mk(2, ['Soil with a seed.', 'A huge carrot.'])];
+  const f = async (url, init) => reply(msg({ issues: [{ scene: 2, problem: 'The seed becomes a huge carrot in one clip.' }], fixes: [{ scene: 2, states: ['Soil with a seed.', 'A small green sprout.'] }, { scene: 1, states: ['too few'] }] }));
+  const r = await W.reviewContinuity({ MODEL_API_KEY: 'k' }, scenes, f);
+  assert.equal(r.fixed, 1); assert.deepEqual(scenes[1].states, ['Soil with a seed.', 'A small green sprout.']); assert.deepEqual(scenes[0].states, ['Soil.', 'Soil with a seed.'], 'a fix of the wrong length is ignored');
+  assert.equal(r.issues[0].scene, 2);
+  assert.deepEqual(await W.reviewContinuity({ MODEL_API_KEY: 'k' }, [mk(1, [])], f), { issues: [], fixed: 0 }, 'nothing to review');
+  assert.deepEqual(await W.reviewContinuity({ MODEL_API_KEY: 'k' }, scenes, async () => reply({ error: { message: 'x' } }, 500)), { issues: [], fixed: 0 }, 'a review that cannot run never blocks the scenes');
+});

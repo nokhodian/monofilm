@@ -75,3 +75,13 @@ test('a cartoon look gives an illustration, and an animal is a character, not a 
   assert.equal(beingOf('A 30-year-old woman with a braid, walking her dog'), 'person');
   assert.equal(beingOf('An 80-year-old man with a thick white beard'), 'person'); assert.equal(beingOf(''), 'person');
 });
+import { clipStates, propsOf } from '../public/js/wizard-model.js';
+test('a clip is asked for from states: how it begins, how it ends, and how each tracked thing looks', () => {
+  const sc = { data: { seconds: 12, clips: [{ seconds: 6 }, { seconds: 6 }], notes: { happens: 'Mimi digs and plants.' }, states: ['Bare soil, Mimi kneels with the seed in her paw.', 'A small hole in the soil, the seed still in her paw.', 'Flat soil, the seed buried, no plant.'], props: [{ name: 'seed', look: 'a tiny orange seed the size of a pea' }] } };
+  assert.deepEqual(clipStates(sc.data), sc.data.states); assert.equal(propsOf(sc.data).length, 1);
+  const p1 = composeClip(sc, {}, 1).prompt, p2 = composeClip(sc, {}, 2).prompt;
+  assert.match(p1, /It begins like this: Bare soil, Mimi kneels/); assert.match(p1, /It ends like this, and nothing further happens: A small hole/); assert.match(p2, /It begins like this: A small hole/); assert.match(p2, /It ends like this[^\n]*Flat soil, the seed buried, no plant\./);
+  assert.match(p1, /Things in this scene \(always look exactly like this[^)]*\): seed: a tiny orange seed the size of a pea/);
+  assert.ok(p1.indexOf('It begins like this') < p1.indexOf('Look:'), 'the states come before the look line');
+  assert.equal(clipStates({ ...sc.data, states: ['only one'] }), null, 'a list of the wrong length is ignored'); assert.doesNotMatch(composeClip({ data: { ...sc.data, states: [], props: [] } }, {}, 1).prompt, /It begins like this|Things in this scene/);
+});
