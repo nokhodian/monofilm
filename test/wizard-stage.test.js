@@ -73,7 +73,7 @@ test('a cartoon look gives an illustration, and an animal is a character, not a 
   assert.equal(beingOf('A chubby baby penguin with a black back and a red knitted hat'), 'creature');
   assert.equal(beingOf('A tiny baby polar bear cub with big eyes'), 'creature');
   assert.equal(beingOf('A 30-year-old woman with a braid, walking her dog'), 'person');
-  assert.equal(beingOf('An 80-year-old man with a thick white beard'), 'person'); assert.equal(beingOf(''), 'person');
+  assert.equal(beingOf('An 80-year-old man with a thick white beard'), 'person'); assert.equal(beingOf(''), 'person'); for (const d of ['A small green frog sitting on a lily pad', 'A baby hedgehog with a round brown body', 'A slow old tortoise with round glasses', 'A baby elephants with big ears']) assert.equal(beingOf(d), 'creature', d);
 });
 import { clipStates, propsOf } from '../public/js/wizard-model.js';
 test('a clip is asked for from states: how it begins, how it ends, and how each tracked thing looks', () => {
