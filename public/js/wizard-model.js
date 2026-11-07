@@ -155,3 +155,10 @@ export const emptyScene = (n, o = {}) => ({ n, name: o.name || `Scene ${n}`, tag
 
 // How many pictures the studio still has to draw for a scene (one credit each).
 export const pictureCount = (id, d) => slotsOf(id, d).filter((x) => x.mode === 'stage').length;
+
+// ---- what kind of picture and what kind of being, so a cartoon penguin is not drawn as a photographed man ----
+export const isDrawn = (look) => /cartoon|animat|\b3d\b|illustrat|drawn|painted|pixar|anime|claymation|storybook|stylis|toon/i.test([look && look.look, look && look.name, look && look.period].filter(Boolean).join(' '));
+export const mediumOf = (look) => (isDrawn(look) ? 'illustration' : 'photograph');
+const STRONG = /\b(man|woman|boy|girl|person|human|lady|gentleman|grandfather|grandmother|mother|father|teenager|\d+[- ]year[- ]old)\b/i, BEAST = /\b(penguin|bear|seal|cub|cat|kitten|dog|puppy|bird|animal|creature|robot|dragon|fox|rabbit|bunny|elephant|horse|monkey|owl|mouse|duck|fish|lion|tiger|monster|alien|toy|doll)\b/i;
+// 'person' unless the description names an animal or creature before it names a human.
+export function beingOf(desc) { const t = String(desc || ''), a = t.search(BEAST), p = t.search(STRONG); return a >= 0 && (p < 0 || a < p) ? 'creature' : 'person'; }

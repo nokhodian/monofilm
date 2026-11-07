@@ -5,7 +5,7 @@ import * as S from './store.js';
 import { spark, outputText, metaConfigured } from './meta.js';
 import { AGENT } from './agent.js';
 import { registerTool, callTool } from './tools.js';
-import { REFS, R, slug, keyOf, clipPlan, clipBeats, clipSpans, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP, sceneBounds, clampScene } from '../public/js/wizard-model.js';
+import { REFS, R, slug, keyOf, mediumOf, beingOf, clipPlan, clipBeats, clipSpans, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP, sceneBounds, clampScene } from '../public/js/wizard-model.js';
 
 const row = (db, pid, ref) => db.prepare('SELECT * FROM artifacts WHERE production=? AND ref=?').bind(pid, ref).first();
 const dataOf = (r) => (r ? parseJson(r.data) : null);
@@ -202,7 +202,8 @@ const asProposal = async (db, pid, ref, parent, deps, data, why) => { await S.pr
 export async function makeFace(env, db, actor, pid, { id, variant = 0, instruction = '' }, f) {
   human(actor);
   const cur = await must(db, pid, R.cast(id), `person ${id}`), d = dataOf(cur), letter = 'ABC'[variant % 3];
-  const prompt = [`Portrait photograph of one person for a film. Head and shoulders, plain neutral background, looking slightly off camera, no text.`, d.desc || d.role, await lookText(db, pid), VARIANT[variant % 3], instruction].filter(Boolean).join(' ');
+  const look = dataOf(await row(db, pid, REFS.look)) || {}, medium = mediumOf(look), thing = beingOf(d.desc || d.role) === 'person' ? 'person' : 'character';
+  const prompt = [`Portrait ${medium} of one ${thing} for a film. ${thing === 'person' ? 'Head and shoulders' : 'Head and upper body'}, plain neutral background, ${thing === 'person' ? 'looking slightly off camera' : 'facing slightly off camera'}, no text.`, thing === 'character' ? 'Draw the character itself, not a person holding or dressed as it, and not a toy.' : '', d.desc || d.role, await lookText(db, pid), thing === 'person' ? VARIANT[variant % 3] : ['', 'A slightly different design of the same kind of character.', 'A third, clearly different design of the same kind of character.'][variant % 3], instruction].filter(Boolean).join(' ');
   const r = await paint(env, db, actor, pid, cur.ref, { prompt, aspect: [3, 4], tag: `face:${letter}` }, f);
   await merge(db, pid, cur.ref, (fresh) => ({ ...fresh, candidates: [...(fresh.candidates || []).filter((c) => c.letter !== letter), { id: r.asset.id, letter }] }), `Made face ${letter}.`);
   return { asset: r.asset, letter };
@@ -210,7 +211,7 @@ export async function makeFace(env, db, actor, pid, { id, variant = 0, instructi
 export async function makePlate(env, db, actor, pid, { id, instruction = '' }, f) {
   human(actor);
   const cur = await must(db, pid, R.place(id), `place ${id}`), d = dataOf(cur);
-  const prompt = [`Photograph of a film location, no people, wide establishing view.`, d.name, d.desc, d.time && `Time of day: ${d.time}.`, (d.must_keep || []).length && `It must clearly show: ${d.must_keep.join(', ')}.`, await lookText(db, pid), instruction].filter(Boolean).join(' ');
+  const medium = mediumOf(dataOf(await row(db, pid, REFS.look)) || {}), prompt = [`${medium === 'photograph' ? 'Photograph' : 'Illustration'} of a film location, no people or characters, wide establishing view.`, d.name, d.desc, d.time && `Time of day: ${d.time}.`, (d.must_keep || []).length && `It must clearly show: ${d.must_keep.join(', ')}.`, await lookText(db, pid), instruction].filter(Boolean).join(' ');
   const r = await paint(env, db, actor, pid, cur.ref, { prompt, aspect: [16, 9], tag: 'plate' }, f);
   await merge(db, pid, cur.ref, (fresh) => ({ ...fresh, source: fresh.source === 'photo' ? 'photo' : 'made', plates: [...(fresh.plates || []), { id: r.asset.id }] }), 'Made a place plate.');
   return { asset: r.asset };
@@ -221,9 +222,9 @@ export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, i
   if (!['start', 'end'].includes(which)) throw bad('which must be start or end');
   const shots = await ensureClips(db, actor, pid, scene), shot = shots[clip - 1]; if (!shot) throw bad(`scene ${scene} has no clip ${clip}`);
   const sd = dataOf(await row(db, pid, R.scene(scene))), fr = R.frame(scene, clip, which), c = composeClip({ data: sd }, {}, clip);
-  const anchors = []; for (const w of sd.who || []) { const p = dataOf(await row(db, pid, w)); const cand = p && (p.candidates || []).find((x) => x.id === p.anchor); if (cand) { const a = await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, cand.id).first(); if (a) anchors.push({ id: keyOf(w), uri: a.uri }); } }
+  const anchors = [], chars = []; for (const w of sd.who || []) { const p = dataOf(await row(db, pid, w)); if (p && p.desc) chars.push(`${p.name}: ${p.desc}`); const cand = p && (p.candidates || []).find((x) => x.id === p.anchor); if (cand) { const a = await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, cand.id).first(); if (a) anchors.push({ id: keyOf(w), uri: a.uri }); } }
   const stageRef = R.stage(scene), st = await row(db, pid, stageRef), stageData = dataOf(st), staged = st && ['approved', 'locked'].includes(st.status) && stageData && (stageData.shots || {})[shot];
-  const place = sd.place && dataOf(await row(db, pid, sd.place));
+  const place = sd.place && dataOf(await row(db, pid, sd.place)), lookRow = dataOf(await row(db, pid, REFS.look)) || {};
   // The first picture of a scene follows the previous scene's last picture: it goes in as a reference, so the light, colours and time of day carry across the cut.
   let prevNote = '';
   if (which === 'start' && clip === 1 && (sd.start || {}).mode !== 'chain') {
@@ -231,7 +232,7 @@ export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, i
     if (prev) { const k = (prev.data.clips && prev.data.clips.length ? prev.data.clips : clipPlan(prev.data.seconds)).length, kf = dataOf(await row(db, pid, R.frame(keyOf(prev.ref), k, 'end')));
       const a = kf && kf.chosen && await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, kf.chosen).first(); if (a) { anchors.push({ id: 'previous-scene', uri: a.uri }); prevNote = "Match the light, colours and time of day of the previous scene's last picture."; } }
   }
-  const prompt = [`${which === 'start' ? 'The first frame' : 'The last frame'} of a ${c.seconds} second film clip.`, c.prompt.split('\n')[0], place && place.desc && `Place: ${place.name}. ${place.desc}`, await lookText(db, pid), prevNote, instruction].filter(Boolean).join(' ');
+  const prompt = [`${which === 'start' ? 'The first frame' : 'The last frame'} of a ${c.seconds} second film clip.`, c.prompt.split('\n')[0], chars.length && `Only these appear, exactly as in their reference pictures: ${chars.join(' ')}`, mediumOf(lookRow) === 'illustration' && 'Drawn in the film\'s own style, not a photograph, and no people unless listed.', place && place.desc && `Place: ${place.name}. ${place.desc}`, await lookText(db, pid), prevNote, instruction].filter(Boolean).join(' ');
   const shape = String(((dataOf(await row(db, pid, REFS.look)) || {}).aspect) || '9:16').split(':').map(Number), aspect = shape.length === 2 && shape.every((n) => n > 0 && n < 100) ? shape : [9, 16]; // the pictures follow the film's shape, not always portrait
   const r = await paint(env, db, actor, pid, fr, { prompt, aspect, anchors, tag: `${which}`, ...(staged ? { stage: { ref: stageRef, shot } } : {}) }, f);
   return { asset: r.asset, ref: fr, staged: !!staged };

@@ -66,3 +66,12 @@ test('floor plan: what can be grabbed, what is nearest, and where things end up'
   assert.ok(setCamera(stage, 'A', { lens: 50, move: 'orbit' }) && stage.cameras.A.lens === 50 && stage.cameras.A.move.type === 'orbit' && !stage.cameras.A.move.to);
   assert.equal(setCamera(stage, 'A', { lens: 33 }), false); assert.equal(setCamera(stage, 'A', { move: 'spin' }), false); assert.equal(setCamera(stage, 'Z', { lens: 50 }), false);
 });
+import { mediumOf, beingOf, isDrawn } from '../public/js/wizard-model.js';
+test('a cartoon look gives an illustration, and an animal is a character, not a person', () => {
+  assert.equal(mediumOf({ look: 'Round 3D shapes in soft pastel colors with warm sunny light' }), 'illustration');
+  assert.equal(mediumOf({ look: 'Muted film, fine grain, natural light' }), 'photograph'); assert.equal(isDrawn({ look: 'Hand-drawn storybook' }), true); assert.equal(mediumOf({}), 'photograph');
+  assert.equal(beingOf('A chubby baby penguin with a black back and a red knitted hat'), 'creature');
+  assert.equal(beingOf('A tiny baby polar bear cub with big eyes'), 'creature');
+  assert.equal(beingOf('A 30-year-old woman with a braid, walking her dog'), 'person');
+  assert.equal(beingOf('An 80-year-old man with a thick white beard'), 'person'); assert.equal(beingOf(''), 'person');
+});
