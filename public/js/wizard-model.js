@@ -175,7 +175,7 @@ export const emptyScene = (n, o = {}) => ({ n, name: o.name || `Scene ${n}`, tag
 export const pictureCount = (id, d) => slotsOf(id, d).filter((x) => x.mode === 'stage').length;
 
 // ---- what kind of picture and what kind of being, so a cartoon penguin is not drawn as a photographed man ----
-export const isDrawn = (look) => /cartoon|animat|\b3d\b|illustrat|drawn|painted|pixar|anime|claymation|storybook|stylis|toon/i.test([look && look.look, look && look.name, look && look.period].filter(Boolean).join(' '));
+export const isDrawn = (look) => { const pick = look && Array.isArray(look.options) ? look.options.find((o) => o.id === look.chosen) : null; return /cartoon|animat|\b3d\b|illustrat|drawn|painted|pixar|anime|claymation|storybook|stylis|toon|picture book|clay/i.test([look && look.look, look && look.name, look && look.period, pick && pick.name, pick && pick.sub, pick && pick.desc].filter(Boolean).join(' ')); };
 export const mediumOf = (look) => (isDrawn(look) ? 'illustration' : 'photograph');
 const STRONG = /\b(man|woman|boy|girl|person|human|lady|gentleman|grandfather|grandmother|mother|father|teenager|\d+[- ]year[- ]old)\b/i, BEAST = /\b(penguin|bear|seal|cub|cat|kitten|dog|puppy|bird|animal|creature|robot|dragon|fox|rabbit|bunny|elephant|horse|pony|monkey|owl|mouse|duck|duckling|fish|lion|tiger|monster|alien|toy|doll|frog|toad|tortoise|turtle|hedgehog|pig|piglet|cow|calf|sheep|lamb|goat|deer|fawn|snake|lizard|bee|butterfly|ladybug|squirrel|panda|koala|kangaroo|giraffe|zebra|hippo|whale|dolphin|octopus|crab|chick|chicken|hen|bat|hamster|otter|beaver|wolf|raccoon|mole|snail|caterpillar|dinosaur|unicorn|ghost|puppet)s?\b/i;
 // 'person' unless the description names an animal or creature before it names a human.

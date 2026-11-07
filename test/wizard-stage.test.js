@@ -99,3 +99,7 @@ test('a clip carries how it moves, the physics rules, and the exact count of a t
   assert.match(p, /How it moves: She opens the bottle, then blows through the wand\./); assert.ok(p.includes(PHYSICS)); assert.match(p, /seed: a pea-sized orange seed \(exactly 1\)/);
   assert.doesNotMatch(composeClip({ data: { ...sc.data, moves: [] } }, {}, 1).prompt, /How it moves/);
 });
+test('the medium follows the chosen look option, not only the look text', () => {
+  assert.equal(mediumOf({ look: 'Smooth round shapes with soft pastel colours', options: [{ id: 'l1', name: 'Soft 3D Cartoon', desc: 'Smooth round shapes' }], chosen: 'l1' }), 'illustration');
+  assert.equal(mediumOf({ look: 'Muted film', options: [{ id: 'l1', name: 'Muted film' }], chosen: 'l1' }), 'photograph');
+});

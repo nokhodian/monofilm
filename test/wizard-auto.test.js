@@ -7,6 +7,7 @@ import { R, REFS, clipPlan } from '../public/js/wizard-model.js';
 const mk = (list) => { const arts = list.map((a) => ({ status: 'approved', stale: false, assets: [], ...a })); return { arts, by: Object.fromEntries(arts.map((a) => [a.ref, a])) }; };
 const story = { ref: REFS.story, kind: 'logline', data: { text: 'A station AI must ask first.' } };
 const bible = { ref: REFS.reading, kind: 'bible', data: {} };
+const look = { ref: REFS.look, kind: 'canon.style', data: { look: 'soft' } };
 const cast = (id, o = {}) => ({ ref: R.cast(id), kind: 'canon.cast', data: { name: id.toUpperCase(), candidates: [], anchor: null, ...o } });
 const place = (id, o = {}) => ({ ref: R.place(id), kind: 'canon.world', data: { name: id, plates: [], source: 'none', ...o } });
 const scene = (id, n, o = {}) => ({ ref: R.scene(id), kind: 'scene', data: { n, name: 'S' + n, seconds: 8, clips: clipPlan(8), start: { mode: 'stage' }, end: { mode: 'stage' }, ...o } });
@@ -16,11 +17,11 @@ test('it waits for a story, then reads it', () => {
   assert.equal(plan(mk([story])).type, 'read');
 });
 test('what the AI made is approved first, in one move, but only the wizard\'s own kinds', () => {
-  const a = plan(mk([story, bible, { ...cast('ines'), status: 'proposed' }, { ...place('lab'), status: 'proposed' }, { ref: 'canon.world:world', kind: 'canon.world', status: 'proposed', data: {} }, { ref: 'reference:m-1', kind: 'reference', status: 'proposed', data: {} }]));
+  const a = plan(mk([story, bible, look, { ...cast('ines'), status: 'proposed' }, { ...place('lab'), status: 'proposed' }, { ref: 'canon.world:world', kind: 'canon.world', status: 'proposed', data: {} }, { ref: 'reference:m-1', kind: 'reference', status: 'proposed', data: {} }]));
   assert.deepEqual([a.type, a.refs], ['approve', [R.cast('ines'), R.place('lab')]]);
 });
 test('faces, then main faces, then places, then scenes, in that order, one at a time', () => {
-  const base = [story, bible];
+  const base = [story, bible, look];
   assert.deepEqual(plan(mk([...base, cast('ines'), cast('orca')])), { type: 'face', id: 'ines', name: 'INES', cost: 1 });
   const faced = (id, a) => cast(id, { candidates: [{ id: 'a-' + id, letter: 'A' }], anchor: a ? 'a-' + id : null });
   assert.deepEqual(plan(mk([...base, faced('ines', true), cast('orca')])), { type: 'face', id: 'orca', name: 'ORCA', cost: 1 });
@@ -30,7 +31,7 @@ test('faces, then main faces, then places, then scenes, in that order, one at a 
   assert.equal(plan(mk([...base, faced('ines', true), place('lab', { plates: [{ id: 'p' }] })])).type, 'scenes');
 });
 test('each scene: its stage, then each picture it needs, made and then put in use', () => {
-  const canon = [story, bible, cast('ines', { candidates: [{ id: 'f' }], anchor: 'f' }), place('lab', { plates: [{ id: 'p' }] })];
+  const canon = [story, bible, look, cast('ines', { candidates: [{ id: 'f' }], anchor: 'f' }), place('lab', { plates: [{ id: 'p' }] })];
   assert.deepEqual(plan(mk([...canon, scene('one', 1)])), { type: 'stage', scene: 'one', name: 'S1', n: 1 });
   const st = { ref: R.stage('one'), kind: 'stage', data: {} };
   const f1 = plan(mk([...canon, scene('one', 1), st])); assert.deepEqual([f1.type, f1.ref, f1.which, f1.clip], ['frame', R.frame('one', 1, 'start'), 'start', 1]);
@@ -44,10 +45,10 @@ test('each scene: its stage, then each picture it needs, made and then put in us
 });
 test('how much is left and what it costs', () => {
   assert.equal(remaining(mk([story])), 14); assert.deepEqual(estimate(mk([story])), { credits: 16, rough: true });
-  const canon = [story, bible, cast('ines', { candidates: [{ id: 'f' }], anchor: 'f' }), cast('orca'), place('lab')];
+  const canon = [story, bible, look, cast('ines', { candidates: [{ id: 'f' }], anchor: 'f' }), cast('orca'), place('lab')];
   assert.deepEqual(estimate(mk([...canon, scene('one', 1), scene('two', 2)])), { credits: 2 + 4, rough: false }, 'a face, a plate, and two pictures for each of two scenes');
   assert.ok(remaining(mk([...canon, scene('one', 1)])) > remaining(mk([...canon, scene('one', 1), { ref: R.stage('one'), kind: 'stage', data: {} }])), 'it shrinks as work is done');
-  assert.deepEqual(estimate(mk([story, bible, cast('a', { candidates: [{ id: 'f' }], anchor: 'f' })])), { credits: 0 + 9, rough: true }, 'before the scenes exist it guesses');
+  assert.deepEqual(estimate(mk([story, bible, look, cast('a', { candidates: [{ id: 'f' }], anchor: 'f' })])), { credits: 0 + 9, rough: true }, 'before the scenes exist it guesses');
 });
 test('every move has plain words and a page', () => {
   for (const a of [{ type: 'read' }, { type: 'approve', refs: [R.cast('x')] }, { type: 'face', name: 'Ines' }, { type: 'plate', name: 'Lab' }, { type: 'scenes' }, { type: 'stage', scene: 's', name: 'N', n: 1 }, { type: 'frame', scene: 's', which: 'end', name: 'N', n: 2 }, { type: 'done' }]) { const t = describe(a); assert.ok(t.title.length > 5 && t.sub.length > 5, a.type); assert.match(pageOf(a), /^#\/w\//); }

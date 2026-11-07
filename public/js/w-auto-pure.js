@@ -13,7 +13,7 @@ const kids = (d) => ({ cast: d.arts.filter((a) => a.kind === 'canon.cast').sort(
 export function plan(d) {
   const story = d.by[REFS.story];
   if (!story || !String((story.data || {}).text || '').trim()) return { type: 'blocked', why: 'Write your story first.' };
-  if (!d.by[REFS.reading]) return { type: 'read' };
+  if (!d.by[REFS.reading] || !d.by[REFS.look]) return { type: 'read' }; // the reading also makes the look; if it is missing, read again
   const todo = d.arts.filter((a) => a.status === 'proposed' && APPROVABLE(a));
   if (todo.length) return { type: 'approve', refs: todo.map((a) => a.ref) };
   const { cast, places, scenes } = kids(d);
