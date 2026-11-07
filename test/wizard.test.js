@@ -89,6 +89,8 @@ test('a picture that is not what was asked for is looked at and drawn again once
   assert.equal((await S.getArtifact(t.db, t.id, R.cast('ines'))).data.candidates[0].check.redrew, true, 'what the check saw is kept with the picture');
   r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines', variant: 1 }, judged([wrong, wrong])); assert.deepEqual([r.check.ok, r.check.redrew, r.check.problem], [false, true, 'It shows a man, not a penguin.']);
   r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines', variant: 0 }, judged([{ ok: false, major: false, seen: 'A woman.', problem: 'The coat is blue, not grey.' }])); assert.deepEqual([r.check.ok, r.check.major], [false, false], 'a small detail is noted, not treated as a stop');
+  r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines', variant: 0 }, judged([{ ok: false, kind: 'detail', seen: 'A woman.', problem: 'There are too many bubbles.' }])); assert.deepEqual([r.check.ok, r.check.major], [false, false], 'a size or number that is a little off does not stop the run');
+  r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines', variant: 0 }, judged([{ ok: false, kind: 'stage', seen: 'A plant.', problem: 'A plant stands where there should be bare soil.' }])); assert.equal(r.check.major, true, 'a thing at the wrong stage does');
   r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines', variant: 2 }, stand()); assert.equal(r.check.ok, true, 'an answer the check cannot read is not a failure'); assert.equal(r.check.skipped, true);
 });
 test('a face is made as a candidate and stored on the person; an unknown person or a missing key is explained', async () => {
