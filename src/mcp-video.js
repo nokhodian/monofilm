@@ -5,6 +5,7 @@ import * as S from './store.js';
 import { retryAdvice } from '../public/js/pack.js';
 import { R, REFS, keyOf, clipPlan, composeClip, startOf, hasEnd, midEnds, forGenerator, GENERATORS } from '../public/js/wizard-model.js';
 import { ensureClips, addTake } from './wizard.js';
+import { reviewFrames } from './takereview.js';
 
 const MAX_VIDEO = 25 * 1024 * 1024, MAX_INLINE = 4 * 1024 * 1024;
 const str = { type: 'string' }, num = { type: 'number' };
@@ -84,6 +85,11 @@ export const VIDEO_TOOLS = [
     const spec = clipSpec(c, a.production, L, sc, Math.round(Number(a.clip) || 1)), g = forGenerator({ prompt: spec.prompt, negative: spec.negative_prompt }, a.generator);
     return { ...spec, prompt: g.prompt, negative_prompt: g.negative, generator: g.generator };
   }),
+  T('review_take', 'Before you submit a clip, send 6 to 8 small frames of it (jpeg, base64, in time order, about 384 px wide) and the studio looks at them against what was asked: object counts, physics, jumps in the place, identity. It answers {ok, issues, advice}; if not ok, add the advice to the prompt and make the clip again.', { ...prod, scene: str, clip: { ...num, description: 'clip number, from 1' }, frames: { type: 'array', items: str, description: 'base64 jpeg frames, in time order' } }, ['production', 'scene', 'clip', 'frames'], async (c, a) => {
+    const L = await load(c, a.production), sc = sceneList(L, a.scene)[0]; if (!sc) throw new HttpError(404, `no scene ${a.scene}`);
+    const n = Math.round(Number(a.clip) || 1), spec = clipSpec(c, a.production, L, sc, n);
+    return reviewFrames(c.env, { frames: a.frames, asked: spec.prompt });
+  }),
   T('list_generators', 'The video models the studio knows, with what each can take and its quirks. Pass the id as generator to get_clip so the words fit your model.', {}, [], async () => ({ generators: Object.entries(GENERATORS).map(([id, g]) => ({ id, ...g })) })),
   T('get_media', 'Read a picture of this production (a media/ uri from get_clip) and get it back inline so you can look at it. Pictures up to 4 MB. For video use the url with your bearer token.', { ...prod, uri: str }, ['production', 'uri'], async (c, a) => {
     const m = new RegExp(`^media/${a.production}/([A-Za-z0-9._-]{1,100})$`).exec(a.uri || ''); if (!m) throw bad(`uri must look like media/${a.production}/<file>`);
@@ -96,9 +102,9 @@ export const VIDEO_TOOLS = [
     return { __content: [{ type: 'image', data: btoa(bin), mimeType: mime }, { type: 'text', text: JSON.stringify({ uri: a.uri, mime, bytes: head.size }) }] };
   }),
   T('submit_take', 'Bring a finished clip back to the studio. Give the video as url (https), data_base64 or uri (media/ already uploaded), up to 25 MB. It is saved as a take for the human to review; nothing is used until they pick it.',
-    { ...prod, scene: str, clip: { ...num, description: 'clip number, from 1' }, url: str, data_base64: str, uri: str, mime: str, seed: { ...num, description: 'the seed you used' }, hold: { ...num, description: 'seconds it stands still at the end, from the measure script' }, cuts: { ...num, description: 'number of hard cuts, from the measure script' }, smooth: { type: 'object', description: 'the smooth object from the measure script' }, note: { ...str, description: 'what you did, or anything the human should know' } }, ['production', 'scene', 'clip'], async (c, a) => {
+    { ...prod, scene: str, clip: { ...num, description: 'clip number, from 1' }, url: str, data_base64: str, uri: str, mime: str, seed: { ...num, description: 'the seed you used' }, hold: { ...num, description: 'seconds it stands still at the end, from the measure script' }, cuts: { ...num, description: 'number of hard cuts, from the measure script' }, smooth: { type: 'object', description: 'the smooth object from the measure script' }, review: { type: 'object', description: 'the answer of review_take for this clip' }, note: { ...str, description: 'what you did, or anything the human should know' } }, ['production', 'scene', 'clip'], async (c, a) => {
       const sc = (await S.listArtifacts(c.db, a.production, { kind: 'scene' })).find((x) => keyOf(x.ref) === a.scene); if (!sc) throw new HttpError(404, `no scene ${a.scene}`);
-      const uri = await storeVideo(c, a.production, a), r = await addTake(c.db, c.actor, a.production, { scene: a.scene, clip: Math.round(Number(a.clip) || 1), uri, seed: Number.isInteger(a.seed) ? a.seed : null, hold: typeof a.hold === 'number' ? a.hold : null, cuts: Number.isInteger(a.cuts) ? a.cuts : null, smooth: a.smooth && typeof a.smooth === 'object' ? a.smooth : null, note: a.note || '' }, STUDIO);
+      const uri = await storeVideo(c, a.production, a), r = await addTake(c.db, c.actor, a.production, { scene: a.scene, clip: Math.round(Number(a.clip) || 1), uri, seed: Number.isInteger(a.seed) ? a.seed : null, hold: typeof a.hold === 'number' ? a.hold : null, cuts: Number.isInteger(a.cuts) ? a.cuts : null, smooth: a.smooth && typeof a.smooth === 'object' ? a.smooth : null, review: a.review && typeof a.review === 'object' ? a.review : null, note: a.note || '' }, STUDIO);
       return { ...r, uri, status: 'proposed', next: 'The human reviews it on the Pack page. Call get_feedback to see their answer.' };
     }),
 ];

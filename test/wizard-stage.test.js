@@ -91,3 +91,11 @@ test('only the things really in view are named in a clip, so a generator is not 
   assert.deepEqual(propsInClip(d, 1).map((p) => p.name), ['tiny orange seed']); assert.deepEqual(propsInClip(d, 2).map((p) => p.name), ['tiny orange seed'], 'the seed is in view at the start of clip 2; the plant is named only to say it is absent');
   assert.doesNotMatch(composeClip({ data: d }, {}, 2).prompt, /carrot plant: a plant/);
 });
+import { movesOf, PHYSICS } from '../public/js/wizard-model.js';
+test('a clip carries how it moves, the physics rules, and the exact count of a thing', () => {
+  const sc = { data: { seconds: 12, clips: [{ seconds: 6 }, { seconds: 6 }], notes: { happens: 'x' }, moves: ['She scoops soil sideways with both front paws.', 'She opens the bottle, then blows through the wand.'], states: ['a', 'b', 'c'], props: [{ name: 'seed', look: 'a pea-sized orange seed', count: 1 }] } };
+  assert.deepEqual(movesOf(sc.data), sc.data.moves); assert.deepEqual(movesOf({ ...sc.data, moves: ['only one'] }), []);
+  const p = composeClip({ data: { ...sc.data, states: ['a seed in her paw', 'a seed in the soil', 'flat soil'] } }, {}, 2).prompt;
+  assert.match(p, /How it moves: She opens the bottle, then blows through the wand\./); assert.ok(p.includes(PHYSICS)); assert.match(p, /seed: a pea-sized orange seed \(exactly 1\)/);
+  assert.doesNotMatch(composeClip({ data: { ...sc.data, moves: [] } }, {}, 1).prompt, /How it moves/);
+});

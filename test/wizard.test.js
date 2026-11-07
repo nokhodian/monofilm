@@ -216,3 +216,11 @@ test('the continuity review corrects the states of a scene that skips a stage, a
   assert.deepEqual(await W.reviewContinuity({ MODEL_API_KEY: 'k' }, [mk(1, [])], f), { issues: [], fixed: 0 }, 'nothing to review');
   assert.deepEqual(await W.reviewContinuity({ MODEL_API_KEY: 'k' }, scenes, async () => reply({ error: { message: 'x' } }, 500)), { issues: [], fixed: 0 }, 'a review that cannot run never blocks the scenes');
 });
+
+test('the clip review reads frames against what was asked, and never blocks when it cannot run', async () => {
+  const { reviewFrames } = await import('../src/takereview.js'); const frames = ['QUJD', 'QUJE', 'QUJF'];
+  const f = async (url, init) => { const b = JSON.parse(init.body); assert.equal(b.input[0].content.filter((c) => c.type === 'input_image').length, 3); return reply(msg({ ok: false, seen: 'A bottle that stays closed.', issues: [{ kind: 'physics', problem: 'She blows through a closed bottle.', frames: '1 to 3' }], advice: 'The bottle is open, cap off.' })); };
+  const r = await reviewFrames({ MODEL_API_KEY: 'k' }, { frames, asked: 'x' }, f); assert.deepEqual([r.ok, r.issues[0].kind, r.advice], [false, 'physics', 'The bottle is open, cap off.']);
+  assert.equal((await reviewFrames({ MODEL_API_KEY: 'k' }, { frames: ['QUJD'], asked: 'x' }, f)).skipped, true, 'one frame is not a clip');
+  assert.equal((await reviewFrames({ MODEL_API_KEY: 'k' }, { frames, asked: 'x' }, async () => reply({}, 400))).ok, true);
+});

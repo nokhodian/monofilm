@@ -137,3 +137,9 @@ test('a retry gets a new seed every time, the same one for the same attempt, and
   assert.equal(retryAdvice('a', 1, [{ hold: 1, picked: true }]).try_again, false);
   assert.equal(retryAdvice('a', 1, [{ hold: 0, smooth: { flag: false } }]).try_again, false, 'a clean take needs no retry');
 });
+
+test('what the clip review found goes into the next try, and a clean review stops the retries', () => {
+  const bad = { review: { ok: false, issues: [{ kind: 'count', problem: 'One seed becomes three.', frames: '3 to 5' }], advice: 'There is exactly one seed, always.' } };
+  const a = retryAdvice('s', 1, [bad]); assert.equal(a.try_again, true); assert.match(a.last_take_problems[0], /One seed becomes three\. \(frames 3 to 5\)/); assert.match(a.add_to_prompt, /exactly one seed/);
+  assert.equal(retryAdvice('s', 1, [{ review: { ok: true, issues: [], advice: '' } }]).try_again, false);
+});

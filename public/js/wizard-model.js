@@ -99,6 +99,9 @@ export function propsInClip(d, k) {
   const here = (p, text) => { const w = String(p.name).trim().split(/\s+/).pop().replace(/[^a-z0-9-]/gi, ''); if (!w) return false; const re = new RegExp(`\\b${w}s?\\b`, 'i'), neg = new RegExp(`\\b(no|not|without)\\b[^.,;]{0,40}\\b${w}s?\\b`, 'i'); return re.test(text) && !neg.test(text); };
   return propsOf(d).filter((p) => here(p, st[k - 1]) || here(p, st[k]));
 }
+// How each clip really moves, one natural, physically possible description per clip (the beats say WHAT happens, this says HOW a body, a hand or a thing moves while it does).
+export function movesOf(d) { const n = clipSpans(d).length, m = Array.isArray(d.moves) ? d.moves.map((x) => String(x || '').trim()) : []; return m.length === n && m.every(Boolean) ? m : []; }
+export const PHYSICS = 'Physics: everything behaves exactly as in real life. Nothing appears, vanishes, multiplies or changes shape or size. Every object keeps its number (one seed stays one seed, one bottle stays one bottle). Hands and paws hold things the way real ones do. Soil, water, bubbles and cloth move the way they really do. The place, the framing and the background stay the same for the whole clip.';
 // A clip has an end picture unless the scene's end pictures are skipped. The last clip ends on the scene's end picture; a clip in the middle ends on a picture of its own, and the next clip starts from it.
 export const hasEnd = (d) => (d.end || {}).mode !== 'skip';
 // Clips in the middle only get an end picture of their own when the scene asks for every clip (the default). With d.ends === 'last' only the scene's last clip has one, which costs fewer credits.
@@ -149,7 +152,8 @@ export function composeClip(scene, film, clipIndex = 1) {
   const look = film.look || {}, never = [...new Set([...(String(n.never || '').split(/[.;\n]/).map((s) => s.trim()).filter(Boolean)), ...(Array.isArray(look.forbidden) ? look.forbidden : String(look.forbidden || '').split(',').map((s) => s.trim()).filter(Boolean)).map((t) => `no ${t}`)])];
   const lines = linesOfClip(d, k), beats = clipBeats(d), endPic = k === spans.length ? hasEnd(d) : midEnds(d), policy = audioPolicy(d, k), cast = film.cast || {};
   const who = (d.who || []).map((r) => cast[r]).filter((p) => p && p.desc);
-  const parts = [beats[k - 1] || (spans.length > 1 ? 'Carry on calmly from the clip before.' : n.happens), k > 1 && beats[k - 2] ? `The clip before ended on: ${beats[k - 2]} Do not repeat it.` : '', n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${oneMove(n.cam)}, one continuous shot`, n.sound && `Sound: ${n.sound}`,
+  const parts = [beats[k - 1] || (spans.length > 1 ? 'Carry on calmly from the clip before.' : n.happens), movesOf(d)[k - 1] && `How it moves: ${movesOf(d)[k - 1]}`, k > 1 && beats[k - 2] ? `The clip before ended on: ${beats[k - 2]} Do not repeat it.` : '', n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${oneMove(n.cam)}, one continuous shot`, n.sound && `Sound: ${n.sound}`,
+    PHYSICS,
     who.length ? `Characters (keep each one exactly as in its reference picture): ${who.map((p) => `${p.name}: ${p.desc}`).join(' ')}` : '',
     `Look: ${look.look || look.base || 'as in the film'}. ${look.aspect || '9:16'}, ${look.fps || 24} fps, ${c.seconds} seconds. The medium, colours, exposure and time of day stay exactly the same for the whole clip. No scene change, no cuts, no text on screen.`];
   if (lines.length) parts.push(`Dialogue: ${lines.map((l) => `${l.who || 'NARRATOR'} says${film.speech ? `, in ${film.speech},` : ''} "${l.text}"${l.en && String(l.en).trim().toLowerCase() !== String(l.text).trim().toLowerCase() ? ` (${l.en})` : ''}`).join(' ')}`);
@@ -157,7 +161,7 @@ export function composeClip(scene, film, clipIndex = 1) {
   parts.push(AUDIO_TEXT[policy], timingLine(c.seconds, endPic));
   const st = clipStates(d), pr = propsInClip(d, k);
   if (st) parts.splice(parts.findIndex((x) => /^Look: /.test(x || '')), 0, `It begins like this: ${st[k - 1]}\nIt ends like this, and nothing further happens: ${st[k]}`);
-  if (pr.length) parts.splice(parts.findIndex((x) => /^Look: /.test(x || '')), 0, `Things in this scene (always look exactly like this, never bigger or smaller, never a different colour): ${pr.map((p) => `${p.name}: ${p.look}`).join('; ')}`);
+  if (pr.length) parts.splice(parts.findIndex((x) => /^Look: /.test(x || '')), 0, `Things in this scene (always look exactly like this, never bigger or smaller, never a different colour): ${pr.map((p) => `${p.name}: ${p.look}${p.count ? ` (exactly ${p.count})` : ''}`).join('; ')}`);
   return { prompt: parts.filter(Boolean).join('\n'), negative: never.join('. '), seconds: c.seconds, join: c.join, clips: spans.length, beat: beats[k - 1] || '', audio: policy, timing: timingLine(c.seconds, endPic) };
 }
 // Generators tend to reach the end picture early and then hold it still, or to pile on extra events. This asks for the whole length to be used, with the end picture reached on the last frame.
@@ -165,7 +169,7 @@ export const timingLine = (seconds, endPicture) => (endPicture
   ? `Timing: use the full ${seconds} seconds with slow, steady movement the whole time, and reach the end picture on the very last frame, not before. Do not add events that are not listed.`
   : `Timing: move gently for the full ${seconds} seconds. Do not add new events, stay in the same place and light, and do not freeze at the end.`);
 
-export const emptyScene = (n, o = {}) => ({ n, name: o.name || `Scene ${n}`, tag: o.tag || '', seconds: o.seconds || 10, place: o.place || null, time: o.time || '', who: o.who || [], transcript: o.transcript || [], notes: { ...emptyNotes(), ...(o.notes || {}) }, start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(o.seconds || 10), overrides: {}, states: [], props: [] });
+export const emptyScene = (n, o = {}) => ({ n, name: o.name || `Scene ${n}`, tag: o.tag || '', seconds: o.seconds || 10, place: o.place || null, time: o.time || '', who: o.who || [], transcript: o.transcript || [], notes: { ...emptyNotes(), ...(o.notes || {}) }, start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(o.seconds || 10), overrides: {}, states: [], props: [], moves: [] });
 
 // How many pictures the studio still has to draw for a scene (one credit each).
 export const pictureCount = (id, d) => slotsOf(id, d).filter((x) => x.mode === 'stage').length;

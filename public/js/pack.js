@@ -124,8 +124,9 @@ export function retryAdvice(scene, clip, takes) {
   const n = (takes || []).length, last = n ? takes[n - 1] : null, flaws = [];
   if (last && last.hold >= 1.5) flaws.push(`stood still for the last ${last.hold} s`);
   if (last && last.smooth && last.smooth.flag) flaws.push(`jumped at about ${last.smooth.at} s`);
+  if (last && last.review && last.review.ok === false) for (const i of (last.review.issues || []).slice(0, 3)) flaws.push(`${i.problem}${i.frames ? ` (frames ${i.frames})` : ''}`);
   if (last && last.cuts) flaws.push(`had ${last.cuts} cut${last.cuts === 1 ? '' : 's'}`);
   const done = (takes || []).some((t) => t.picked);
-  const add = [last && last.hold >= 1.5 ? 'Spread the action over the whole clip so it lands on the very last frame, with no pause.' : '', last && ((last.smooth && last.smooth.flag) || last.cuts) ? 'Make it one continuous shot: the same place, light and framing from the first frame to the last. No cuts, no morphing.' : ''].filter(Boolean).join(' ');
+  const add = [last && last.hold >= 1.5 ? 'Spread the action over the whole clip so it lands on the very last frame, with no pause.' : '', last && last.review && last.review.advice ? last.review.advice : '', last && ((last.smooth && last.smooth.flag) || last.cuts) ? 'Make it one continuous shot: the same place, light and framing from the first frame to the last. No cuts, no morphing.' : ''].filter(Boolean).join(' ');
   return { attempt: n + 1, max_attempts: MAX_ATTEMPTS, seed: seedFor(scene, clip, n + 1), try_again: !done && !!flaws.length && n < MAX_ATTEMPTS, last_take_problems: flaws, add_to_prompt: flaws.length ? add : '', stop: done ? 'A take is already picked.' : n >= MAX_ATTEMPTS && flaws.length ? `Already ${n} takes with problems. Stop and tell the human, who can change the brief.` : '' };
 }
