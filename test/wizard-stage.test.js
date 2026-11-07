@@ -85,3 +85,9 @@ test('a clip is asked for from states: how it begins, how it ends, and how each 
   assert.ok(p1.indexOf('It begins like this') < p1.indexOf('Look:'), 'the states come before the look line');
   assert.equal(clipStates({ ...sc.data, states: ['only one'] }), null, 'a list of the wrong length is ignored'); assert.doesNotMatch(composeClip({ data: { ...sc.data, states: [], props: [] } }, {}, 1).prompt, /It begins like this|Things in this scene/);
 });
+import { propsInClip } from '../public/js/wizard-model.js';
+test('only the things really in view are named in a clip, so a generator is not told about a plant that is not there yet', () => {
+  const d = { seconds: 12, clips: [{ seconds: 6 }, { seconds: 6 }], states: ['Mimi kneels by soft soil holding a tiny orange seed.', 'A small hole in the soil, Mimi holds the seed above it.', 'Flat brown soil, Mimi sits back, no carrot plant yet.'], props: [{ name: 'tiny orange seed', look: 'a seed' }, { name: 'carrot plant', look: 'a plant' }] };
+  assert.deepEqual(propsInClip(d, 1).map((p) => p.name), ['tiny orange seed']); assert.deepEqual(propsInClip(d, 2).map((p) => p.name), ['tiny orange seed'], 'the seed is in view at the start of clip 2; the plant is named only to say it is absent');
+  assert.doesNotMatch(composeClip({ data: d }, {}, 2).prompt, /carrot plant: a plant/);
+});

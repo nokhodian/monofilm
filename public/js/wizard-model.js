@@ -93,6 +93,12 @@ export function clipBeats(d) {
 export function clipStates(d) { const n = clipSpans(d).length, s = Array.isArray(d.states) ? d.states.map((x) => String(x || '').trim()) : []; return s.length === n + 1 && s.every(Boolean) ? s : null; }
 // The things the scene tracks (a seed, a plant, a watering can) with one fixed look each, so they do not change colour or size between clips.
 export const propsOf = (d) => (Array.isArray(d.props) ? d.props : []).filter((p) => p && p.name && p.look);
+// Only the things really in view at the start or the end of a clip. Naming a thing that is not there yet makes a generator draw it.
+export function propsInClip(d, k) {
+  const st = clipStates(d); if (!st) return propsOf(d);
+  const here = (p, text) => { const w = String(p.name).trim().split(/\s+/).pop().replace(/[^a-z0-9-]/gi, ''); if (!w) return false; const re = new RegExp(`\\b${w}s?\\b`, 'i'), neg = new RegExp(`\\b(no|not|without)\\b[^.,;]{0,40}\\b${w}s?\\b`, 'i'); return re.test(text) && !neg.test(text); };
+  return propsOf(d).filter((p) => here(p, st[k - 1]) || here(p, st[k]));
+}
 // A clip has an end picture unless the scene's end pictures are skipped. The last clip ends on the scene's end picture; a clip in the middle ends on a picture of its own, and the next clip starts from it.
 export const hasEnd = (d) => (d.end || {}).mode !== 'skip';
 // Clips in the middle only get an end picture of their own when the scene asks for every clip (the default). With d.ends === 'last' only the scene's last clip has one, which costs fewer credits.
@@ -149,7 +155,7 @@ export function composeClip(scene, film, clipIndex = 1) {
   if (lines.length) parts.push(`Dialogue: ${lines.map((l) => `${l.who || 'NARRATOR'} says${film.speech ? `, in ${film.speech},` : ''} "${l.text}"${l.en && String(l.en).trim().toLowerCase() !== String(l.text).trim().toLowerCase() ? ` (${l.en})` : ''}`).join(' ')}`);
   if (k > 1) parts.push(c.join === 'cut' ? 'This clip is a cut to a new view. It has its own start picture.' : endPic ? 'It begins from the end picture of the clip before.' : 'Continue from the last picture of the previous clip.');
   parts.push(AUDIO_TEXT[policy], timingLine(c.seconds, endPic));
-  const st = clipStates(d), pr = propsOf(d);
+  const st = clipStates(d), pr = propsInClip(d, k);
   if (st) parts.splice(parts.findIndex((x) => /^Look: /.test(x || '')), 0, `It begins like this: ${st[k - 1]}\nIt ends like this, and nothing further happens: ${st[k]}`);
   if (pr.length) parts.splice(parts.findIndex((x) => /^Look: /.test(x || '')), 0, `Things in this scene (always look exactly like this, never bigger or smaller, never a different colour): ${pr.map((p) => `${p.name}: ${p.look}`).join('; ')}`);
   return { prompt: parts.filter(Boolean).join('\n'), negative: never.join('. '), seconds: c.seconds, join: c.join, clips: spans.length, beat: beats[k - 1] || '', audio: policy, timing: timingLine(c.seconds, endPic) };
