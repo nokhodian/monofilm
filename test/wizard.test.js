@@ -83,11 +83,12 @@ test('scenes are drafted from the reading, then clips, pictures and a returned t
 const judged = (verdicts, prompts = []) => { const base = stand(); let i = 0; return async (url, init) => { if (url.endsWith('/responses') && /check ONE picture/.test(JSON.parse(init.body).instructions)) { const v = verdicts[Math.min(i++, verdicts.length - 1)]; return reply(msg(v)); } if (url.includes('/images/')) prompts.push(JSON.parse(init.body).prompt); return base(url, init); }; };
 test('a picture that is not what was asked for is looked at and drawn again once with the correction; a check that cannot run lets it through', async () => {
   const t = await setup(); await W.readStory(t.env, t.db, human, t.id, stand());
-  const prompts = [], wrong = { ok: false, seen: 'A man holding a toy penguin.', problem: 'It shows a man, not a penguin.' };
+  const prompts = [], wrong = { ok: false, major: true, seen: 'A man holding a toy penguin.', problem: 'It shows a man, not a penguin.' };
   let r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines' }, judged([wrong, { ok: true, seen: 'A woman.', problem: '' }], prompts));
   assert.deepEqual([r.check.ok, r.check.redrew], [true, true]); assert.equal(prompts.length, 2); assert.match(prompts[1], /Correction: It shows a man, not a penguin\./);
   assert.equal((await S.getArtifact(t.db, t.id, R.cast('ines'))).data.candidates[0].check.redrew, true, 'what the check saw is kept with the picture');
   r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines', variant: 1 }, judged([wrong, wrong])); assert.deepEqual([r.check.ok, r.check.redrew, r.check.problem], [false, true, 'It shows a man, not a penguin.']);
+  r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines', variant: 0 }, judged([{ ok: false, major: false, seen: 'A woman.', problem: 'The coat is blue, not grey.' }])); assert.deepEqual([r.check.ok, r.check.major], [false, false], 'a small detail is noted, not treated as a stop');
   r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines', variant: 2 }, stand()); assert.equal(r.check.ok, true, 'an answer the check cannot read is not a failure'); assert.equal(r.check.skipped, true);
 });
 test('a face is made as a candidate and stored on the person; an unknown person or a missing key is explained', async () => {

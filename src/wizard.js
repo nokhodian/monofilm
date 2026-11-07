@@ -190,7 +190,7 @@ const VARIANT = ['', 'A slightly different person: different face shape.', 'A th
 async function drawChecked(env, db, actor, pid, ref, input, expect, f) {
   let r = await paint(env, db, actor, pid, ref, input, f), check = await checkPicture(env, r.asset.uri, expect, f), redrew = false;
   if (!check.ok) { redrew = true; r = await paint(env, db, actor, pid, ref, { ...input, prompt: `${input.prompt} Correction: ${check.problem || 'it was not what was asked for'}. It must show: ${expect}` }, f).catch(() => r); check = await checkPicture(env, r.asset.uri, expect, f); }
-  return { r, check: { ok: check.ok, seen: check.seen || '', problem: check.problem || '', redrew, skipped: !!check.skipped } };
+  return { r, check: { ok: check.ok, major: !!check.major, seen: check.seen || '', problem: check.problem || '', redrew, skipped: !!check.skipped } };
 }
 async function paint(env, db, actor, pid, ref, input, f) {
   if (!metaConfigured(env)) throw new HttpError(503, 'MODEL_API_KEY is not set, so Muse Image is off.');

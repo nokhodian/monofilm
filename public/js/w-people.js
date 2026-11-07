@@ -35,7 +35,7 @@ function faceHtml(a) {
     const c = byL[L]; if (!c) return `<div class="wz-ppl-face"><div class="pic none"><i>Face ${L} · not made</i></div></div>`;
     const on = a.data.anchor === c.id, src = srcOf(a.ref, c.id);
     return `<div class="wz-ppl-face">${itemEl(a.ref, `<div class="pic ${on ? 'on' : ''}">${src ? `<img src="${esc(src)}" alt="Face ${L} of ${esc(a.data.name)}">` : ''}${on ? '<em>main</em>' : ''}<i>Face ${L}</i></div>`, { part: `face:${L}`, kind: 'face', name: `${a.data.name} · face ${L}`, img: src, plain: true })}
-      ${c.check && c.check.ok === false ? `<div class="sm wzp-bad" role="alert"><b>This may be wrong.</b> ${esc(c.check.problem || c.check.seen || '')} I drew it again once and it still looks off.</div>` : ''}
+      ${c.check && c.check.ok === false && c.check.major ? `<div class="sm wzp-bad" role="alert"><b>This may be wrong.</b> ${esc(c.check.problem || c.check.seen || '')} I drew it again once and it still looks off.</div>` : ''}
       <button class="bt sm wz-ppl-use ${on ? '' : 'pri'}" data-act="wppl-use" data-ref="${esc(a.ref)}" data-id="${esc(c.id)}" ${on ? 'disabled' : ''}>${on ? '✓ Main face' : 'Use this face'}</button></div>`;
   }).join('');
 }
