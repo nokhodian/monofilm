@@ -4,7 +4,7 @@
 // The picture SOURCE and the clip join are decided on the Brief page only; here they are read-only with a link.
 import { $, $$, esc, st, api, P, toast, mediaSrc, isHuman } from './core.js';
 import { get, createArtifact } from './data.js';
-import { R, keyOf, SUBS, ANCHOR_MODES, sceneReadiness, clipSpans, hasEnd } from './wizard-model.js';
+import { R, keyOf, SUBS, ANCHOR_MODES, sceneReadiness, clipSpans, hasEnd, midEnds } from './wizard-model.js';
 import { W, spine, itemEl, chipOf, pill, lk, nothing, ownEdit, approveRefs, rerender, refresh, hrefOf, hrefIn, castArts } from './w-core.js';
 import { clipBar } from './w-clips.js';
 import { registerFix } from './w-fix.js';
@@ -28,8 +28,8 @@ export function head(ctx) {
 // Where a picture comes from is decided on the Brief page; this only shows it.
 // Where this clip's pictures come from: the first clip has the scene's start picture, a later clip either its own (after a cut) or the last frame of the clip before; only the last clip has the end picture.
 const clipSources = (ctx, d) => { const n = ctx.clip, spans = clipSpans(d), c = spans[n - 1] || {}, last = n === spans.length, brief = lk('Change in Brief', hrefOf('scenes', ctx.scene, 'brief'));
-  const start = n === 1 ? sourceLine(ctx, (d.start || {}).mode || 'stage') : c.join === 'cut' ? '<span class="sm">Its own start picture, from this layout</span> <span class="sm mute">· a cut</span>' : hasEnd(d) ? `<span class="sm">The end picture of clip ${n - 1}: the same picture ends that clip and starts this one</span>` : `<span class="sm">The last frame of clip ${n - 1}, from the clip you bring back</span>`;
-  const end = last ? sourceLine(ctx, (d.end || {}).mode || 'stage') : hasEnd(d) ? '<span class="sm">Its own end picture, from this layout (where the camera move ends)</span>' : `<span class="sm">None. Clip ${n} ends where its camera move ends.</span> <span class="sm mute">· ${brief}</span>`;
+  const start = n === 1 ? sourceLine(ctx, (d.start || {}).mode || 'stage') : c.join === 'cut' ? '<span class="sm">Its own start picture, from this layout</span> <span class="sm mute">· a cut</span>' : midEnds(d) ? `<span class="sm">The end picture of clip ${n - 1}: the same picture ends that clip and starts this one</span>` : `<span class="sm">The last frame of clip ${n - 1}, from the clip you bring back</span>`;
+  const end = last ? sourceLine(ctx, (d.end || {}).mode || 'stage') : midEnds(d) ? '<span class="sm">Its own end picture, from this layout (where the camera move ends)</span>' : `<span class="sm">None. Clip ${n} ends where its camera move ends.</span> <span class="sm mute">· ${brief}</span>`;
   return `<span class="lbl">Where the pictures come from</span><div class="arow"><b>Start picture</b><div>${start}</div></div><div class="arow"><b>End picture</b><div>${end}</div></div>`; };
 const sourceLine = (ctx, mode) => `<span class="sm">${esc(modeName(mode))}</span> <span class="sm mute">· ${lk('Change in Brief', hrefOf('scenes', ctx.scene, 'brief'))}</span>`;
 

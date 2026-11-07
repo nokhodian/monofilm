@@ -3,7 +3,7 @@
 import { HttpError, bad, parseJson } from './util.js';
 import * as S from './store.js';
 import { retryAdvice } from '../public/js/pack.js';
-import { R, REFS, keyOf, clipPlan, composeClip, startOf, hasEnd, forGenerator, GENERATORS } from '../public/js/wizard-model.js';
+import { R, REFS, keyOf, clipPlan, composeClip, startOf, hasEnd, midEnds, forGenerator, GENERATORS } from '../public/js/wizard-model.js';
 import { ensureClips, addTake } from './wizard.js';
 
 const MAX_VIDEO = 25 * 1024 * 1024, MAX_INLINE = 4 * 1024 * 1024;
@@ -29,7 +29,7 @@ function clipSpec(c, pid, L, sc, n) {
   const id = keyOf(sc.ref), d = sc.data, clips = d.clips && d.clips.length ? d.clips : clipPlan(d.seconds), cl = clips[n - 1];
   if (!cl) throw new HttpError(404, `scene ${id} has no clip ${n} (it has ${clips.length})`);
   const p = composeClip(sc, L.film, n), last = n === clips.length, frame2 = (k, which) => { const f = L.data(R.frame(id, k, which)); return f && f.chosen ? L.uriOf(R.frame(id, k, which), f.chosen) : null; }, frame = (which) => frame2(n, which);
-  const from = startOf(d, n), startUri = from === 'start' || from === 'own' ? frame2(n, 'start') : from === 'prev-end' ? frame2(n - 1, 'end') : null, endOk = hasEnd(d);
+  const from = startOf(d, n), startUri = from === 'start' || from === 'own' ? frame2(n, 'start') : from === 'prev-end' ? frame2(n - 1, 'end') : null, endOk = last ? hasEnd(d) : midEnds(d);
   const takes = L.arts.filter((a) => a.kind === 'take' && a.data.scene === id && a.data.clip === n);
   const stage = (L.assets[R.stage(id)] || []).filter((a) => a.provenance && a.provenance.role && (!a.provenance.shot || a.provenance.shot.endsWith(`-c${n}`) || n === 1));
   return {

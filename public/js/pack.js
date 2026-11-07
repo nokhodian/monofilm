@@ -1,6 +1,6 @@
 // The export pack: what an outside video generator needs, as a folder or a .zip. Pure functions, so the page and the tests use the same code.
 // Meta has no video generator, so nothing here generates video. It writes the prompt, the anchor pictures, the stage controls and a manifest for whichever generator the person uses.
-import { composeClip, clipPlan, clipLineCheck, linesOfClip, startOf, hasEnd, NOTE_KEYS, slug, keyOf, MAX_CLIP } from './wizard-model.js';
+import { composeClip, clipPlan, clipLineCheck, linesOfClip, startOf, hasEnd, midEnds, NOTE_KEYS, slug, keyOf, MAX_CLIP } from './wizard-model.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 const ext = (uri, mime) => (/\.(png|jpe?g|webp|gif|mp4|webm|wav|mp3|json)$/i.exec(uri || '') || [, ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4' })[mime] || 'png'])[1].toLowerCase();
@@ -42,7 +42,7 @@ export function sceneEntries(film, scene, { target = 'both', max = MAX_CLIP, roo
       else if (from === 'prev-end' && sf[`${n - 1}-end`]) putStart(sf[`${n - 1}-end`], `end picture of clip ${pad(n - 1)} (the same picture)`);
       else if (n > 1) startFrom = `last frame of clip ${pad(n - 1)}, taken from the clip you bring back`;
     }
-    if (w.end && hasEnd(d) && sf[`${n}-end`]) { U(`${c1}/end.${ext(sf[`${n}-end`])}`, sf[`${n}-end`]); files.push('end'); }
+    if (w.end && (last ? hasEnd(d) : midEnds(d)) && sf[`${n}-end`]) { U(`${c1}/end.${ext(sf[`${n}-end`])}`, sf[`${n}-end`]); files.push('end'); }
     if (w.stage) for (const s of (scene.stage || []).filter((x) => !x.shot || x.shot.endsWith(`-c${n}`) || n === 1)) { U(`${c1}/stage/${s.role}.${ext(s.uri)}`, s.uri); files.push(`stage/${s.role}`); }
     if (w.refs) for (const a of scene.anchors || []) { U(`${c1}/refs/${slug(a.id)}.${ext(a.uri)}`, a.uri); refs.push(a.id); files.push(`refs/${slug(a.id)}`); }
     E(`${c1}/clip.json`, JSON.stringify({ film: film.name, scene: d.n, scene_name: d.name, clip: n, of: clips.length, seconds: p.seconds, aspect: (film.look && film.look.aspect) || '9:16', fps: (film.look && film.look.fps) || 24, target, begins: n === 1 ? 'start' : c.join === 'cut' ? 'cut' : 'continues', start_from: startFrom, ends_with: w.end && hasEnd(d) && sf[`${n}-end`] ? 'end picture' : null, timing: p.timing, beat: p.beat, audio_policy: p.audio, transition_in: n === 1 ? (d.start && d.start.mode === 'chain' ? 'continues from the previous scene' : 'cut') : null, files, depends_on: [scene.ref, 'canon.style:look', ...(d.who || [])] }, null, 2));

@@ -38,7 +38,7 @@ test('a clip gets one camera move, an English line has no repeated gloss, and a 
   const p = composeClip(sc, { speech: 'German' }, 1).prompt;
   assert.match(p, /Camera: static wide, one continuous shot/); assert.doesNotMatch(p, /close-up/); assert.match(p, /"Hello there\."(?! \()/); assert.match(p, /"Hallo\." \(Hello\.\)/);
   const g = forGenerator(composeClip(sc, {}, 1), 'minimax-h3'); assert.match(g.prompt, /Do not show: no crowds/); assert.equal(g.negative, ''); assert.equal(g.generator.id, 'minimax-h3');
-  assert.equal(forGenerator(composeClip(sc, {}, 1), 'nope').generator.id, 'generic');
+  assert.equal(forGenerator(composeClip(sc, {}, 1), 'nope').generator.id, 'generic'); assert.equal(forGenerator(composeClip(sc, {}, 1), 'constructor').generator.id, 'generic');
 });
 test('plain errors', () => {
   assert.match(plainError('Approve the look (step 3) first.', 'x').href, /look/);

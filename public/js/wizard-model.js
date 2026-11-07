@@ -79,24 +79,25 @@ export const cuesOfClip = (d, n) => { const spans = clipSpans(d); return (d.cues
 // What happens in each clip, so no clip is asked to do the whole scene. Written beats win (one per clip). Otherwise the scene's "What happens" is cut into sentences and each
 // sentence goes to the clip its share of the time falls in. Returns one string per clip (empty when a clip has nothing of its own).
 export function clipBeats(d) {
-  const spans = clipSpans(d), n = spans.length, own = Array.isArray(d.beats) && d.beats.length === n && d.beats.every((x) => String(x || '').trim()) ? d.beats.map((x) => String(x).trim()) : null;
-  if (own) return own;
-  const happens = String((d.notes || {}).happens || '').replace(/\s+/g, ' ').trim();
-  if (!happens) return spans.map(() => '');
+  const spans = clipSpans(d), n = spans.length, mine = Array.isArray(d.beats) && d.beats.length === n && d.beats.some((x) => String(x || '').trim()) ? d.beats.map((x) => String(x || '').trim()) : null;
+  if (mine && mine.every(Boolean)) return mine;
+  const happens = String((d.notes || {}).happens || '').replace(/\s+/g, ' ').trim(), pick = (shared) => shared.map((x, i) => (mine && mine[i]) || x); // a line the person wrote stays; a blank one is filled from the shared split
+  if (!happens) return pick(spans.map(() => ''));
   if (n === 1) return [happens];
   const sent = happens.split(/(?<=[.!?])\s+/).filter(Boolean), out = spans.map(() => []);
   sent.forEach((x, i) => out[Math.min(n - 1, Math.floor((i * n) / sent.length))].push(x)); // an even share of the sentences for each clip, in order
-  return out.map((x) => x.join(' '));
+  return pick(out.map((x) => x.join(' ')));
 }
 // A clip has an end picture unless the scene's end pictures are skipped. The last clip ends on the scene's end picture; a clip in the middle ends on a picture of its own, and the next clip starts from it.
 export const hasEnd = (d) => (d.end || {}).mode !== 'skip';
 // Clips in the middle only get an end picture of their own when the scene asks for every clip (the default). With d.ends === 'last' only the scene's last clip has one, which costs fewer credits.
 export const midEnds = (d) => hasEnd(d) && d.ends !== 'last';
 // Every spoken line must fall in exactly one clip. Returns plain-words problems, empty when it is right.
-export function clipLineCheck(d) {
+export function clipLineCheck(d, { late = false } = {}) { // late: also report lines that start after the scene has ended (they would be cut off)
   const n = clipSpans(d).length, seen = {}, out = [];
   for (let k = 1; k <= n; k++) for (const l of linesOfClip(d, k)) (seen[l.index] = seen[l.index] || []).push(k);
-  (d.transcript || []).forEach((l, i) => { if (!(l.text || '').trim()) return; const at = seen[i] || []; if (at.length !== 1) out.push(at.length ? `line ${i + 1} is in clips ${at.join(' and ')}` : `line ${i + 1} is in no clip`); });
+  const total = clipSpans(d).reduce((a, c) => a + c.seconds, 0); let t = 0;
+  (d.transcript || []).forEach((l, i) => { const start = t; t += Math.max(1, Number(l.sec) || 2); if (!(l.text || '').trim()) return; const at = seen[i] || []; if (at.length !== 1) out.push(at.length ? `line ${i + 1} is in clips ${at.join(' and ')}` : `line ${i + 1} is in no clip`); else if (late && start >= total) out.push(`line ${i + 1} starts at ${start} s, after the scene ends at ${total} s`); });
   return out;
 }
 // Where a clip begins: the scene's start picture, a picture of its own (after a cut), or the end picture of the clip before.
@@ -129,7 +130,7 @@ export const GENERATORS = {
   'minimax-h3': { name: 'MiniMax H3 (local, ComfyUI)', negative: false, end_picture: true, native_audio: true, max_seconds: 8, notes: 'No negative prompt input (it is added to the prompt as "Do not show"). Cuts when the prompt lists several shots. Natural walking and consistent voices across clips are weak.' },
   generic: { name: 'Any generator', negative: true, end_picture: true, native_audio: true, max_seconds: 8, notes: '' },
 };
-export const forGenerator = (clip, id) => { const g = GENERATORS[id] || GENERATORS.generic; return { ...clip, generator: { id: GENERATORS[id] ? id : 'generic', ...g }, prompt: !g.negative && clip.negative ? `${clip.prompt}\nDo not show: ${clip.negative}.` : clip.prompt, negative: g.negative ? clip.negative : '' }; };
+export const forGenerator = (clip, id) => { const k = Object.hasOwn(GENERATORS, id) ? id : 'generic', g = GENERATORS[k]; return { ...clip, generator: { id: k, ...g }, prompt: !g.negative && clip.negative ? `${clip.prompt}\nDo not show: ${clip.negative}.` : clip.prompt, negative: g.negative ? clip.negative : '' }; };
 // The words a generator receives for one clip, built only from approved film canon and this scene's brief. Pure, so the page, the pack and the Worker agree.
 // film = { look, speech, cast: { '<canon.cast ref>': { name, desc } } }
 export function composeClip(scene, film, clipIndex = 1) {

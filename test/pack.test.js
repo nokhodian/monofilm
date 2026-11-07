@@ -23,6 +23,10 @@ test('a scene pack has a brief, a transcript, subtitles and one folder per clip,
   assert.ok(!refs.some((p) => /start\.|end\./.test(p)) && refs.some((p) => p.endsWith('refs/ines.png')));
   assert.ok(!text.some((p) => /\.(png|jpg)$/.test(p)) && text.some((p) => p.endsWith('prompt.txt')));
 });
+test('with ends: last, a stale middle end picture is not packed, and with every clip it is', () => {
+  const sc2 = (ends) => ({ ...scene, data: { ...scene.data, ends }, frames: { ...scene.frames, '1-end': 'media/p/old.png' } }), has = (x) => names(sceneEntries(film, x, { target: 'both' })).includes('scene-01-the-beam/clip-01/end.png');
+  assert.equal(has(sc2('last')), false); assert.equal(has(sc2(undefined)), true);
+});
 test('clip.json says how each clip begins; a skipped anchor is left out', () => {
   const get = (e, p) => JSON.parse(e.find((x) => x.path.endsWith(p)).text), e = sceneEntries(film, scene, { target: 'both' });
   assert.deepEqual([get(e, 'clip-01/clip.json').begins, get(e, 'clip-01/clip.json').start_from, get(e, 'clip-02/clip.json').begins, get(e, 'clip-02/clip.json').start_from], ['start', 'start picture', 'cut', 'own start picture']);
@@ -75,7 +79,7 @@ test('each clip is asked to do only its own part, and told what the clip before 
   assert.equal(a.prompt.split('\n')[0], 'Mira hops. Mira trips.'); assert.doesNotMatch(a.prompt, /knocks the tower/); assert.equal(b.prompt.split('\n')[0], 'Mira knocks the tower over.'); assert.doesNotMatch(b.prompt.split('\n')[0], /hops/);
   assert.match(b.prompt, /The clip before ended on: Mira hops\. Mira trips\. Do not repeat it\./); assert.match(b.prompt, /It begins from the end picture of the clip before/);
   const own = composeClip({ data: { ...sc.data, beats: ['She hops.', 'She trips and falls.'] } }, {}, 2); assert.equal(own.prompt.split('\n')[0], 'She trips and falls.', 'written lines win');
-  assert.deepEqual(clipBeats({ ...sc.data, beats: ['one', ''] }), ['Mira hops. Mira trips.', 'Mira knocks the tower over.'], 'a half-written set is ignored');
+  assert.deepEqual(clipBeats({ ...sc.data, beats: ['one', ''] }), ['one', 'Mira knocks the tower over.'], 'a line the person wrote stays, and a blank one is filled from the shared split');
   assert.deepEqual(clipBeats({ ...sc.data, clips: clipPlan(7), notes: { happens: 'One. Two.' } }), ['One. Two.'], 'one clip does everything');
 });
 test('the look stays constant, characters are described the same way each time, and silent clips are asked for as silent', () => {
@@ -118,8 +122,8 @@ test('a clip that reaches its end picture early and stands still is caught, to t
 
 test('every spoken line is in exactly one clip, and a pack refuses a scene where that is not true', () => {
   const d = { n: 1, name: 'x', seconds: 12, clips: [{ seconds: 6 }, { seconds: 6 }], transcript: [{ text: 'a', sec: 4 }, { text: 'b', sec: 4 }, { text: 'c', sec: 4 }, { text: '', sec: 4 }, { text: 'late', sec: 9 }], notes: {} };
-  assert.deepEqual(clipLineCheck(d), []);
-  assert.deepEqual(clipLineCheck({ ...d, clips: [{ seconds: 6 }, { seconds: 6 }, { seconds: 6 }] }), []);
+  assert.deepEqual(clipLineCheck(d), []); assert.match(clipLineCheck(d, { late: true })[0], /line 5 starts at 16 s, after the scene ends at 12 s/);
+  assert.deepEqual(clipLineCheck({ ...d, clips: [{ seconds: 6 }, { seconds: 6 }, { seconds: 6 }, { seconds: 6 }] }, { late: true }), []);
   assert.equal(linesOfClip(d, 1).length + linesOfClip(d, 2).length, 4);
   assert.deepEqual(clipLineCheck(d), []);
 });
