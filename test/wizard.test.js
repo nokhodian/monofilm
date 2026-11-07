@@ -195,3 +195,10 @@ test('a video model connects over MCP: list clips, read one, fetch its picture, 
   const again = (await call('get_clip', { scene: 'the-beam', clip: 1 })).structuredContent;
   assert.deepEqual([again.takes[0].seed, again.takes[0].cuts, again.retry.attempt, again.retry.try_again], [42, 1, 2, true]); assert.match(again.retry.add_to_prompt, /continuous shot/);
 });
+test('a one-off "model was not found" from Meta is tried again, a real failure is not hidden', async () => {
+  const { spark } = await import('../src/meta.js'); let n = 0;
+  const flaky = async () => (++n === 1 ? new Response(JSON.stringify({ error: { message: 'The requested model was not found.' } }), { status: 404 }) : reply({ output_text: 'ok' }));
+  assert.equal((await spark({ MODEL_API_KEY: 'k' }, { input: 'hi' }, flaky)).output_text, 'ok'); assert.equal(n, 2);
+  const gone = async () => new Response(JSON.stringify({ error: { message: 'The requested model was not found.' } }), { status: 404 });
+  await assert.rejects(spark({ MODEL_API_KEY: 'k', MODEL_SPARK: 'nope' }, { input: 'hi' }, gone), /404/);
+});

@@ -1,7 +1,7 @@
 // The AI that works the studio, run by Muse Spark. It sees the same tools an MCP client sees (next_work, get_canon, propose, call_tool ...),
 // reads the human's feedback, revises, and answers each thread. A human approves what it proposes; this loop can never approve anything.
 import { HttpError } from './util.js';
-import { spark, outputText, MODELS } from './meta.js';
+import { spark, outputText, modelOf } from './meta.js';
 import { TOOLS } from './mcp.js';
 
 export const AGENT = { id: 'muse-spark', name: 'muse-spark', kind: 'ai', role: 'agent' };
@@ -26,6 +26,6 @@ export async function runAgent(env, db, pid, { goal, maxSteps = 8 } = {}, f) {
     }
     r = await spark(env, { instructions: SYSTEM, tools: toolSpec(), input: outs, previous: r.id }, f);
   }
-  return { model: MODELS.spark, steps, text: outputText(r).trim(), finished: !(r.output || []).some((x) => x.type === 'function_call') };
+  return { model: modelOf(env, 'spark'), steps, text: outputText(r).trim(), finished: !(r.output || []).some((x) => x.type === 'function_call') };
 }
 const summarise = (name, a) => ({ propose: `proposed ${a.ref}`, comment: `replied on ${a.ref}`, call_tool: `ran ${a.tool} for ${a.ref}`, get_artifact: `read ${a.ref}`, attach_asset: `attached a file to ${a.ref}` }[name] || name);

@@ -4,7 +4,7 @@ import { HttpError, bad, parseJson, sha256hex } from './util.js';
 import { TOOL_KINDS, TRANSPORTS, can } from './kinds.js';
 import { attachAsset, assertArtifact, charge, refund, logEvent } from './store.js';
 import { stageInput, ACCEPTS } from './stage.js';
-import { museImage, dataUrl, MODELS } from './meta.js';
+import { museImage, dataUrl, modelOf } from './meta.js';
 import { frame } from '../public/js/stage-math.js';
 import { id8 } from './util.js';
 
@@ -43,7 +43,7 @@ async function metaImage(tool, target, input, env, f, ctx) {
   if (!prompt) throw new Error('nothing to generate from: pass a prompt or a stage');
   const [W, H] = frame((input.aspect || [9, 16]).join(':'), 1536), [img] = await museImage(env, { prompt, images: refs, size: `${W}x${H}` }, f);
   const key = `${ctx.pid}/gen-${id8()}.png`; await env.MEDIA.put(key, img.bytes, { httpMetadata: { contentType: img.mime } });
-  return { uri: `media/${key}`, mime: img.mime, bytes: img.bytes.length, meta: { model: MODELS.image, prompt, references: refs.length, size: `${W}x${H}`, stage: (input.stage || input.shot) ? { ref: input.stage, shot: input.shot } : undefined } };
+  return { uri: `media/${key}`, mime: img.mime, bytes: img.bytes.length, meta: { model: modelOf(env, 'image'), prompt, references: refs.length, size: `${W}x${H}`, stage: (input.stage || input.shot) ? { ref: input.stage, shot: input.shot } : undefined } };
 }
 async function http(tool, target, input, env, f) {
   if (!/^https:\/\//.test(target.url)) throw new Error('tool target must be https');

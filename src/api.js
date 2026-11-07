@@ -7,7 +7,7 @@ import { listAccounts, decideAccount } from './accounts.js';
 import * as AP from './autopilot.js';
 import { registerTool, listTools, callTool } from './tools.js';
 import { checkAdherence } from './adherence.js';
-import { transcribe, metaConfigured, MODELS } from './meta.js';
+import { transcribe, metaConfigured, listMetaModels, modelOf, MODELS } from './meta.js';
 import { runAgent } from './agent.js';
 import * as W from './wizard.js';
 
@@ -26,6 +26,7 @@ export async function api(req, env, actor, ctx) {
     if (m === 'POST') return json({ ok: true }, 200, { 'set-cookie': `mf=${encodeURIComponent((/^Bearer (.+)$/.exec(req.headers.get('authorization') || '') || [])[1])}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=2592000${secure}` });
     if (m === 'DELETE') return json({ ok: true }, 200, { 'set-cookie': `mf=; Path=/api; HttpOnly; SameSite=Strict; Max-Age=0${secure}` });
   }
+  if (a === 'meta' && b === 'models' && m === 'GET') { must(actor, 'manage'); return json(await listMetaModels(env)); } // which Meta models this studio's key can use
   if (a === 'accounts') { // who asked for access: the person who runs the studio approves or declines, and gives credits
     must(actor, 'manage');
     if (m === 'GET' && !b) return json(await listAccounts(db));
@@ -33,7 +34,7 @@ export async function api(req, env, actor, ctx) {
   }
   if (a === 'actors' && m === 'POST') { must(actor, 'manage'); return json(await createActor(db, await body(req)), 201); }
   if (a === 'restore' && m === 'POST') { must(actor, 'budget'); return json(await S.restoreBackup(db, actor, await body(req)), 201); } // a backup carries its own budget, so only someone who may grant credits may restore one
-  if (a === 'meta' && b === 'status' && m === 'GET') return json({ configured: metaConfigured(env), models: MODELS });
+  if (a === 'meta' && b === 'status' && m === 'GET') return json({ configured: metaConfigured(env), models: Object.fromEntries(Object.keys(MODELS).map((k) => [k, modelOf(env, k)])) });
   if (a === 'tools') {
     if (m === 'GET') return json(await listTools(db));
     if (m === 'POST') { must(actor, 'manage'); return json(await registerTool(db, await body(req)), 201); }
