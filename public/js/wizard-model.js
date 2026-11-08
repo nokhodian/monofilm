@@ -101,7 +101,7 @@ export function propsInClip(d, k) {
 }
 // How each clip really moves, one natural, physically possible description per clip (the beats say WHAT happens, this says HOW a body, a hand or a thing moves while it does).
 export function movesOf(d) { const n = clipSpans(d).length, m = Array.isArray(d.moves) ? d.moves.map((x) => String(x || '').trim()) : []; return m.length === n && m.every(Boolean) ? m : []; }
-export const PHYSICS = 'Physics: everything behaves exactly as in real life. Nothing appears, vanishes, multiplies or changes shape or size. Every object keeps its number (one seed stays one seed, one bottle stays one bottle). Hands and paws hold things the way real ones do. Soil, water, bubbles and cloth move the way they really do. The place, the framing and the background stay the same for the whole clip.';
+export const PHYSICS = 'Physics: everything behaves exactly as in real life. Nothing appears, vanishes, multiplies or changes shape or size. Every object keeps its number (one seed stays one seed, one bottle stays one bottle). Characters touch and carry things the way real animals do. The place, the framing and the background stay the same for the whole clip.';
 // A clip has an end picture unless the scene's end pictures are skipped. The last clip ends on the scene's end picture; a clip in the middle ends on a picture of its own, and the next clip starts from it.
 export const hasEnd = (d) => (d.end || {}).mode !== 'skip';
 // Clips in the middle only get an end picture of their own when the scene asks for every clip (the default). With d.ends === 'last' only the scene's last clip has one, which costs fewer credits.
@@ -141,7 +141,7 @@ const AUDIO_TEXT = { dialogue: 'Audio: only the spoken lines above, with quiet r
 export const oneMove = (cam) => String(cam || '').split(/[,;.]?\s+(?:and then|then|followed by|cut to|next|after that|before)\s+/i)[0].replace(/\bshots\b/i, 'shot').trim();
 // What a video generator can take. A clip's words are adapted to it; an unknown generator gets the plain prompt.
 export const GENERATORS = {
-  'minimax-h3': { name: 'MiniMax H3 (local, ComfyUI)', negative: false, end_picture: true, native_audio: true, max_seconds: 8, notes: 'No negative prompt input (it is added to the prompt as "Do not show"). Cuts when the prompt lists several shots. Natural walking and consistent voices across clips are weak.' },
+  'minimax-h3': { name: 'MiniMax H3 (local, ComfyUI)', negative: false, end_picture: true, native_audio: true, max_seconds: 8, notes: 'No negative prompt input (it is added to the prompt as "Do not show"). Cuts when the prompt lists several shots. Natural walking and consistent voices across clips are weak. Draws poured water as a flat blue disc, adds floating bubbles and sparkles when the words mention bubbles, and cannot show a tiny object being picked up.' },
   generic: { name: 'Any generator', negative: true, end_picture: true, native_audio: true, max_seconds: 8, notes: '' },
 };
 export const forGenerator = (clip, id) => { const k = Object.hasOwn(GENERATORS, id) ? id : 'generic', g = GENERATORS[k]; return { ...clip, generator: { id: k, ...g }, prompt: !g.negative && clip.negative ? `${clip.prompt}\nDo not show: ${clip.negative}.` : clip.prompt, negative: g.negative ? clip.negative : '' }; };
