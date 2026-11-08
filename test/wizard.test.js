@@ -301,3 +301,12 @@ test('an end picture is told what the camera did, is drawn from the picture befo
   assert.match(prompts[0], /The camera has not moved: the same position, angle and framing as the previous picture\./); assert.match(prompts[0], /Sizes \(kept in every frame, in this proportion\): the woman in her forties about a third of the frame height\./);
   assert.match(prompts[0], /Image 1 is the picture just before this one/, 'drawn from the picture before'); assert.ok(images[0] >= 3, `the check saw the new picture, the previous picture and the character (${images[0]})`);
 });
+
+test('a generator that cannot take camera moves gets a static camera in every scene, and the scene writer is told', async () => {
+  const t = await setup(), seen = []; const st = await S.getArtifact(t.db, t.id, REFS.story);
+  await S.propose(t.db, human, t.id, { ref: REFS.story, data: { ...st.data, format: { ...st.data.format, generator: 'minimax-h3' } }, auto_approve: true, base_version: st.version });
+  const f = async (url, init) => { if (url.endsWith('/responses')) { const b = JSON.parse(init.body); seen.push(String(b.input)); if (/turn a story into scenes/i.test(b.instructions)) return reply(msg({ scenes: [{ name: 'The beam', seconds: 12, place: 'Cathedral scaffold', time: 'dusk', who: ['Ines'], notes: { happens: 'x', cam: 'slow push-in' } }, { name: 'The fall', seconds: 8, notes: { happens: 'y', cam: 'handheld medium' } }, { name: 'Calm', seconds: 8, notes: { happens: 'z', cam: 'static close' } }] })); } return stand()(url, init); };
+  await W.readStory(t.env, t.db, human, t.id, f); await ok(t, REFS.reading); await W.draftScenes(t.env, t.db, human, t.id, f);
+  const cams = []; for (const id of ['the-beam', 'the-fall', 'calm']) cams.push((await S.getArtifact(t.db, t.id, R.scene(id))).data.notes.cam);
+  assert.deepEqual(cams, ['static wide', 'static medium', 'static close']); assert.ok(seen.some((x) => /cannot take camera moves: every scene's cam must be static/.test(x)));
+});
