@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cutOf, filterOf, assemble } from '../scripts/assemble-film.mjs';
+import { cutOf, filterOf, assemble, frameDiff, bestJoin } from '../scripts/assemble-film.mjs';
 
 const has = (b) => { try { execFileSync(b, ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } };
 
@@ -24,9 +24,21 @@ test('every clip is brought to one size, rate and audio format, with a short fad
 });
 test('two clips of different size and rate, one without sound, come out as one film of the right length', { skip: !has('ffmpeg') || !has('ffprobe') }, () => {
   const dir = mkdtempSync(join(tmpdir(), 'asm-')), mk = (name, src, extra) => { execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', src, ...extra, join(dir, name)]); return join(dir, name); };
-  const a = mk('a.mp4', 'testsrc2=s=320x240:r=25:d=3', ['-f', 'lavfi', '-i', 'sine=f=440:d=3', '-shortest']), b = mk('b.mp4', 'testsrc2=s=640x480:r=30:d=4', []);
+  const a = mk('a.mp4', 'testsrc2=s=320x240:r=25:d=3', ['-f', 'lavfi', '-i', 'sine=f=440:d=3', '-shortest']), b = mk('b.mp4', 'color=c=white:s=640x480:r=30:d=4', []);
   const out = join(dir, 'film.mp4'), r = assemble({ size: '640x360', fps: 24, clips: [{ file: a, hold: 1.5 }, { file: b, continues: true }] }, out);
   const info = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height', '-of', 'json', out], { encoding: 'utf8' }));
-  assert.equal(r.parts, 2); assert.ok(Math.abs(Number(info.format.duration) - (1.8 + 3.917)) < 0.3, `duration ${info.format.duration}`);
+  assert.equal(r.parts, 2); assert.equal(r.dissolved, 1, 'two clips that look nothing alike are dissolved, not jumped'); assert.ok(Math.abs(Number(info.format.duration) - (1.8 + 3.917 - 0.4)) < 0.45, `duration ${info.format.duration}`);
   assert.ok(info.streams.some((s) => s.codec_type === 'audio'), 'the silent clip got a silent track so the film has sound all through'); assert.ok(info.streams.some((s) => s.width === 640 && s.height === 360));
+});
+
+test('a join is made where the two clips match: the same picture is cut, a different one is dissolved, and the best frame near the end is chosen', { skip: !has('ffmpeg') || !has('ffprobe') }, () => {
+  assert.equal(frameDiff(Buffer.from([10, 10]), Buffer.from([10, 10])), 0); assert.equal(frameDiff(Buffer.from([0, 0]), Buffer.from([100, 200])), 150);
+  const dir = mkdtempSync(join(tmpdir(), 'asmj-')), mk = (name, src) => { execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', src, '-f', 'lavfi', '-i', 'sine=f=300:d=4', '-shortest', join(dir, name)]); return join(dir, name); };
+  const red1 = mk('r1.mp4', 'color=c=red:s=320x180:r=24:d=4'), red2 = mk('r2.mp4', 'color=c=red:s=320x180:r=24:d=4'), blue = mk('b.mp4', 'color=c=blue:s=320x180:r=24:d=4');
+  const same = bestJoin(red1, 0, 4, red2, 0); assert.deepEqual([same.soft, same.diff], [false, 0]); assert.ok(same.end >= 3.8, 'with nothing to gain, the clip keeps (nearly) its full length');
+  const apart = bestJoin(red1, 0, 4, blue, 0); assert.equal(apart.soft, true); assert.ok(apart.diff > 12);
+  const ramp = mk('ramp.mp4', "color=c=black:s=320x180:r=24:d=4,geq=r='255*lt(T,2.5)':g=0:b=0"), toRed = bestJoin(ramp, 0, 4, red2, 0);
+  assert.equal(toRed.soft, false); assert.ok(toRed.end <= 2.5 + 0.11 || toRed.end >= 2.0, `the clip is cut at a frame that matches red: ${toRed.end}`);
+  const out = join(dir, 'same.mp4'), r = assemble({ size: '320x180', fps: 24, clips: [{ file: red1 }, { file: red2, continues: true }] }, out), info = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'json', out], { encoding: 'utf8' }));
+  assert.equal(r.dissolved, 0); assert.ok(Math.abs(Number(info.format.duration) - (4 + 3.917)) < 0.3, `duration ${info.format.duration}`);
 });

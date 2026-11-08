@@ -160,14 +160,16 @@ export function publishChecklist(film = {}, scenes = []) {
 // from the camera (depth[name]); when the camera pushes in, everything scales together, so only the RATIO between characters is held. The tolerances are wide enough for a few frames of
 // measuring noise and narrow enough to catch a snail that shrinks to 60% or a pair whose proportion changes.
 const med = (a) => { const s = a.filter((x) => x > 0.02).sort((p, q) => p - q); return s.length ? s[Math.floor(s.length / 2)] : 0; };
+// The reference is the clip's own first frames (the start picture sets the scale). A frame is off when it and the next one are both outside the tolerance (one bad box is noise).
+const stepsOff = (values, ref, lo, hi) => { const off = values.map((v) => v > 0.02 && (v / ref < lo || v / ref > hi)); return off.map((x, i) => x && (off[i + 1] || off[i - 1])); };
 export function sizeFaults(series, { seconds = 6.6, depth = {}, push = false } = {}) {
   const names = Object.keys(series), n = names.length ? series[names[0]].length : 0, at = (i) => Math.round(((i + 0.5) * seconds) / Math.max(1, n) * 10) / 10, out = [];
-  if (!push) for (const name of names) { const m = med(series[name]); if (!m) continue; const lo = depth[name] ? 0.5 : 0.75, hi = depth[name] ? 1.7 : 1.3;
-    series[name].forEach((v, i) => { if (v > 0.02 && (v / m < lo || v / m > hi)) out.push({ kind: 'size', name, i, at: at(i), ratio: Math.round((v / m) * 100) / 100 }); }); }
+  if (!push) for (const name of names) { const ref = med(series[name].slice(0, 3)) || med(series[name]); if (!ref) continue; const lo = depth[name] ? 0.5 : 0.88, hi = depth[name] ? 1.7 : 1.14;
+    stepsOff(series[name], ref, lo, hi).forEach((bad, i) => { if (bad) out.push({ kind: 'size', name, i, at: at(i), ratio: Math.round((series[name][i] / ref) * 100) / 100 }); }); }
   for (let a = 0; a < names.length; a++) for (let b = a + 1; b < names.length; b++) {
-    const A = series[names[a]], B = series[names[b]], rs = A.map((v, i) => (v > 0.02 && B[i] > 0.02 ? v / B[i] : 0)), m = med(rs); if (!m) continue;
-    const loose = depth[names[a]] || depth[names[b]], lo = loose ? 0.5 : 0.75, hi = loose ? 1.7 : 1.33;
-    rs.forEach((v, i) => { if (v > 0 && (v / m < lo || v / m > hi)) out.push({ kind: 'ratio', name: `${names[a]} to ${names[b]}`, i, at: at(i), ratio: Math.round((v / m) * 100) / 100 }); });
+    const A = series[names[a]], B = series[names[b]], rs = A.map((v, i) => (v > 0.02 && B[i] > 0.02 ? v / B[i] : 0)), ref = med(rs.slice(0, 3)) || med(rs); if (!ref) continue;
+    const loose = depth[names[a]] || depth[names[b]], lo = loose ? 0.5 : 0.85, hi = loose ? 1.7 : 1.18;
+    stepsOff(rs, ref, lo, hi).forEach((bad, i) => { if (bad) out.push({ kind: 'ratio', name: `${names[a]} to ${names[b]}`, i, at: at(i), ratio: Math.round((rs[i] / ref) * 100) / 100 }); });
   }
   return out.sort((x, y) => x.i - y.i);
 }

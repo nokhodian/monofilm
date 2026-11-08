@@ -1,6 +1,6 @@
 """Reviews finished clips with the studio's clip review (sizes measured by SAM, a judge's checklist) without making anything new.
 usage: MONOFILM_KEY=<agent key> python3 scripts/review-clips.py <production id> <folder with clips and state.json> [scene:clip,scene:clip]
-For each take in state.json it takes 12 frames, asks the studio (review_take) and prints what was found and until when each take is good (good_until, in seconds). Needs ffmpeg."""
+For each take in state.json it takes 12 frames, asks the studio (review_take), prints what was found and until when each take is good (good_until, in seconds), and writes the answers to <folder>/reviews.json. Needs ffmpeg."""
 import base64, json, os, subprocess, sys, tempfile, urllib.request
 
 KEY, HOST = os.environ["MONOFILM_KEY"], os.environ.get("MONOFILM_HOST", "monofilm.monoes.me")
@@ -26,7 +26,7 @@ def frames_of(path, seconds, count=12):
     return out
 
 
-state = json.load(open(os.path.join(FOLDER, "state.json")))
+state = json.load(open(os.path.join(FOLDER, "state.json"))); results = {}
 for key, rec in state.items():
     if ONLY and key not in ONLY:
         continue
@@ -37,4 +37,6 @@ for key, rec in state.items():
         r = mcp("review_take", {"production": PROD, "scene": scene, "clip": int(clip), "frames": frames_of(path, secs)})
         faults = r.get("size_faults") or []
         print(f"{key} a{take['attempt']}  ok={r.get('ok')}  good_until={r.get('good_until')}  size faults: " + ("; ".join(f"{f['kind']} {f['name']} {f['ratio']}x at {f['at']} s" for f in faults[:5]) or "none"), flush=True)
+        results.setdefault(key, {})[take["attempt"]] = {"ok": r.get("ok"), "good_until": r.get("good_until"), "size_faults": faults, "sizes": r.get("sizes"), "issues": r.get("issues"), "scores": r.get("scores")}
+        json.dump(results, open(os.path.join(FOLDER, "reviews.json"), "w"), indent=1)
         print("    sizes:", {k: [round(x, 2) for x in v] for k, v in (r.get("sizes") or {}).items()}, flush=True)
