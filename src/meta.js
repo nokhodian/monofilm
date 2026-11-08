@@ -61,3 +61,20 @@ export async function spark(env, { input, tools, previous, instructions, model =
 
 // The models this key can use right now (GET /v1/models), for the studio's admin.
 export const listMetaModels = (env, f) => call(env, '/models', { method: 'GET' }, f);
+
+// An empty frame of the wanted shape, as a small PNG data URL. The edit endpoint has no size field and takes the size of the FIRST picture, so a picture made from a portrait face comes out portrait.
+// Putting an empty frame of the film's shape first fixes the shape. Uncompressed deflate blocks keep this free of any library.
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = (u) => { let c = 0xffffffff; for (let i = 0; i < u.length; i++) c = CRC[(c ^ u[i]) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+export function blankFrame(aw, ah, long = 192) {
+  const w = aw >= ah ? long : Math.max(8, Math.round((long * aw) / ah)), h = aw >= ah ? Math.max(8, Math.round((long * ah) / aw)) : long, raw = new Uint8Array((w + 1) * h).fill(0xd8);
+  for (let y = 0; y < h; y++) raw[y * (w + 1)] = 0; // filter type 0 at the start of each row
+  const blocks = []; for (let i = 0; i < raw.length; i += 65535) { const part = raw.subarray(i, Math.min(raw.length, i + 65535)), last = i + 65535 >= raw.length, head = new Uint8Array(5); head[0] = last ? 1 : 0; head[1] = part.length & 255; head[2] = part.length >> 8; head[3] = ~part.length & 255; head[4] = (~part.length >> 8) & 255; blocks.push(head, part); }
+  let a = 1, b = 0; for (let i = 0; i < raw.length; i++) { a = (a + raw[i]) % 65521; b = (b + a) % 65521; }
+  const adler = new Uint8Array(4); new DataView(adler.buffer).setUint32(0, ((b << 16) | a) >>> 0);
+  const z = [new Uint8Array([0x78, 0x01]), ...blocks, adler], zl = z.reduce((n, x) => n + x.length, 0), idat = new Uint8Array(zl); let o = 0; for (const x of z) { idat.set(x, o); o += x.length; }
+  const chunk = (type, data) => { const out = new Uint8Array(12 + data.length), dv = new DataView(out.buffer); dv.setUint32(0, data.length); for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i); out.set(data, 8); dv.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length))); return out; };
+  const ihdr = new Uint8Array(13), hv = new DataView(ihdr.buffer); hv.setUint32(0, w); hv.setUint32(4, h); ihdr[8] = 8; ihdr[9] = 0;
+  const parts = [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', new Uint8Array(0))], png = new Uint8Array(parts.reduce((n, x) => n + x.length, 0)); o = 0; for (const x of parts) { png.set(x, o); o += x.length; }
+  return { url: dataUrl(png, 'image/png'), width: w, height: h, bytes: png };
+}

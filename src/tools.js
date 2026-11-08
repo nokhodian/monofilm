@@ -4,7 +4,7 @@ import { HttpError, bad, parseJson, sha256hex } from './util.js';
 import { TOOL_KINDS, TRANSPORTS, can } from './kinds.js';
 import { attachAsset, assertArtifact, charge, refund, logEvent } from './store.js';
 import { stageInput, ACCEPTS } from './stage.js';
-import { museImage, dataUrl, modelOf } from './meta.js';
+import { museImage, dataUrl, modelOf, blankFrame } from './meta.js';
 import { frame } from '../public/js/stage-math.js';
 import { id8 } from './util.js';
 
@@ -38,6 +38,8 @@ async function metaImage(tool, target, input, env, f, ctx) {
   // The layout goes first: the edit endpoint has no size field, so the first picture sets the frame.
   const layout = (input.files || []).find((x) => x.role === 'layout'), lu = layout && await read(layout.uri);
   if (lu) { refs.push(lu); notes.push(`Image 1 is a flat layout of the scene. Make a ${aw}:${ah} ${input.medium || 'photograph'} with exactly this camera angle and framing, and put the people and objects where it shows them. Do not copy its flat colours.`); }
+  const hasBase = (input.anchors || []).some((x) => x.role === 'base');
+  if (!lu && !hasBase && (input.anchors || []).length) { refs.push(blankFrame(aw, ah).url); notes.push(`Image 1 is an empty frame of the right shape. Use it only for the size and shape of the picture: draw the whole scene in a picture of exactly that shape, and do not copy its grey.`); }
   for (const a of (input.anchors || []).filter((x) => x.role === 'base').slice(0, 1)) { const u = await read(a.uri); if (u) { refs.push(u); notes.push(`Image ${refs.length} is the picture just before this one. Draw the next moment of the very same scene: the same place, background, camera angle, framing and light, and ALL the same characters, each at the same size and in about the same position, changed only as the description says (a new pose, a new object state). Never remove a character and never add one.`); } }
   for (const a of (input.anchors || []).filter((x) => x.role !== 'base').slice(0, 4)) { const u = await read(a.uri); if (u) { refs.push(u); notes.push(`Image ${refs.length} is the character ${a.id}. Keep this character exactly: the same face, shape, colours, markings and clothes.`); } }
   const prompt = [input.prompt, ...notes].filter(Boolean).join('\n\n');

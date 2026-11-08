@@ -277,3 +277,12 @@ test('a start picture is drawn with the reference pictures of the characters in 
   assert.deepEqual(inp.anchors.map((a) => a.id), ['ines'], 'the character reference reaches the image model'); assert.ok(calls.filter((u) => u.includes('/images/')).pop().endsWith('/images/edits'), 'with a reference the edit endpoint is used');
   assert.match(inp.prompt, /Only these appear, exactly as in their reference pictures: A woman in her forties/);
 });
+
+test('an empty frame of the film\'s shape is a valid PNG, so a picture made from a portrait face no longer comes out portrait', async () => {
+  const { blankFrame } = await import('../src/meta.js'); const b = blankFrame(16, 9), p = blankFrame(9, 16), sq = blankFrame(1, 1);
+  assert.deepEqual([b.width, b.height, p.width, p.height, sq.width, sq.height], [192, 108, 108, 192, 192, 192]);
+  assert.deepEqual([...b.bytes.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]); assert.equal(Buffer.from(b.bytes.slice(12, 16)).toString(), 'IHDR'); assert.equal(Buffer.from(b.bytes.slice(-8, -4)).toString(), 'IEND');
+  const { execFileSync } = await import('node:child_process'), { writeFileSync, mkdtempSync } = await import('node:fs'), { join } = await import('node:path'), { tmpdir } = await import('node:os'), f = join(mkdtempSync(join(tmpdir(), 'png-')), 'b.png');
+  writeFileSync(f, b.bytes); let probe = ''; try { probe = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', f], { encoding: 'utf8' }).trim(); } catch { return; }
+  assert.equal(probe, '192,108', 'a real decoder reads it');
+});
