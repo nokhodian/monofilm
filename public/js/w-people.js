@@ -39,6 +39,12 @@ function faceHtml(a) {
       <button class="bt sm wz-ppl-use ${on ? '' : 'pri'}" data-act="wppl-use" data-ref="${esc(a.ref)}" data-id="${esc(c.id)}" ${on ? 'disabled' : ''}>${on ? '✓ Main face' : 'Use this face'}</button></div>`;
   }).join('');
 }
+// The full-body and side views made from the chosen face (more reference pictures for the video generator).
+function viewsHtml(a) {
+  const vs = a.data.views || [], has = hasAnchor(a); if (!has && !vs.length) return '';
+  const tiles = vs.map((v) => { const src = srcOf(a.ref, v.id); return `<div class="wz-ppl-face"><div class="pic">${src ? `<img src="${esc(src)}" alt="${esc(v.kind)} view of ${esc(a.data.name)}">` : ''}<i>${v.kind === 'body' ? 'Full body' : 'Side view'}</i></div>${v.check && v.check.ok === false && v.check.major ? `<div class="sm wzp-bad" role="alert">May be wrong: ${esc(v.check.problem || '')}</div>` : ''}</div>`; }).join('');
+  return `<div class="wz-ppl-faces" style="margin-top:8px">${tiles}</div><div class="sm mute" style="margin-top:4px">${vs.length ? 'More pictures made from the main face, so the person keeps their body and clothes.' : 'No body or side view yet.'} <button class="bt sm" data-act="wppl-views" data-id="${esc(keyOf(a.ref))}">${vs.length ? 'Draw them again' : 'Draw body and side views'}</button></div>`;
+}
 function htmlPeople(ctx) {
   const ps = people();
   if (!ps.length) return spine(ctx, { A: nothing('Nothing to do yet.'), B: `<p class="nothing">I found no people yet. ${lk('Go to Start', hrefOf('start'))} and let me read your story first.</p>`, items: [], empty: true, ai: 'I need to read your story first.', gate: { ready: false, reason: 'Let me read your story first (steps 1 and 2).' } });
@@ -46,7 +52,7 @@ function htmlPeople(ctx) {
     ${ps.map((a) => `<div class="wz-ppl-who"><div><b>${esc(a.data.name)}</b><div class="sm mute">${esc(a.data.role || '')}</div></div><div><button class="bt sm ${cand(a).length ? '' : 'pri'}" data-act="wppl-make" data-id="${esc(keyOf(a.ref))}" ${busy[keyOf(a.ref)] && busy[keyOf(a.ref)].total ? 'disabled' : ''}>${cand(a).length ? 'Make 3 new faces' : 'Make 3 faces'} · 3 credits</button><span data-wppl-prog="${esc(keyOf(a.ref))}">${progLine(keyOf(a.ref))}</span></div></div>`).join('')}
     <p class="sm mute" style="margin:8px 0 0">Voices need nothing from you. Change one on the right if it is wrong.</p>`;
   const B = ps.map((a) => `<div class="wz-ppl-card">${itemEl(a.ref, `<div class="cn"><b><i>${esc(a.data.name)}</i></b></div><div class="sm mute">${esc(a.data.role || '')}</div><div style="margin-top:4px">${a.data.invented ? pill('invented', 'warn') + ' ' : ''}${hasAnchor(a) ? pill('main face chosen', 'ok') : pill('choose a face', 'warn')}</div><div style="margin-top:6px">${chipOf(a.ref)}</div>`, { kind: 'face', name: a.data.name, cls: 'rowitem', img: srcOf(a.ref, a.data.anchor) })}
-    <div><div class="wz-ppl-faces">${faceHtml(a)}</div>${cand(a).length ? '<p class="sm mute" style="margin:6px 0 0">Click a face to tell me what is off. Press "Use this face" to make it the main one.</p>' : '<p class="sm mute" style="margin:8px 0 0">No faces yet. Press "Make 3 faces" above.</p>'}${voiceHtml(a)}</div></div>`).join('');
+    <div><div class="wz-ppl-faces">${faceHtml(a)}</div>${viewsHtml(a)}${cand(a).length ? '<p class="sm mute" style="margin:6px 0 0">Click a face to tell me what is off. Press "Use this face" to make it the main one.</p>' : '<p class="sm mute" style="margin:8px 0 0">No faces yet. Press "Make 3 faces" above.</p>'}${voiceHtml(a)}</div></div>`).join('');
   const missing = ps.filter((a) => !hasAnchor(a)), notice = [...(missing.length ? [['warn', `No main face yet for ${missing.map((a) => esc(a.data.name)).join(', ')}.`]] : [['ok', 'Every person has a main face.']]), ['warn', 'If you change a main face later, every picture built on it must be made again.']];
   const its = items(), sts = its.map(statusOf), todo = sts.filter((s) => s !== 'ok').length;
   const ready = !missing.length && todo === 0, reason = missing.length ? `Choose a main face for ${missing.map((a) => a.data.name).join(', ')}.` : todo ? `${todo} face or voice item${todo === 1 ? '' : 's'} still to review. Press "Looks right" on each or "Approve all".` : 'All faces and voices are approved.';
@@ -101,6 +107,7 @@ registerStep('people', {
   },
   acts: {
     'wppl-make'(el) { const id = el.dataset.id; if (busy[id] && busy[id].total) return; makeFaces(id).catch((e) => { busy[id] = { total: 0, err: errText(e) }; paintBusy(id); }); },
+    async 'wppl-views'(el) { el.disabled = true; el.textContent = 'Drawing…'; try { for (const kind of ['body', 'profile']) await api(P('/wizard/view'), { method: 'POST', body: { id: el.dataset.id, kind } }); toast('I drew the body and side views.'); } catch (e) { toast(`I could not draw them: ${errText(e)}`); } return 'refresh'; },
     async 'wppl-use'(el) { await ownEdit(el.dataset.ref, (d) => ({ ...d, anchor: el.dataset.id }), 'Chose the main face'); return 'refresh'; },
   },
 });

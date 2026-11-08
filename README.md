@@ -70,6 +70,10 @@ Muse Image makes three candidates for the start and the end of each scene. SAM 3
 
 `docs/knowledge/` holds what we have learned about directing AI films: 412 sources that were really opened, 267 practices that cite them (each says whether the studio already does it), 16 model profiles, and a short playbook. Any agent can add to it by the rules in its README, and `npm run kb:check` keeps it honest. The studio's generator profiles, prompts and checks are built from it.
 
+### Finishing a film
+
+`npm run assemble -- plan.json film.mp4` joins finished clips the way the research recommends: one size, frame rate and audio format, a frozen tail trimmed, the first frames of a continued clip cut away, a short fade at every join and one loudness target.
+
 ### A pack for any video generator
 
 <img src="public/shots/pack.png" alt="The Pack page: the files for each clip, the prompt, and a place to bring a generated clip back" width="860">

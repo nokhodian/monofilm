@@ -8,7 +8,7 @@ const mk = (list) => { const arts = list.map((a) => ({ status: 'approved', stale
 const story = { ref: REFS.story, kind: 'logline', data: { text: 'A station AI must ask first.' } };
 const bible = { ref: REFS.reading, kind: 'bible', data: {} };
 const look = { ref: REFS.look, kind: 'canon.style', data: { look: 'soft' } };
-const cast = (id, o = {}) => ({ ref: R.cast(id), kind: 'canon.cast', data: { name: id.toUpperCase(), candidates: [], anchor: null, ...o } });
+const cast = (id, o = {}) => ({ ref: R.cast(id), kind: 'canon.cast', data: { name: id.toUpperCase(), candidates: [], anchor: null, views: [{ id: 'v1', kind: 'body' }], ...o } });
 const place = (id, o = {}) => ({ ref: R.place(id), kind: 'canon.world', data: { name: id, plates: [], source: 'none', ...o } });
 const scene = (id, n, o = {}) => ({ ref: R.scene(id), kind: 'scene', data: { n, name: 'S' + n, seconds: 8, clips: clipPlan(8), start: { mode: 'stage' }, end: { mode: 'stage' }, ...o } });
 
@@ -54,4 +54,12 @@ test('every move has plain words and a page', () => {
   for (const a of [{ type: 'read' }, { type: 'approve', refs: [R.cast('x')] }, { type: 'face', name: 'Ines' }, { type: 'plate', name: 'Lab' }, { type: 'scenes' }, { type: 'stage', scene: 's', name: 'N', n: 1 }, { type: 'frame', scene: 's', which: 'end', name: 'N', n: 2 }, { type: 'done' }]) { const t = describe(a); assert.ok(t.title.length > 5 && t.sub.length > 5, a.type); assert.match(pageOf(a), /^#\/w\//); }
   assert.equal(pageOf({ type: 'frame', scene: 'the-crack', which: 'start', name: 'x', n: 1 }), '#/w/scenes/the-crack/pictures');
   assert.equal(pageOf({ type: 'approve', refs: [REFS.look] }), '#/w/look'); assert.equal(pageOf({ type: 'anchor', name: 'x' }), '#/w/people'); assert.equal(pageOf({ type: 'done' }), '#/w/ship');
+});
+
+test('after the main face is chosen, each person gets a full-body and a side view, and it counts in the price', () => {
+  const withFace = (o = {}) => cast('ines', { candidates: [{ id: 'f' }], anchor: 'f', views: [], ...o });
+  const a = plan(mk([story, bible, look, withFace()]));
+  assert.deepEqual([a.type, a.id, a.cost], ['views', 'ines', 2]); assert.equal(describe(a).page, 'people');
+  assert.notEqual(plan(mk([story, bible, look, withFace({ views: [{ id: 'b', kind: 'body' }] })])).type, 'views');
+  assert.equal(estimate(mk([story, bible, look, withFace()])).credits - estimate(mk([story, bible, look, withFace({ views: [{ id: 'b' }] })])).credits, 2);
 });

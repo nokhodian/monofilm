@@ -56,6 +56,7 @@ async function exec(env, db, actor, pid, a, d) {
     case 'read': return retry(() => W.readStory(env, db, actor, pid));
     case 'approve': { let ok = 0, last; for (const ref of a.refs) { try { await S.decide(db, actor, pid, { ref, action: 'approve', comment: 'Approved by Roll camera' }); ok++; } catch (e) { last = e; } } if (!ok) throw last; return; }
     case 'face': return worry(await retry(() => W.makeFace(env, db, actor, pid, { id: a.id, variant: 0 })), `the picture of ${a.name}`);
+    case 'views': { let last; for (const kind of ['body', 'profile']) last = await retry(() => W.makeView(env, db, actor, pid, { id: a.id, kind })); return worry(last, `the ${a.name} reference pictures`); }
     case 'anchor': return edit(a.ref, (x) => ({ ...x, anchor: a.assetId }), 'Main face chosen by Roll camera');
     case 'plate': return worry(await retry(() => W.makePlate(env, db, actor, pid, { id: a.id })), `the picture of ${a.name}`);
     case 'scenes': return retry(async () => { if ((await S.listArtifacts(db, pid, { kind: 'scene' })).length) return; return W.draftScenes(env, db, actor, pid); }); // checked again inside every try: a try that failed after making some scenes must not make a second set // never draft twice: a second draft would add a second set of scenes with other names

@@ -244,6 +244,21 @@ export async function makeFace(env, db, actor, pid, { id, variant = 0, instructi
   await merge(db, pid, cur.ref, (fresh) => ({ ...fresh, candidates: [...(fresh.candidates || []).filter((c) => c.letter !== letter), { id: r.asset.id, letter, check }] }), `Made face ${letter}.`);
   return { asset: r.asset, letter, check };
 }
+// More reference pictures of one character, made from the chosen face: a full-body and a side view. A face alone does not hold the body, the clothes or the size (chr-p-003).
+export async function makeView(env, db, actor, pid, { id, kind = 'body', instruction = '' }, f) {
+  human(actor);
+  if (!['body', 'profile'].includes(kind)) throw bad('kind must be body or profile');
+  const cur = await must(db, pid, R.cast(id), `person ${id}`), d = dataOf(cur), cand = (d.candidates || []).find((x) => x.id === d.anchor);
+  if (!cand) throw new HttpError(409, `Choose a main face for ${d.name} first.`);
+  const face = await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, cand.id).first(); if (!face) throw new HttpError(409, `The main face of ${d.name} is missing.`);
+  const medium = mediumOf(dataOf(await row(db, pid, REFS.look)) || {}), thing = beingOf(d.desc || d.role) === 'person' ? 'person' : 'character';
+  const what = kind === 'body' ? `Full-body ${medium} of the same ${thing}, standing and facing the camera, the whole body in the picture` : `Side-view ${medium} of the same ${thing} in profile, the whole body in the picture`;
+  const prompt = [`${what}, plain neutral background, no text. Exactly the same ${thing} as in the reference picture: the same colours, shape, markings and clothes.`, d.desc || d.role, await lookText(db, pid), instruction].filter(Boolean).join(' ');
+  const expect = `Medium: ${medium}. Exactly one ${thing}: ${d.desc || d.role}. The whole body is visible${kind === 'profile' ? ', seen from the side' : ''}. Nothing else is in the picture.`;
+  const { r, check } = await drawChecked(env, db, actor, pid, cur.ref, { prompt, aspect: [3, 4], tag: `view:${kind}`, medium, anchors: [{ id: keyOf(cur.ref), name: d.name, uri: face.uri }] }, expect, f);
+  await merge(db, pid, cur.ref, (fresh) => ({ ...fresh, views: [...(fresh.views || []).filter((v) => v.kind !== kind), { id: r.asset.id, kind, check }] }), `Made the ${kind} view.`);
+  return { asset: r.asset, kind, check };
+}
 export async function makePlate(env, db, actor, pid, { id, instruction = '' }, f) {
   human(actor);
   const cur = await must(db, pid, R.place(id), `place ${id}`), d = dataOf(cur);
@@ -258,8 +273,8 @@ export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, i
   if (!['start', 'end'].includes(which)) throw bad('which must be start or end');
   const shots = await ensureClips(db, actor, pid, scene), shot = shots[clip - 1]; if (!shot) throw bad(`scene ${scene} has no clip ${clip}`);
   const sd = dataOf(await row(db, pid, R.scene(scene))), fr = R.frame(scene, clip, which), c = composeClip({ data: sd }, {}, clip);
-  const anchors = [], chars = [];
-  if (which === 'end') { const prevRef = clip === 1 ? R.frame(scene, 1, 'start') : R.frame(scene, clip - 1, 'end'), kf = dataOf(await row(db, pid, prevRef)), a = kf && kf.chosen && await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, kf.chosen).first(); if (a) anchors.push({ id: 'previous-frame', role: 'base', uri: a.uri }); } // an end picture is made FROM the picture before it, so the place and the framing cannot jump for (const w of sd.who || []) { const p = dataOf(await row(db, pid, w)); if (p && p.desc) chars.push(`${p.name}: ${p.desc}`); const cand = p && (p.candidates || []).find((x) => x.id === p.anchor); if (cand) { const a = await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, cand.id).first(); if (a) anchors.push({ id: keyOf(w), name: p.name, uri: a.uri }); } }
+  const anchors = [], chars = [], bodies = [];
+  if (which === 'end') { const prevRef = clip === 1 ? R.frame(scene, 1, 'start') : R.frame(scene, clip - 1, 'end'), kf = dataOf(await row(db, pid, prevRef)), a = kf && kf.chosen && await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, kf.chosen).first(); if (a) anchors.push({ id: 'previous-frame', role: 'base', uri: a.uri }); } // an end picture is made FROM the picture before it, so the place and the framing cannot jump for (const w of sd.who || []) { const p = dataOf(await row(db, pid, w)); if (p && p.desc) chars.push(`${p.name}: ${p.desc}`); const cand = p && (p.candidates || []).find((x) => x.id === p.anchor); if (cand) { const a = await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, cand.id).first(); if (a) anchors.push({ id: keyOf(w), name: p.name, uri: a.uri }); } const bv = p && (p.views || []).find((v) => v.kind === 'body'), ba = bv && await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, bv.id).first(); if (ba) bodies.push({ id: `${keyOf(w)}-body`, name: p.name, uri: ba.uri }); } anchors.push(...bodies); // the faces first, then the full-body views, so a long list loses a body before a face
   const stageRef = R.stage(scene), st = await row(db, pid, stageRef), stageData = dataOf(st), staged = st && ['approved', 'locked'].includes(st.status) && stageData && (stageData.shots || {})[shot];
   const place = sd.place && dataOf(await row(db, pid, sd.place)), lookRow = dataOf(await row(db, pid, REFS.look)) || {};
   // The first picture of a scene follows the previous scene's last picture: it goes in as a reference, so the light, colours and time of day carry across the cut.

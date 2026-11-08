@@ -9,7 +9,8 @@
     "seed": "node scripts/seed.mjs",
     "measure": "node scripts/measure-take.mjs",
     "kb:check": "node scripts/kb-check.mjs",
-    "kb:build": "node scripts/kb-check.mjs --build"
+    "kb:build": "node scripts/kb-check.mjs --build",
+    "assemble": "node scripts/assemble-film.mjs"
   },
   "devDependencies": { "wrangler": "^4" }
 }

@@ -296,11 +296,6 @@
    "idea": "Optional ffmpeg step: fps=12 then fps=24 on clips of a stop-motion look."
   },
   {
-   "id": "ani-p-014",
-   "title": "Use squash and stretch and exaggeration only in drawn looks",
-   "idea": "Gate a squash-and-stretch phrase on isDrawn(look)."
-  },
-  {
    "id": "ani-p-017",
    "title": "Do not mix live action and animation in one clip unless it is a separate layer",
    "idea": "Declare mixed films as per-shot medium and refuse a mixed medium inside one clip."
@@ -311,11 +306,6 @@
    "idea": "Add an audience setting that slows cuts and bans flash transitions."
   },
   {
-   "id": "aud-p-010",
-   "title": "Do not trust a native voice to persist across clips",
-   "idea": "An audio step per scene: voice map per character, voice changer on each clip, then mix."
-  },
-  {
    "id": "aud-p-013",
    "title": "Use an audio-driven model for long monologues",
    "idea": "Offer a talking-shot route in the pack for scenes that are one long speech."
@@ -324,11 +314,6 @@
    "id": "aud-p-017",
    "title": "Check the licence before using an audio model on a film",
    "idea": "Add audio files with provenance to the film pack manifest."
-  },
-  {
-   "id": "chr-p-003",
-   "title": "Add a second and third view to the reference set",
-   "idea": "After the face is chosen, generate a full-body and a profile picture from it, check them with picturecheck against the face, and pass up to three to the generator as references."
   },
   {
    "id": "chr-p-009",
@@ -346,26 +331,6 @@
    "idea": "Let the scene writer pick static or push-in when the subject moves fast."
   },
   {
-   "id": "qa-p-021",
-   "title": "Set the made-for-kids flag and know COPPA when the film is for children",
-   "idea": "Ship page question \"Is this made for children?\" with the consequences."
-  },
-  {
-   "id": "qa-p-022",
-   "title": "Disclose realistic synthetic content when publishing",
-   "idea": "Add a ship checklist with platform disclosure steps."
-  },
-  {
-   "id": "qa-p-023",
-   "title": "Keep provenance marks; do not strip them",
-   "idea": "Export step that preserves or writes a C2PA manifest and notes the generator."
-  },
-  {
-   "id": "pm-p-013",
-   "title": "Use the generator's own camera words",
-   "idea": "Map the planner's camera field to a vocabulary table per generator in GENERATORS."
-  },
-  {
    "id": "res-p-015",
    "title": "Do not trust a single benchmark ranking",
    "idea": "Keep a small regression prompt set and score each model on it."
@@ -374,16 +339,6 @@
    "id": "res-p-017",
    "title": "Several keyframes beat one for long motion",
    "idea": "Let the shot list place a mid-clip keyframe picture."
-  },
-  {
-   "id": "scn-p-023",
-   "title": "Match frame size and counts to the model's grid",
-   "idea": "Put per-model size and frame rules in the generator profile."
-  },
-  {
-   "id": "wf-p-006",
-   "title": "Budget retakes by shot type",
-   "idea": "Classify each clip by risk (people touching, dialogue, POV) and scale the attempt budget and shown price."
   },
   {
    "id": "wf-p-009",
@@ -1080,9 +1035,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Gate a squash-and-stretch phrase on isDrawn(look)."
+    "status": "done",
+    "where": "composeClip: squash-and-stretch motion feel only for drawn, non-handmade looks",
+    "idea": ""
    },
    "contributor": "researcher-ani",
    "date": "2026-11-08",
@@ -1541,8 +1496,8 @@
    "conflicts": [],
    "monofilm": {
     "status": "partial",
-    "where": "public/js/wizard-model.js clipLineCheck (every line in exactly one clip, no length check)",
-    "idea": "Warn when a line is over 12 words or when a clip holds more spoken seconds than its length."
+    "where": "dialogue_load in get_clip warns when a clip has too many words for its length",
+    "idea": "Show the warning on the Brief page"
    },
    "contributor": "researcher-aud",
    "date": "2026-11-08",
@@ -1875,9 +1830,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "GENERATORS notes already say consistent voices across clips are weak for minimax-h3",
-    "idea": "An audio step per scene: voice map per character, voice changer on each clip, then mix."
+    "status": "partial",
+    "where": "get_clip.voices and pack voicePlan: a speaker with lines in more than one clip is routed to a separate voice",
+    "idea": "Generate or import the voice pass inside the studio"
    },
    "contributor": "researcher-aud",
    "date": "2026-11-08",
@@ -1920,9 +1875,9 @@
    "strength": "single-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Add a voice record to canon.cast."
+    "status": "partial",
+    "where": "canon.voice per character feeds voicePlan",
+    "idea": "A locked voice configuration (voice id) per character"
    },
    "contributor": "researcher-aud",
    "date": "2026-11-08",
@@ -1958,9 +1913,9 @@
    "strength": "single-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Warn in clipLineCheck when a clip has more than two distinct who values."
+    "status": "partial",
+    "where": "dialogue_load warns about more than two speakers in a clip",
+    "idea": "Block it on the Brief page"
    },
    "contributor": "researcher-aud",
    "date": "2026-11-08",
@@ -2287,9 +2242,9 @@
    "strength": "single-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Optional ffmpeg assembly recipe."
+    "status": "partial",
+    "where": "scripts/assemble-film.mjs sets one loudness target",
+    "idea": "Duck music under speech when there is a score"
    },
    "contributor": "researcher-aud",
    "date": "2026-11-08",
@@ -2322,9 +2277,9 @@
    "strength": "single-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Assembly recipe; the studio does not stitch audio yet."
+    "status": "partial",
+    "where": "scripts/assemble-film.mjs fades each clip's sound in and out for a moment at one sample rate",
+    "idea": "A true crossfade with overlap where two clips clash"
    },
    "contributor": "researcher-aud",
    "date": "2026-11-08",
@@ -2552,9 +2507,9 @@
    "strength": "vendor",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Policy note and provenance field in the pack manifest."
+    "status": "partial",
+    "where": "pack publishing checklist item for synthetic voices",
+    "idea": "A consent field on a voice"
    },
    "contributor": "researcher-aud",
    "date": "2026-11-08",
@@ -2756,9 +2711,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "src/wizard.js makeFace makes one 3:4 portrait only",
-    "idea": "After the face is chosen, generate a full-body and a profile picture from it, check them with picturecheck against the face, and pass up to three to the generator as references."
+    "status": "done",
+    "where": "src/wizard.js makeView (full-body and side view drawn from the chosen face and checked against it); Roll camera step \"views\"; get_clip lists the views after the faces; the People page shows them",
+    "idea": ""
    },
    "contributor": "researcher-chr",
    "date": "2026-11-08",
@@ -3973,9 +3928,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "src/wizard.js SCENES_SYSTEM example \"slow push-in\"; no check that cam has a speed word",
-    "idea": "Make the scene writer and a prompt check require a speed word in notes.cam, defaulting to \"slow\"."
+    "status": "done",
+    "where": "normalizeCamera in public/js/wizard-model.js adds a speed word to every move",
+    "idea": ""
    },
    "contributor": "cin-researcher",
    "date": "2026-11-08",
@@ -4029,9 +3984,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "public/js/wizard-model.js composeClip writes \"Camera: <cam>, one continuous shot\"",
-    "idea": "When cam is static/wide, phrase it as \"camera holds completely static\"."
+    "status": "done",
+    "where": "normalizeCamera says \"the camera holds still\" for a static shot",
+    "idea": ""
    },
    "contributor": "cin-researcher",
    "date": "2026-11-08",
@@ -4825,9 +4780,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "get_clip and clip.json carry assembly.trim_start_frames (2 for a continued clip)",
-    "idea": "Also trim the end frames"
+    "status": "done",
+    "where": "scripts/assemble-film.mjs trims the first frames of a continued clip and a frozen tail",
+    "idea": ""
    },
    "contributor": "cin-researcher",
    "date": "2026-11-08",
@@ -5169,9 +5124,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "src/picturecheck.js (per-character sees/matches list, then kind)",
-    "idea": "Make the clip review answer a fixed checklist per scene fact too, not only free issues."
+    "status": "done",
+    "where": "src/takereview.js: the reviewer answers numbered yes/no questions built by clipChecklist",
+    "idea": ""
    },
    "contributor": "researcher-qa",
    "date": "2026-11-08",
@@ -5385,9 +5340,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "src/takereview.js issue kinds; public/js/pack.js retryAdvice",
-    "idea": "Add a separate plain \"looks good\" mark so beauty is not mixed with correctness."
+    "status": "done",
+    "where": "review_take returns scores for quality, prompt match and physics",
+    "idea": ""
    },
    "contributor": "researcher-qa",
    "date": "2026-11-08",
@@ -5550,8 +5505,8 @@
    "conflicts": [],
    "monofilm": {
     "status": "partial",
-    "where": "Faces are drawn as lettered candidates (src/wizard.js makeFace); clips are retried one at a time",
-    "idea": "Auto-rank parallel clip takes with reviewFrames before showing them."
+    "where": "MCP tool compare_takes (pairwise judge)",
+    "idea": "Use it inside the retry loop of the generation script instead of absolute scoring"
    },
    "contributor": "researcher-qa",
    "date": "2026-11-08",
@@ -6018,9 +5973,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Ship page question \"Is this made for children?\" with the consequences."
+    "status": "done",
+    "where": "pack PUBLISHING.md and manifest.publishing: made-for-kids question",
+    "idea": ""
    },
    "contributor": "researcher-qa",
    "date": "2026-11-08",
@@ -6058,9 +6013,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Add a ship checklist with platform disclosure steps."
+    "status": "done",
+    "where": "pack PUBLISHING.md and manifest.publishing: disclosure",
+    "idea": ""
    },
    "contributor": "researcher-qa",
    "date": "2026-11-08",
@@ -6105,9 +6060,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Export step that preserves or writes a C2PA manifest and notes the generator."
+    "status": "done",
+    "where": "pack PUBLISHING.md and manifest.publishing: keep provenance marks",
+    "idea": ""
    },
    "contributor": "researcher-qa",
    "date": "2026-11-08",
@@ -6156,9 +6111,9 @@
    "strength": "single-source",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "Approvals and picked takes are recorded under the person's name (src/autopilot.js, store)",
-    "idea": "Export a \"human contribution\" log from the project history."
+    "status": "done",
+    "where": "pack PUBLISHING.md: keep the approval record",
+    "idea": ""
    },
    "contributor": "researcher-qa",
    "date": "2026-11-08",
@@ -8166,9 +8121,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Map the planner's camera field to a vocabulary table per generator in GENERATORS."
+    "status": "partial",
+    "where": "GENERATORS camera_style: Hailuo gets bracketed commands via cameraCommand",
+    "idea": "Camera vocabularies for other generators"
    },
    "contributor": "researcher-pm",
    "date": "2026-11-08",
@@ -8278,9 +8233,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "GENERATORS rewrites_prompt flag (data only)",
-    "idea": "Show a hint in the pack when the generator rewrites prompts"
+    "status": "done",
+    "where": "forGenerator hints when a generator rewrites prompts",
+    "idea": ""
    },
    "contributor": "researcher-pm",
    "date": "2026-11-08",
@@ -8655,9 +8610,9 @@
    "strength": "vendor",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Add sizes and frame-rule fields to the profile of each local generator."
+    "status": "partial",
+    "where": "GENERATORS grid note and hint (LTX)",
+    "idea": "Fit size and frame counts automatically"
    },
    "contributor": "researcher-pm",
    "date": "2026-11-08",
@@ -10298,9 +10253,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "assembly.trim_start_frames in get_clip and clip.json",
-    "idea": "Apply the trim in an assembly step"
+    "status": "done",
+    "where": "scripts/assemble-film.mjs cuts the first two frames of a continued clip",
+    "idea": ""
    },
    "contributor": "researcher-scn",
    "date": "2026-11-08",
@@ -10683,9 +10638,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Put per-model size and frame rules in the generator profile."
+    "status": "partial",
+    "where": "GENERATORS grid note and hint (LTX)",
+    "idea": "Fit size and frame counts automatically"
    },
    "contributor": "researcher-scn",
    "date": "2026-11-08",
@@ -10723,9 +10678,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "src/mcp-video.js clipSpec returns aspect and fps per clip",
-    "idea": "Normalise take size, fps and colour in the final assembly step."
+    "status": "done",
+    "where": "scripts/assemble-film.mjs brings every clip to one size, frame rate, colour format and audio rate",
+    "idea": ""
    },
    "contributor": "researcher-scn",
    "date": "2026-11-08",
@@ -12185,9 +12140,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "MAX_ATTEMPTS is a flat 3 in public/js/pack.js",
-    "idea": "Classify each clip by risk (people touching, dialogue, POV) and scale the attempt budget and shown price."
+    "status": "partial",
+    "where": "clipRisk and attemptBudget: low 2, medium 3, high 4 tries; get_clip.retry.max_attempts follows",
+    "idea": "Show the expected credits per clip on the Pack page"
    },
    "contributor": "researcher-wf",
    "date": "2026-11-08",

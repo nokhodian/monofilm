@@ -239,3 +239,16 @@ test('the clip review answers a checklist and scores, and two takes can be compa
   assert.deepEqual([p.winner, p.a_problems], ['B', ['closed bottle']]); assert.equal((await reviewPair({ MODEL_API_KEY: 'k' }, { framesA: ['QUJD'], framesB: frames }, f)).skipped, true);
   assert.equal((await reviewPair({ MODEL_API_KEY: 'k' }, { framesA: frames, framesB: frames }, async () => reply({}, 400))).winner, 'tie', 'a comparison that cannot run never blocks');
 });
+
+test('a full-body and a side view are drawn from the chosen face, checked against it, and stored on the person', async () => {
+  const t = await setup(), f = stand(); await W.readStory(t.env, t.db, human, t.id, f);
+  await assert.rejects(W.makeView(t.env, t.db, human, t.id, { id: 'ines', kind: 'body' }, f), (e) => e.status === 409 && /main face/.test(e.message));
+  const face = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines' }, f), cur = await S.getArtifact(t.db, t.id, R.cast('ines'));
+  await S.propose(t.db, human, t.id, { ref: R.cast('ines'), data: { ...cur.data, anchor: face.asset.id }, parent: cur.parent || undefined, auto_approve: true, base_version: cur.version });
+  const prompts = [], g = judged([{ ok: true, seen: 'x', problem: '' }], prompts);
+  const body = await W.makeView(t.env, t.db, human, t.id, { id: 'ines', kind: 'body' }, g), side = await W.makeView(t.env, t.db, human, t.id, { id: 'ines', kind: 'profile' }, g);
+  assert.deepEqual([body.kind, side.kind], ['body', 'profile']); assert.match(prompts[0], /Full-body photograph of the same person/); assert.match(prompts[1], /Side-view photograph of the same person in profile/);
+  const p = await S.getArtifact(t.db, t.id, R.cast('ines')); assert.deepEqual(p.data.views.map((v) => v.kind).sort(), ['body', 'profile']); assert.equal(p.assets.length >= 3, true);
+  await W.makeView(t.env, t.db, human, t.id, { id: 'ines', kind: 'body' }, g); assert.equal((await S.getArtifact(t.db, t.id, R.cast('ines'))).data.views.length, 2, 'making a view again replaces it');
+  await assert.rejects(W.makeView(t.env, t.db, human, t.id, { id: 'ines', kind: 'tail' }, g), (e) => e.status === 400);
+});
