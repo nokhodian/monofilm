@@ -103,3 +103,9 @@ test('the medium follows the chosen look option, not only the look text', () => 
   assert.equal(mediumOf({ look: 'Smooth round shapes with soft pastel colours', options: [{ id: 'l1', name: 'Soft 3D Cartoon', desc: 'Smooth round shapes' }], chosen: 'l1' }), 'illustration');
   assert.equal(mediumOf({ look: 'Muted film', options: [{ id: 'l1', name: 'Muted film' }], chosen: 'l1' }), 'photograph');
 });
+
+test('with a start picture the words do not describe the characters again', () => {
+  const sc = { data: { seconds: 6, notes: { happens: 'x' }, who: ['canon.cast:mimi'] } }, film = { cast: { 'canon.cast:mimi': { name: 'Mimi', desc: 'A bunny in tiny blue overalls.' } } };
+  assert.match(composeClip(sc, film, 1).prompt, /Mimi: A bunny in tiny blue overalls\./);
+  const p = composeClip(sc, { ...film, pictures: true }, 1).prompt; assert.doesNotMatch(p, /blue overalls/); assert.match(p, /Characters: Mimi look exactly as in the start picture/);
+});

@@ -29,8 +29,8 @@ const sceneList = (L, only) => L.arts.filter((a) => a.kind === 'scene' && (!only
 function clipSpec(c, pid, L, sc, n) {
   const id = keyOf(sc.ref), d = sc.data, clips = d.clips && d.clips.length ? d.clips : clipPlan(d.seconds), cl = clips[n - 1];
   if (!cl) throw new HttpError(404, `scene ${id} has no clip ${n} (it has ${clips.length})`);
-  const p = composeClip(sc, L.film, n), last = n === clips.length, frame2 = (k, which) => { const f = L.data(R.frame(id, k, which)); return f && f.chosen ? L.uriOf(R.frame(id, k, which), f.chosen) : null; }, frame = (which) => frame2(n, which);
-  const from = startOf(d, n), startUri = from === 'start' || from === 'own' ? frame2(n, 'start') : from === 'prev-end' ? frame2(n - 1, 'end') : null, endOk = last ? hasEnd(d) : midEnds(d);
+  const last = n === clips.length, frame2 = (k, which) => { const f = L.data(R.frame(id, k, which)); return f && f.chosen ? L.uriOf(R.frame(id, k, which), f.chosen) : null; }, frame = (which) => frame2(n, which);
+  const from = startOf(d, n), startUri = from === 'start' || from === 'own' ? frame2(n, 'start') : from === 'prev-end' ? frame2(n - 1, 'end') : null, endOk = last ? hasEnd(d) : midEnds(d), p = composeClip(sc, { ...L.film, pictures: !!startUri }, n);
   const takes = L.arts.filter((a) => a.kind === 'take' && a.data.scene === id && a.data.clip === n);
   const stage = (L.assets[R.stage(id)] || []).filter((a) => a.provenance && a.provenance.role && (!a.provenance.shot || a.provenance.shot.endsWith(`-c${n}`) || n === 1));
   return {
@@ -88,7 +88,8 @@ export const VIDEO_TOOLS = [
   T('review_take', 'Before you submit a clip, send 6 to 8 small frames of it (jpeg, base64, in time order, about 384 px wide) and the studio looks at them against what was asked: object counts, physics, jumps in the place, identity. It answers {ok, issues, advice}; if not ok, add the advice to the prompt and make the clip again.', { ...prod, scene: str, clip: { ...num, description: 'clip number, from 1' }, frames: { type: 'array', items: str, description: 'base64 jpeg frames, in time order' } }, ['production', 'scene', 'clip', 'frames'], async (c, a) => {
     const L = await load(c, a.production), sc = sceneList(L, a.scene)[0]; if (!sc) throw new HttpError(404, `no scene ${a.scene}`);
     const n = Math.round(Number(a.clip) || 1), spec = clipSpec(c, a.production, L, sc, n);
-    return reviewFrames(c.env, { frames: a.frames, asked: spec.prompt });
+    const pics = []; for (const [what, x] of [['start', spec.start_picture], ['end', spec.end_picture]]) if (x && x.uri) pics.push({ what, uri: x.uri });
+    return reviewFrames(c.env, { frames: a.frames, asked: spec.prompt, pictures: pics });
   }),
   T('list_generators', 'The video models the studio knows, with what each can take and its quirks. Pass the id as generator to get_clip so the words fit your model.', {}, [], async () => ({ generators: Object.entries(GENERATORS).map(([id, g]) => ({ id, ...g })) })),
   T('get_media', 'Read a picture of this production (a media/ uri from get_clip) and get it back inline so you can look at it. Pictures up to 4 MB. For video use the url with your bearer token.', { ...prod, uri: str }, ['production', 'uri'], async (c, a) => {
