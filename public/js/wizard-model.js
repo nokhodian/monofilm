@@ -209,7 +209,7 @@ export const isDrawn = (look) => DRAWN.test(lookText(look));
 // A handmade stop-motion look (clay, felt, paper, puppets): it moves in steps, like animation shot on twos.
 export const isHandmade = (look) => /stop[- ]?motion|clay|plasticine|felt|paper|cut-?out|puppet/i.test(lookText(look));
 export const mediumOf = (look) => (isDrawn(look) ? 'illustration' : 'photograph');
-const STRONG = /\b(man|woman|boy|girl|person|human|lady|gentleman|grandfather|grandmother|mother|father|teenager|\d+[- ]year[- ]old)\b/i, BEAST = /\b(penguin|bear|seal|cub|cat|kitten|dog|puppy|bird|animal|creature|robot|dragon|fox|rabbit|bunny|elephant|horse|pony|monkey|owl|mouse|duck|duckling|fish|lion|tiger|monster|alien|toy|doll|frog|toad|tortoise|turtle|hedgehog|pig|piglet|cow|calf|sheep|lamb|goat|deer|fawn|snake|lizard|bee|butterfly|ladybug|squirrel|panda|koala|kangaroo|giraffe|zebra|hippo|whale|dolphin|octopus|crab|chick|chicken|hen|bat|hamster|otter|beaver|wolf|raccoon|mole|snail|caterpillar|dinosaur|unicorn|ghost|puppet)s?\b/i;
+const STRONG = /\b(man|woman|boy|girl|person|human|lady|gentleman|grandfather|grandmother|mother|father|teenager|\d+[- ]year[- ]old)\b/i, BEAST = /\b(penguin|bear|seal|cub|cat|kitten|dog|puppy|bird|animal|creature|robot|dragon|fox|rabbit|bunny|elephant|horse|pony|monkey|owl|mouse|duck|duckling|fish|lion|tiger|monster|alien|toy|doll|frog|toad|tortoise|turtle|hedgehog|pig|piglet|cow|calf|sheep|lamb|goat|deer|fawn|snake|lizard|bee|butterfly|ladybug|squirrel|panda|koala|kangaroo|giraffe|zebra|hippo|whale|dolphin|octopus|crab|chick|chicken|hen|bat|hamster|otter|beaver|wolf|raccoon|mole|snail|caterpillar|dinosaur|unicorn|ghost|puppet|beetle|ant|bug|insect|ladybird|ladybug|spider|worm|dragonfly|cricket|firefly|moth|slug|starfish|jellyfish|shark|seahorse|swan|goose|parrot|penguin|robin|sparrow)s?\b/i;
 // 'person' unless the description names an animal or creature before it names a human.
 export function beingOf(desc) { const t = String(desc || ''), a = t.search(BEAST), p = t.search(STRONG); return a >= 0 && (p < 0 || a < p) ? 'creature' : 'person'; }
 
@@ -250,4 +250,17 @@ export function clipChecklist(d, k) {
   q.push('Do the place, the background and the framing stay the same in every frame?', 'Does every character look the same in every frame (same clothes, colours, shape)?', 'Does anything appear, vanish, multiply or change size without being asked for?');
   if (mv) q.push(`Does the clip show this, in this order: ${mv}`);
   return q;
+}
+
+// ---- what kind of creature a character is, in a word, and a short look for it: image models follow a name badly and a kind well ----
+export const beastOf = (desc) => { const m = String(desc || '').match(BEAST); return m ? m[0].toLowerCase().replace(/s$/, '') : ''; };
+export function shortLook(desc, name = '') {
+  let t = String(desc || '').trim().replace(new RegExp(`^${String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+(is|was)\\s+`, 'i'), '').replace(/^(an?|the)\s+/i, '');
+  t = t.split(/\s+(?:with|who|that|wearing|always)\s+|[,.;]/)[0].trim(); return t.length > 70 ? t.slice(0, 70).replace(/\s+\S*$/, '') : t;
+}
+// "Moss left and Pip right" becomes "Moss the small grey-green clay snail left and Pip the tiny orange clay beetle right" (the first time each name appears).
+export function expandNames(text, chars) {
+  let out = String(text || '');
+  for (const c of chars || []) { if (!c.name || !c.look) continue; const re = new RegExp(`\\b${c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`); out = out.replace(re, `${c.name} the ${c.look}`); }
+  return out;
 }

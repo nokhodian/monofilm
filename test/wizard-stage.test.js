@@ -146,3 +146,11 @@ test('the reviewer gets atomic yes/no questions built from the states, the count
   const q = clipChecklist(d, 1); assert.match(q[0], /first frame match this: A seed lies in a hollow/); assert.match(q[1], /last frame match this: The hollow is half filled/); assert.ok(q.some((x) => /exactly 1 seed/.test(x))); assert.ok(q.some((x) => /same in every frame/.test(x))); assert.match(q[q.length - 1], /She pushes soil in/);
   assert.ok(!clipChecklist({ seconds: 6, notes: {} }, 1).some((x) => /first frame match/.test(x)), 'no states, no state questions');
 });
+
+import { beastOf, shortLook, expandNames } from '../public/js/wizard-model.js';
+test('a character is known by its kind: the animal word, a short look, and a name that carries its kind into a state', () => {
+  assert.deepEqual([beastOf('Moss is a small grey-green clay snail with a low soft body'), beastOf('Pip is a tiny orange clay beetle'), beastOf('A woman in her forties')], ['snail', 'beetle', '']); assert.equal(beingOf('Pip is a tiny orange clay beetle'), 'creature');
+  assert.equal(shortLook('Moss is a small grey-green clay snail with a low soft body and a big round spiral shell', 'Moss'), 'small grey-green clay snail'); assert.equal(shortLook('A tiny baby bunny with soft cream fur, long ears', 'Mimi'), 'tiny baby bunny');
+  assert.equal(expandNames('Moss left and Pip right, Moss looking up.', [{ name: 'Moss', look: 'small clay snail' }, { name: 'Pip', look: 'orange clay beetle' }]), 'Moss the small clay snail left and Pip the orange clay beetle right, Moss looking up.');
+  assert.equal(expandNames('Nobody here.', [{ name: 'Moss', look: 'snail' }]), 'Nobody here.');
+});

@@ -252,3 +252,14 @@ test('a full-body and a side view are drawn from the chosen face, checked agains
   await W.makeView(t.env, t.db, human, t.id, { id: 'ines', kind: 'body' }, g); assert.equal((await S.getArtifact(t.db, t.id, R.cast('ines'))).data.views.length, 2, 'making a view again replaces it');
   await assert.rejects(W.makeView(t.env, t.db, human, t.id, { id: 'ines', kind: 'tail' }, g), (e) => e.status === 400);
 });
+
+test('a bear drawn for a snail is caught by comparing the kind of being in code, and a bunny called a rabbit passes', async () => {
+  const { checkPicture, sameKind } = await import('../src/picturecheck.js'), env = { MODEL_API_KEY: 'k', MEDIA: fakeR2() };
+  env.MEDIA.m.set('p/x.png', PNG); const say = (chars) => async () => reply(msg({ ok: true, seen: 'Two clay figures.', problem: '', characters: chars }));
+  const kinds = [{ name: 'Moss', kind: 'snail' }, { name: 'Pip', kind: 'beetle' }];
+  const bad = await checkPicture(env, 'media/p/x.png', 'x', say([{ name: 'Moss', kind_seen: 'teddy bear' }, { name: 'Pip', kind_seen: 'green bear' }]), [], kinds);
+  assert.deepEqual([bad.ok, bad.kind, bad.major], [false, 'being', true]); assert.match(bad.problem, /Moss looks like a teddy bear; it must be a snail/);
+  assert.equal((await checkPicture(env, 'media/p/x.png', 'x', say([{ name: 'moss', kind_seen: 'a clay snail' }, { name: 'Pip', kind_seen: 'orange insect' }]), [], kinds)).ok, true, 'a name in any case, and a synonym, are fine');
+  assert.equal((await checkPicture(env, 'media/p/x.png', 'x', say([]), [], kinds)).ok, true, 'a judge that names no characters is not a failure');
+  assert.deepEqual([sameKind('bunny', 'white rabbit'), sameKind('frog', 'toad'), sameKind('snail', 'bear'), sameKind('', 'bear')], [true, true, false, true]);
+});
