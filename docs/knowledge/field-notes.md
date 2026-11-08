@@ -19,6 +19,10 @@ What we learned by running Monofilm ourselves (2026-11-05 to 2026-11-09), with t
 | 13 | Pictures came out portrait in a landscape film | The image edit endpoint takes its size from the first reference picture, and that was a portrait face | An empty frame of the film's shape goes first (`blankFrame`) |
 | 14 | A clip review marked good clips as failed | A checklist question was phrased so that "no" was the good answer, and the code read "no" as a fault | Every question is phrased so that "yes" is good |
 | 15 | The generation script was lost when a scratch folder was cleaned | It lived only in a temporary folder and on the PC | The scripts live in `scripts/generators/minimax-h3-comfyui/` |
+| 16 | A character was half its size in the last picture of a scene, and a hill reshaped between pictures | The image model ignores a size written in words, and the plan said "slow push-in" while the video generator held its camera still | Each scene has a size line per character (`sizes`); a static camera is the default; a generator that cannot take camera moves (`static_camera`, named in the film's format as `generator`) gets a static camera in every scene |
+| 17 | A vision judge did not see a character change size | A judge is poor at proportions | SAM measures each character's box in the new and the previous picture; below 65% or above 150% of the previous size is a fault (`sizeProblem`). Ask SAM for a plain kind word ("snail"), not a long description: it found nothing for "very small grey-green clay snail" |
+| 18 | A snail was drawn rearing up in the first picture and lying flat in the later ones | The first state did not name a posture | Every state names each character's posture |
+| 19 | An empty place picture came out with little clay animals on it | A handmade clay look invites figurines | The place prompt asks for nothing living or figure-like |
 
 ## MiniMax H3 (local, 8-step turbo): what we saw
 
@@ -37,4 +41,9 @@ What we learned by running Monofilm ourselves (2026-11-05 to 2026-11-09), with t
 | Mimi and the Carrot Seed (2 min) | cartoon with joins | 3 of 24 | outfit and detail drift between clips; water drawn as a disc |
 | Moss and Pip (36 s) | clay stop-motion, two characters | 0 of 16 | right characters and light story; a few physics slips (a snail tipping over), duplicate Moss in one take, frozen tails |
 
-The last film was the first made after all the fixes in notes 1 to 14. Its characters, place and light stayed right from the first picture to the last.
+The Moss and Pip film was the first made after the fixes in notes 1 to 14. Its characters, place and light stayed right from the first picture to the last.
+
+| film | what it was | cuts (takes) | average biggest jump between frames (best takes) | what was wrong |
+|---|---|---|---|---|
+| Moss and Pip v1 (36 s) | stop-motion, before sizes and static camera | 0 of 16 | 5.7 | framing changed inside clips, character sizes drifted between pictures |
+| Moss and Pip v2 (35 s) | same story, with sizes, static camera, measured sizes | 0 of 15 | 2.5 | the generator does little of the slow motion it is asked for (a snail that barely glides), end holds of 1 to 4 seconds, one clip with a possible second snail |
