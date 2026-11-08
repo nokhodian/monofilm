@@ -25,7 +25,7 @@ export async function checkPicture(env, uri, expect, f, refs = [], kinds = []) {
 }
 const read = async (env, uri) => { const o = await env.MEDIA.get(String(uri).replace(/^media\//, '')); return o ? dataUrl(await o.arrayBuffer(), (o.httpMetadata && o.httpMetadata.contentType) || 'image/png') : null; };
 // A bear is not a snail: the kind of every named character is compared in code, because a judge that is asked only "does it match?" says yes to a bear.
-const SAME = { rabbit: ['bunny', 'hare'], bunny: ['rabbit', 'hare'], beetle: ['bug', 'insect', 'ladybug', 'ladybird'], bug: ['beetle', 'insect', 'ladybug'], snail: ['slug'], frog: ['toad'], penguin: ['bird'], hedgehog: ['porcupine'] };
+const SAME = { rabbit: ['bunny', 'hare'], bunny: ['rabbit', 'hare'], beetle: ['bug', 'insect', 'ladybug', 'ladybird', 'ant'], bug: ['beetle', 'insect', 'ladybug', 'ant'], ant: ['beetle', 'bug', 'insect'], snail: ['slug'], frog: ['toad'], penguin: ['bird'], hedgehog: ['porcupine'] };
 export const sameKind = (want, seen) => { const w = String(want || '').toLowerCase(), t = String(seen || '').toLowerCase(); return !w || !t || t.includes(w) || w.includes(t) || (SAME[w] || []).some((x) => t.includes(x)); };
 async function checkOnce(env, uri, expect, f, refs = [], kinds = []) {
   try {
