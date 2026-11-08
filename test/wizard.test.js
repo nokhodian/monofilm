@@ -310,3 +310,19 @@ test('a generator that cannot take camera moves gets a static camera in every sc
   const cams = []; for (const id of ['the-beam', 'the-fall', 'calm']) cams.push((await S.getArtifact(t.db, t.id, R.scene(id))).data.notes.cam);
   assert.deepEqual(cams, ['static wide', 'static medium', 'static close']); assert.ok(seen.some((x) => /cannot take camera moves: every scene's cam must be static/.test(x)));
 });
+
+test('a character that changed size between two pictures is caught by measuring it, not by judging', async () => {
+  const { sizeProblem } = await import('../src/picturecheck.js'), env = { MODEL_API_KEY: 'k', MEDIA: fakeR2() };
+  env.MEDIA.m.set('p/a.png', PNG); env.MEDIA.m.set('p/b.png', PNG);
+  const box = (side) => `<|box;x1=100;y1=100;x2=${100 + side};y2=${100 + side};w=1000;h=1000;c=0.9|>`;
+  const sam = (before, now) => { let n = 0; return async (url, init) => { assert.equal(JSON.parse(init.body).model, 'sam-3.1'); return reply({ output_text: n++ % 2 === 0 ? box(before) : box(now) }); }; };
+  const sizes = (push) => ({ baseUri: 'media/p/a.png', looks: [{ name: 'Pip', look: 'tiny orange clay beetle' }], push });
+  assert.match(await sizeProblem(env, 'media/p/b.png', sizes(false), sam(400, 200)), /the tiny orange clay beetle is 50% of the size it was in the previous picture; it must keep the same size/);
+  assert.equal(await sizeProblem(env, 'media/p/b.png', sizes(false), sam(400, 380)), '', 'a small change is fine');
+  assert.match(await sizeProblem(env, 'media/p/b.png', sizes(false), sam(200, 310)), /155%/); assert.equal(await sizeProblem(env, 'media/p/b.png', sizes(true), sam(200, 310)), '', 'a planned camera push allows a bigger character');
+  assert.match(await sizeProblem(env, 'media/p/b.png', sizes(true), sam(400, 300)), /75%/, 'but not a smaller one');
+  assert.equal(await sizeProblem(env, 'media/p/b.png', sizes(false), async () => reply({ output_text: 'no match' })), '', 'a character SAM cannot find is not a failure');
+  assert.equal(await sizeProblem(env, 'media/p/b.png', sizes(false), async () => reply({}, 500)), '', 'a measurement that cannot run never blocks');
+  const { checkPicture } = await import('../src/picturecheck.js'); const r = await checkPicture(env, 'media/p/b.png', 'x', sam(400, 200), [], [], sizes(false));
+  assert.deepEqual([r.ok, r.kind, r.major], [false, 'size', true]);
+});

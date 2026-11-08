@@ -1,6 +1,6 @@
 // A second look at every picture the studio draws: does it show what was asked for? A cartoon penguin once came out as a photographed man holding a toy,
 // and every later picture and clip followed it. The check asks Muse Spark to look at the picture and say what is in it. If the check cannot run, the picture is let through.
-import { spark, outputText, dataUrl } from './meta.js';
+import { spark, outputText, dataUrl, sam } from './meta.js';
 import { parseJson } from './util.js';
 
 const SYSTEM = 'If reference pictures of characters follow the first picture, compare each character in the FIRST picture with its reference picture: every garment, every colour, the ear and body shape and the markings must be the same, and any difference is kind "appearance" and goes in problem as "NAME wears X; must wear Y". You check ONE picture made for a film against a short list of what it must show. FIRST, for every character the list names, write what you actually see it wearing and its main colours, and compare that with the description word by word (blue overalls are not a pink sweater, a yellow scarf is not a blue scarf). THEN output JSON {characters, ok, kind, seen, problem}. characters is a list of {name, kind_seen (what kind of being or animal it really is, one or two words), sees (clothes and main colours you see), matches (true or false)}. ok is true only if the picture matches every point and every character matches its description. kind says what is wrong when ok is false: "being" (the wrong kind of being, for example a person instead of an animal), "medium" (a photograph instead of an illustration or the reverse), "character" (a character is missing or someone extra is there), "stage" (a thing is present, absent or at the wrong growth stage for the moment described, for example a plant where there should only be soil), "size" (a character is clearly bigger or smaller than in the previous picture, or out of proportion to the others, without having walked toward or away from the camera), "scene" (the place, the background or the camera framing is not the same as in the previous picture), "appearance" (a character wears different clothes or has different colours or a different shape from its description), or "detail" (anything smaller: a pattern, an accessory, how many of something, or how big a thing is). seen is one short sentence about what is really in the picture. problem is one short sentence saying what is wrong and what it must be instead (for example "Mimi wears a pink sweater; she must wear tiny blue overalls"), or an empty string when ok.';
@@ -16,7 +16,22 @@ async function blindKinds(env, uri, kinds, f) {
     const missing = kinds.filter((k) => !seen.some((x) => sameKind(k.kind, x))); return { why: missing.length ? `The picture shows ${seen.join(' and ')}; it must show ${missing.map((k) => `a ${k.kind}`).join(' and ')} (${missing.map((k) => k.name).join(', ')})` : '', seen };
   } catch (e) { return { why: '', seen: [], error: String(e && e.message).slice(0, 160) }; }
 }
-export async function checkPicture(env, uri, expect, f, refs = [], kinds = []) {
+// How big each character is, measured and not judged: SAM finds the character by what it looks like and returns its box. A character that is half the size it was in the
+// previous picture, with a camera that did not move, is a fault; a vision judge does not see it (nor does it see the opposite). `sizes` = { baseUri, looks: [{ name, look }], push }.
+const sizeOf = (boxes) => { const b = (boxes || []).slice().sort((x, y) => (y.conf || 0) - (x.conf || 0))[0]; if (!b) return 0; const [x1, y1, x2, y2] = b.box; return Math.sqrt(Math.max(0, x2 - x1) * Math.max(0, y2 - y1)); };
+export async function sizeProblem(env, uri, sizes, f) {
+  try {
+    const now = await read(env, uri), before = await read(env, sizes.baseUri); if (!now || !before) return '';
+    const lo = sizes.push ? 0.85 : 0.65, hi = sizes.push ? 1.6 : 1.5, bad = [];
+    for (const c of sizes.looks.slice(0, 3)) {
+      const concept = c.look, [a, b] = await Promise.all([sam(env, { image: before, concept }, f), sam(env, { image: now, concept }, f)]), sa = sizeOf(a), sb = sizeOf(b);
+      if (sa > 0.02 && sb > 0.02) { const ratio = sb / sa; if (ratio < lo || ratio > hi) bad.push(`the ${c.look} is ${Math.round(ratio * 100)}% of the size it was in the previous picture`); }
+    }
+    return bad.length ? `${bad.join('; ')}; it must keep the same size (it may look bigger or smaller only by really walking nearer or further)` : '';
+  } catch (e) { return ''; }
+}
+export async function checkPicture(env, uri, expect, f, refs = [], kinds = [], sizes = null) {
+  if (sizes && sizes.baseUri && (sizes.looks || []).length) { const why = await sizeProblem(env, uri, sizes, f); if (why) return { ok: false, kind: 'size', major: true, seen: '', beings: [], problem: why.slice(0, 260) }; }
   let beings = [], beingsError = ''; if (kinds.length) { const b = await blindKinds(env, uri, kinds, f); beings = b.seen; beingsError = b.error || ''; if (b.why) return { ok: false, kind: 'being', major: true, seen: '', beings, problem: b.why.slice(0, 220) }; }
   const first = await checkOnce(env, uri, expect, f, refs, kinds);
   if (first.ok || first.skipped) return { ...first, beings, beingsError };
