@@ -3,9 +3,16 @@
 import { spark, outputText, dataUrl } from './meta.js';
 import { parseJson } from './util.js';
 
-const SYSTEM = 'You check ONE picture made for a film against a short list of what it must show. Output JSON {ok, kind, seen, problem}. ok is true only if the picture matches every point. kind says what is wrong when ok is false: "being" (the wrong kind of being, for example a person instead of an animal), "medium" (a photograph instead of an illustration or the reverse), "character" (a character is missing or someone extra is there), "stage" (a thing is present, absent or at the wrong growth stage for the moment described, for example a plant where there should only be soil), or "detail" (anything smaller: a colour, a pattern, an accessory, how many of something, or how big a thing is). seen is one short sentence about what is really in the picture. problem is one short sentence saying what is wrong, or an empty string when ok.';
+const SYSTEM = 'You check ONE picture made for a film against a short list of what it must show. Output JSON {ok, kind, seen, problem}. ok is true only if the picture matches every point. kind says what is wrong when ok is false: "being" (the wrong kind of being, for example a person instead of an animal), "medium" (a photograph instead of an illustration or the reverse), "character" (a character is missing or someone extra is there), "stage" (a thing is present, absent or at the wrong growth stage for the moment described, for example a plant where there should only be soil), or "appearance" (a character wears different clothes or has different colours or a different shape from its description), or "detail" (anything smaller: a pattern, an accessory, how many of something, or how big a thing is). seen is one short sentence about what is really in the picture. problem is one short sentence saying what is wrong, or an empty string when ok.';
 
+// A picture that fails is looked at a second time before it counts as failed: one wrong look at a splash of water must not stop a whole film.
 export async function checkPicture(env, uri, expect, f) {
+  const first = await checkOnce(env, uri, expect, f);
+  if (first.ok || first.skipped) return first;
+  const second = await checkOnce(env, uri, expect, f);
+  return second.ok || second.skipped ? { ...second, ok: true, secondOpinion: true } : first;
+}
+async function checkOnce(env, uri, expect, f) {
   try {
     if (!env.MEDIA || !uri) return { ok: true, skipped: true };
     const o = await env.MEDIA.get(String(uri).replace(/^media\//, '')); if (!o) return { ok: true, skipped: true };

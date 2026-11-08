@@ -84,7 +84,7 @@ const judged = (verdicts, prompts = []) => { const base = stand(); let i = 0; re
 test('a picture that is not what was asked for is looked at and drawn again once with the correction; a check that cannot run lets it through', async () => {
   const t = await setup(); await W.readStory(t.env, t.db, human, t.id, stand());
   const prompts = [], wrong = { ok: false, major: true, seen: 'A man holding a toy penguin.', problem: 'It shows a man, not a penguin.' };
-  let r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines' }, judged([wrong, { ok: true, seen: 'A woman.', problem: '' }], prompts));
+  let r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines' }, judged([wrong, wrong, { ok: true, seen: 'A woman.', problem: '' }], prompts));
   assert.deepEqual([r.check.ok, r.check.redrew], [true, true]); assert.equal(prompts.length, 2); assert.match(prompts[1], /Correction: It shows a man, not a penguin\./);
   assert.equal((await S.getArtifact(t.db, t.id, R.cast('ines'))).data.candidates[0].check.redrew, true, 'what the check saw is kept with the picture');
   r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines', variant: 1 }, judged([wrong, wrong])); assert.deepEqual([r.check.ok, r.check.redrew, r.check.problem], [false, true, 'It shows a man, not a penguin.']);
@@ -223,4 +223,9 @@ test('the clip review reads frames against what was asked, and never blocks when
   const r = await reviewFrames({ MODEL_API_KEY: 'k' }, { frames, asked: 'x' }, f); assert.deepEqual([r.ok, r.issues[0].kind, r.advice], [false, 'physics', 'The bottle is open, cap off.']);
   assert.equal((await reviewFrames({ MODEL_API_KEY: 'k' }, { frames: ['QUJD'], asked: 'x' }, f)).skipped, true, 'one frame is not a clip');
   assert.equal((await reviewFrames({ MODEL_API_KEY: 'k' }, { frames, asked: 'x' }, async () => reply({}, 400))).ok, true);
+});
+test('a picture that fails once is looked at again, and one bad look does not fail it; a wrong picture is redrawn up to twice', async () => {
+  const t = await setup(); await W.readStory(t.env, t.db, human, t.id, stand()); const wrong = { ok: false, kind: 'stage', seen: 'A sprout.', problem: 'A sprout is growing.' }, right = { ok: true, seen: 'Flat soil.', problem: '' };
+  let prompts = []; let r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines' }, judged([wrong, right], prompts)); assert.deepEqual([r.check.ok, r.check.redrew], [true, false], 'the second look agreed it was fine: no redraw'); assert.equal(prompts.length, 1);
+  prompts = []; r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines', variant: 1 }, judged([wrong, wrong, wrong, wrong, right, right], prompts)); assert.deepEqual([r.check.ok, r.check.redrew], [true, true]); assert.equal(prompts.length, 3, 'two redraws at most');
 });

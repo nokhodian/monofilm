@@ -210,7 +210,7 @@ const VARIANT = ['', 'A slightly different person: different face shape.', 'A th
 // Draw, look at the result, and draw once more with the correction if it is not what was asked for. The last picture is kept either way, with what the check saw.
 async function drawChecked(env, db, actor, pid, ref, input, expect, f) {
   let r = await paint(env, db, actor, pid, ref, input, f), check = await checkPicture(env, r.asset.uri, expect, f), redrew = false;
-  if (!check.ok) { redrew = true; r = await paint(env, db, actor, pid, ref, { ...input, prompt: `${input.prompt} Correction: ${check.problem || 'it was not what was asked for'}. It must show: ${expect}` }, f).catch(() => r); check = await checkPicture(env, r.asset.uri, expect, f); }
+  for (let i = 0; i < 2 && !check.ok && !check.skipped; i++) { redrew = true; const again = await paint(env, db, actor, pid, ref, { ...input, prompt: `${input.prompt} Correction: ${check.problem || 'it was not what was asked for'}. It must show: ${expect}` }, f).catch(() => null); if (!again) break; r = again; check = await checkPicture(env, r.asset.uri, expect, f); } // up to two more tries, each told what was wrong
   return { r, check: { ok: check.ok, major: !!check.major, seen: check.seen || '', problem: check.problem || '', redrew, skipped: !!check.skipped } };
 }
 async function paint(env, db, actor, pid, ref, input, f) {
