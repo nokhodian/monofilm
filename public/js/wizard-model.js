@@ -247,7 +247,7 @@ export function clipChecklist(d, k) {
   const st = clipStates(d), q = [], mv = movesOf(d)[k - 1];
   if (st) q.push(`Does the first frame match this: ${st[k - 1]}`, `Does the last frame match this: ${st[k]}`);
   for (const p of propsInClip(d, k)) if (p.count) q.push(`Is there exactly ${p.count} ${p.name} in every frame where it is visible?`);
-  q.push('Do the place, the background and the framing stay the same in every frame?', 'Does every character look the same in every frame (same clothes, colours, shape)?', 'Does anything appear, vanish, multiply or change size without being asked for?');
+  q.push('Do the place, the background and the framing stay the same in every frame?', 'Does every character look the same in every frame (same clothes, colours, shape)?', 'Is it true that nothing appears, vanishes, multiplies or changes size without being asked for?');
   if (mv) q.push(`Does the clip show this, in this order: ${mv}`);
   return q;
 }
