@@ -58,7 +58,8 @@ export function filmEntries(film, scenes, { target = 'both', max = MAX_CLIP } = 
   out.push({ path: `${root}/film/format.json`, text: JSON.stringify({ aspect: look.aspect || '9:16', fps: look.fps || 24, speech: film.speech || '', captions: film.captions || [] }, null, 2) });
   if (w.refs || target === 'both') { for (const a of film.anchors || []) out.push({ path: `${root}/film/anchors/${slug(a.id)}.${ext(a.uri)}`, uri: a.uri }); for (const p of film.plates || []) out.push({ path: `${root}/film/plates/${slug(p.id)}.${ext(p.uri)}`, uri: p.uri }); }
   for (const s of scenes) out.push(...sceneEntries(film, s, { target, max, root }));
-  out.push({ path: `${root}/manifest.json`, text: JSON.stringify({ schema: 'monofilm/pack@1', film: film.name, target, made: new Date().toISOString(), scenes: scenes.map((s) => ({ n: s.data.n, name: s.data.name, dir: sceneDir(s), seconds: s.data.seconds, clips: (s.data.clips && s.data.clips.length ? s.data.clips : clipPlan(s.data.seconds, max)).length })), note: 'Meta has no video generator. Give each clip folder to the generator you use, then bring the result back into the studio.' }, null, 2) });
+  const publishing = publishChecklist(film, scenes); out.push({ path: `${root}/PUBLISHING.md`, text: ['# Before you publish', '', ...publishing.map((i) => `- [ ] ${i.text}`), ''].join('\n') });
+  out.push({ path: `${root}/manifest.json`, text: JSON.stringify({ schema: 'monofilm/pack@1', publishing, film: film.name, target, made: new Date().toISOString(), scenes: scenes.map((s) => ({ n: s.data.n, name: s.data.name, dir: sceneDir(s), seconds: s.data.seconds, clips: (s.data.clips && s.data.clips.length ? s.data.clips : clipPlan(s.data.seconds, max)).length })), note: 'Meta has no video generator. Give each clip folder to the generator you use, then bring the result back into the studio.' }, null, 2) });
   return out;
 }
 
@@ -120,7 +121,7 @@ export const MAX_ATTEMPTS = 3;
 // The same scene, clip and attempt always give the same seed, so a retry is repeatable and a new attempt always changes it.
 export function seedFor(scene, clip, attempt) { let h = 2166136261; for (const c of `${scene}:${clip}:${attempt}`) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h % 2147483647; }
 // What a video model should do next for a clip, from the takes already made (each { picked, hold, smooth, cuts }). Nothing is retried once a take is picked, or after MAX_ATTEMPTS.
-export function retryAdvice(scene, clip, takes) {
+export function retryAdvice(scene, clip, takes, max = MAX_ATTEMPTS) {
   const n = (takes || []).length, last = n ? takes[n - 1] : null, flaws = [];
   if (last && last.hold >= 1.5) flaws.push(`stood still for the last ${last.hold} s`);
   if (last && last.smooth && last.smooth.flag) flaws.push(`jumped at about ${last.smooth.at} s`);
@@ -128,5 +129,28 @@ export function retryAdvice(scene, clip, takes) {
   if (last && last.cuts) flaws.push(`had ${last.cuts} cut${last.cuts === 1 ? '' : 's'}`);
   const done = (takes || []).some((t) => t.picked);
   const add = [last && last.hold >= 1.5 ? 'Spread the action over the whole clip so it lands on the very last frame, with no pause.' : '', last && last.review && last.review.advice ? last.review.advice : '', last && ((last.smooth && last.smooth.flag) || last.cuts) ? 'Make it one continuous shot: the same place, light and framing from the first frame to the last. No cuts, no morphing.' : ''].filter(Boolean).join(' ');
-  return { attempt: n + 1, max_attempts: MAX_ATTEMPTS, seed: seedFor(scene, clip, n + 1), try_again: !done && !!flaws.length && n < MAX_ATTEMPTS, last_take_problems: flaws, add_to_prompt: flaws.length ? add : '', stop: done ? 'A take is already picked.' : n >= MAX_ATTEMPTS && flaws.length ? `Already ${n} takes with problems. Stop and tell the human, who can change the brief.` : '' };
+  return { attempt: n + 1, max_attempts: max, seed: seedFor(scene, clip, n + 1), try_again: !done && !!flaws.length && n < max, last_take_problems: flaws, add_to_prompt: flaws.length ? add : '', stop: done ? 'A take is already picked.' : n >= max && flaws.length ? `Already ${n} takes with problems. Stop and tell the human, who can change the brief.` : '' };
+}
+
+// ---- the voices of a scene (aud-p-010, aud-p-011) ----
+// A native generator voice does not persist from one clip to the next, even with a fixed seed. A character who speaks in more than one clip gets ONE separate voice pass over all their lines;
+// a character who speaks in a single clip can keep the generator's own voice. film.voices = { NAME: 'how the voice sounds' }.
+export function voicePlan(d, film = {}) {
+  const n = (d.clips && d.clips.length ? d.clips : clipPlan(d.seconds)).length, by = {};
+  for (let k = 1; k <= n; k++) for (const l of linesOfClip(d, k)) { const who = l.who || 'NARRATOR', x = (by[who] = by[who] || { who, voice: (film.voices || {})[who] || '', clips: [], lines: [] }); if (!x.clips.includes(k)) x.clips.push(k); x.lines.push({ clip: k, text: l.text, at: l.at, sec: l.sec }); }
+  const speakers = Object.values(by).map((x) => ({ ...x, route: x.clips.length > 1 ? 'separate-voice' : 'native' }));
+  return { speakers, note: speakers.some((x) => x.route === 'separate-voice') ? 'A speaker with lines in more than one clip needs one separate voice (text-to-speech or voice changer) over all their lines, so the voice stays the same. Lay the voices over the clips and mix them under the music.' : '' };
+}
+
+// ---- before you publish (qa-p-019 to qa-p-025) ----
+export function publishChecklist(film = {}, scenes = []) {
+  const items = [
+    { id: 'disclosure', text: 'Label the film as AI-generated or AI-altered when you publish it. Platforms such as YouTube ask for this on realistic synthetic content; clearly animated or fantasy content is usually exempt, but check the platform.', practice: 'qa-p-022' },
+    { id: 'kids', text: 'Is this film made for children? If so, set the "made for kids" option on the platform (it limits comments, ads and personalisation), keep the content child-safe, and check the platform\'s children\'s-data rules (such as COPPA) before you publish.', practice: 'qa-p-021' },
+    { id: 'provenance', text: 'Keep the content credentials and watermarks that the generators add (for example C2PA or SynthID). Do not strip them in the edit.', practice: 'qa-p-023' },
+    { id: 'authorship', text: 'Keep this studio\'s approval record: it shows the human choices (what was approved, redrawn or rejected), which supports a claim of authorship over the film.', practice: 'qa-p-024' },
+    { id: 'likeness', text: 'Do not show real people or famous characters unless you have the right to.', practice: 'qa-p-019' },
+  ];
+  if (scenes.some((s) => ((s.data || {}).transcript || []).some((l) => l.text))) items.push({ id: 'voice', text: 'If you add a cloned or synthetic voice, you need the voice owner\'s consent, and the film should say the speech is synthetic.', practice: 'aud-p-025' });
+  return items;
 }

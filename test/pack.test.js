@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sceneEntries, filmEntries, srt, zip, crc32, buildZip, hashOf, similarity, sceneDir, tailHold, smoothness, seedFor, retryAdvice } from '../public/js/pack.js';
+import { sceneEntries, filmEntries, srt, zip, crc32, buildZip, hashOf, similarity, sceneDir, tailHold, smoothness, seedFor, retryAdvice, voicePlan, publishChecklist } from '../public/js/pack.js';
 import { clipPlan, emptyNotes, clipSpans, clipBeats, startOf, linesOfClip, cuesOfClip, composeClip, clipLineCheck } from '../public/js/wizard-model.js';
 
 const film = { name: 'Ines teaser', look: { look: 'Muted film', aspect: '9:16', fps: 24, forbidden: ['electric light'] }, speech: 'German', captions: ['English'], anchors: [{ id: 'ines', name: 'Ines', uri: 'media/p/a.png' }], plates: [{ id: 'scaffold', uri: 'media/p/pl.png' }] };
@@ -142,4 +142,12 @@ test('what the clip review found goes into the next try, and a clean review stop
   const bad = { review: { ok: false, issues: [{ kind: 'count', problem: 'One seed becomes three.', frames: '3 to 5' }], advice: 'There is exactly one seed, always.' } };
   const a = retryAdvice('s', 1, [bad]); assert.equal(a.try_again, true); assert.match(a.last_take_problems[0], /One seed becomes three\. \(frames 3 to 5\)/); assert.match(a.add_to_prompt, /exactly one seed/);
   assert.equal(retryAdvice('s', 1, [{ review: { ok: true, issues: [], advice: '' } }]).try_again, false);
+});
+
+test('a speaker with lines in more than one clip is routed to a separate voice, and the pack tells the person what to check before publishing', () => {
+  const d = { seconds: 12, clips: [{ seconds: 6 }, { seconds: 6 }], transcript: [{ who: 'MIRA', text: 'Hello', sec: 6 }, { who: 'MIRA', text: 'Again', sec: 6 }, { who: 'BO', text: 'Hi', sec: 6 }] };
+  const v = voicePlan(d, { voices: { MIRA: 'warm, quick' } }), mira = v.speakers.find((x) => x.who === 'MIRA'); assert.deepEqual([mira.route, mira.clips, mira.voice], ['separate-voice', [1, 2], 'warm, quick']); assert.equal(v.speakers.find((x) => x.who === 'BO').route, 'native'); assert.match(v.note, /one separate voice/);
+  assert.equal(voicePlan({ seconds: 6, transcript: [] }).note, '');
+  assert.deepEqual(publishChecklist({}, [{ data: d }]).map((i) => i.id), ['disclosure', 'kids', 'provenance', 'authorship', 'likeness', 'voice']); assert.ok(!publishChecklist({}, []).some((i) => i.id === 'voice'));
+  const pack = filmEntries(film, [scene], { target: 'both' }), man = JSON.parse(pack.find((x) => x.path.endsWith('manifest.json')).text); assert.equal(man.publishing[0].id, 'disclosure'); assert.match(pack.find((x) => x.path.endsWith('PUBLISHING.md')).text, /- \[ \] Label the film as AI-generated/);
 });

@@ -197,6 +197,7 @@ test('a video model connects over MCP: list clips, read one, fetch its picture, 
   assert.deepEqual([take.data.seed, take.data.hold, take.data.cuts, take.data.smooth.flag], [42, 2.5, 1, true]);
   const again = (await call('get_clip', { scene: 'the-beam', clip: 1 })).structuredContent;
   assert.deepEqual([again.takes[0].seed, again.takes[0].cuts, again.retry.attempt, again.retry.try_again], [42, 1, 2, true]); assert.match(again.retry.add_to_prompt, /continuous shot/);
+  assert.ok(['low', 'medium', 'high'].includes(again.risk)); assert.ok(Array.isArray(again.voices.speakers)); assert.deepEqual(again.dialogue_load.warnings, []); assert.equal(again.retry.max_attempts, { low: 2, medium: 3, high: 4 }[again.risk]);
 });
 test('a one-off "model was not found" from Meta is tried again, a real failure is not hidden', async () => {
   const { spark } = await import('../src/meta.js'); let n = 0;
@@ -228,4 +229,13 @@ test('a picture that fails once is looked at again, and one bad look does not fa
   const t = await setup(); await W.readStory(t.env, t.db, human, t.id, stand()); const wrong = { ok: false, kind: 'stage', seen: 'A sprout.', problem: 'A sprout is growing.' }, right = { ok: true, seen: 'Flat soil.', problem: '' };
   let prompts = []; let r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines' }, judged([wrong, right], prompts)); assert.deepEqual([r.check.ok, r.check.redrew], [true, false], 'the second look agreed it was fine: no redraw'); assert.equal(prompts.length, 1);
   prompts = []; r = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines', variant: 1 }, judged([wrong, wrong, wrong, wrong, right, right], prompts)); assert.deepEqual([r.check.ok, r.check.redrew], [true, true]); assert.equal(prompts.length, 3, 'two redraws at most');
+});
+test('the clip review answers a checklist and scores, and two takes can be compared', async () => {
+  const { reviewFrames, reviewPair } = await import('../src/takereview.js'); const frames = ['QUJD', 'QUJE', 'QUJF'], list = ['Does the first frame match this: a', 'Is there exactly 1 seed in every frame where it is visible?'];
+  const f = async () => reply(msg({ ok: true, seen: 'x', issues: [], advice: '', scores: { quality: 4, match: 3, physics: 9 }, answers: [{ n: 1, yes: true, note: '' }, { n: 2, yes: false, note: 'three seeds in frame 3' }] }));
+  const r = await reviewFrames({ MODEL_API_KEY: 'k' }, { frames, asked: 'x', checklist: list }, f);
+  assert.equal(r.ok, false, 'a no answer is a fault even when the judge said ok'); assert.equal(r.issues[0].kind, 'count'); assert.match(r.issues[0].problem, /three seeds in frame 3/); assert.deepEqual(r.scores, { quality: 4, match: 3, physics: null }, 'a score out of range is dropped');
+  const p = await reviewPair({ MODEL_API_KEY: 'k' }, { framesA: frames, framesB: frames, asked: 'x' }, async () => reply(msg({ winner: 'B', reason: 'A has a closed bottle.', a_problems: ['closed bottle'], b_problems: [] })));
+  assert.deepEqual([p.winner, p.a_problems], ['B', ['closed bottle']]); assert.equal((await reviewPair({ MODEL_API_KEY: 'k' }, { framesA: ['QUJD'], framesB: frames }, f)).skipped, true);
+  assert.equal((await reviewPair({ MODEL_API_KEY: 'k' }, { framesA: frames, framesB: frames }, async () => reply({}, 400))).winner, 'tie', 'a comparison that cannot run never blocks');
 });

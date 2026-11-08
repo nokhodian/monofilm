@@ -2,10 +2,10 @@
 // Everything the model needs comes in one answer, and every file has an absolute url it can fetch with the same bearer token (or get_media returns a picture inline).
 import { HttpError, bad, parseJson } from './util.js';
 import * as S from './store.js';
-import { retryAdvice } from '../public/js/pack.js';
-import { R, REFS, keyOf, clipPlan, composeClip, startOf, hasEnd, midEnds, forGenerator, GENERATORS } from '../public/js/wizard-model.js';
+import { retryAdvice, voicePlan } from '../public/js/pack.js';
+import { R, REFS, keyOf, clipPlan, composeClip, startOf, hasEnd, midEnds, forGenerator, GENERATORS, clipRisk, attemptBudget, dialogueLoad, clipChecklist } from '../public/js/wizard-model.js';
 import { ensureClips, addTake } from './wizard.js';
-import { reviewFrames } from './takereview.js';
+import { reviewFrames, reviewPair } from './takereview.js';
 
 const MAX_VIDEO = 25 * 1024 * 1024, MAX_INLINE = 4 * 1024 * 1024;
 const str = { type: 'string' }, num = { type: 'number' };
@@ -21,7 +21,7 @@ async function load(c, pid) {
   const by = Object.fromEntries(arts.map((a) => [a.ref, a])), data = (ref) => (by[ref] ? by[ref].data : null);
   const uriOf = (ref, id) => { const x = (assets[ref] || []).find((a) => a.id === id); return x ? x.uri : null; };
   const fmt = (data(REFS.story) || {}).format || {}, look = data(REFS.look) || {};
-  const cast = Object.fromEntries(arts.filter((a) => a.kind === 'canon.cast').map((a) => [a.ref, { name: a.data.name, desc: a.data.desc || '' }])), film = { look, speech: fmt.speech || '', captions: fmt.captions || [], cast };
+  const cast = Object.fromEntries(arts.filter((a) => a.kind === 'canon.cast').map((a) => [a.ref, { name: a.data.name, desc: a.data.desc || '' }])), voices = Object.fromEntries(arts.filter((a) => a.kind === 'canon.voice').map((a) => [String(a.data.name || '').toUpperCase(), a.data.desc || ''])), film = { look, speech: fmt.speech || '', captions: fmt.captions || [], cast, voices };
   return { arts, assets, by, data, uriOf, film };
 }
 const sceneList = (L, only) => L.arts.filter((a) => a.kind === 'scene' && (!only || keyOf(a.ref) === only)).sort((a, b) => (a.data.n || 0) - (b.data.n || 0));
@@ -49,7 +49,8 @@ function clipSpec(c, pid, L, sc, n) {
     stage_controls: stage.map((a) => ({ role: a.provenance.role, ...pic(c, pid, a.uri) })),
     takes: takes.map((t) => ({ ref: t.ref, status: t.status, picked: !!t.data.picked, ...(t.data.seed != null ? { seed: t.data.seed } : {}), ...(t.data.cuts ? { cuts: t.data.cuts } : {}), ...(t.data.hold ? { stands_still_at_end_seconds: t.data.hold } : {}), ...(t.data.smooth && t.data.smooth.flag ? { jumps_at_seconds: t.data.smooth.at } : {}) })),
     assembly: { trim_start_frames: n > 1 && cl.join !== 'cut' ? 2 : 0, cut_on_motion: true, note: 'The first frames of a continued clip are often smeared: start the edit at frame 3, and cut while something is still moving, not on a still frame.' },
-    retry: retryAdvice(id, n, takes.filter((t) => !(t.updated < sc.updated)).map((t) => t.data)), // takes made before the scene was last changed belong to an older plan and do not count against the tries
+    risk: clipRisk(d, n), voices: voicePlan(d, L.film), dialogue_load: dialogueLoad(d, n),
+    retry: retryAdvice(id, n, takes.filter((t) => !(t.updated < sc.updated)).map((t) => t.data), attemptBudget(clipRisk(d, n))), // takes made before the scene was last changed belong to an older plan and do not count against the tries
     next: 'Make this clip with retry.seed, then measure it (npm run measure -- <file>) and call submit_take with the video, the seed and the measures. If retry.try_again is true, add retry.add_to_prompt to the prompt and make it again with the new seed.',
   };
 }
@@ -91,7 +92,12 @@ export const VIDEO_TOOLS = [
     const L = await load(c, a.production), sc = sceneList(L, a.scene)[0]; if (!sc) throw new HttpError(404, `no scene ${a.scene}`);
     const n = Math.round(Number(a.clip) || 1), spec = clipSpec(c, a.production, L, sc, n);
     const pics = []; for (const [what, x] of [['start', spec.start_picture], ['end', spec.end_picture]]) if (x && x.uri) pics.push({ what, uri: x.uri });
-    return reviewFrames(c.env, { frames: a.frames, asked: spec.prompt, pictures: pics });
+    return reviewFrames(c.env, { frames: a.frames, asked: spec.prompt, pictures: pics, checklist: clipChecklist(sc.data, n) });
+  }),
+  T('compare_takes', 'Which of two takes of the same clip is better? Send 6 to 8 small jpeg frames (base64, in time order) of each. A judge agrees with people most when it compares two takes, so use this to pick between takes instead of scoring each. It answers {winner: A, B or tie, reason, a_problems, b_problems}.', { ...prod, scene: str, clip: { ...num, description: 'clip number, from 1' }, frames_a: { type: 'array', items: str }, frames_b: { type: 'array', items: str } }, ['production', 'scene', 'clip', 'frames_a', 'frames_b'], async (c, a) => {
+    const L = await load(c, a.production), sc = sceneList(L, a.scene)[0]; if (!sc) throw new HttpError(404, `no scene ${a.scene}`);
+    const spec = clipSpec(c, a.production, L, sc, Math.round(Number(a.clip) || 1)), pics = []; for (const [what, x] of [['start', spec.start_picture], ['end', spec.end_picture]]) if (x && x.uri) pics.push({ what, uri: x.uri });
+    return reviewPair(c.env, { framesA: a.frames_a, framesB: a.frames_b, asked: spec.prompt, pictures: pics });
   }),
   T('list_generators', 'The video models the studio knows, with what each can take and its quirks. Pass the id as generator to get_clip so the words fit your model.', {}, [], async () => ({ generators: Object.entries(GENERATORS).map(([id, g]) => ({ id, ...g })) })),
   T('get_media', 'Read a picture of this production (a media/ uri from get_clip) and get it back inline so you can look at it. Pictures up to 4 MB. For video use the url with your bearer token.', { ...prod, uri: str }, ['production', 'uri'], async (c, a) => {

@@ -149,8 +149,8 @@ export const GENERATORS = {
   'kling-2.5': { name: 'Kling 2.5', negative_mode: 'field', max_chars: null, ideal_words: [50, 100], max_refs: 4, end_picture: true, native_audio: false, max_seconds: 10, rewrites_prompt: false, notes: 'One hero subject and one action; name the camera move exactly. Over-describing a character\'s appearance makes identity drift. End image does not combine with multi-prompt. [pm-008, pm-028, scn]' },
   'runway-gen-4.5': { name: 'Runway Gen-4.5', negative_mode: 'none', max_chars: 1000, max_refs: null, end_picture: false, native_audio: false, max_seconds: 10, rewrites_prompt: false, notes: 'Image-to-video: describe only the change, subject motion and camera separately, and say what stays still. Negation can backfire: use positive wording. A fixed seed is similar, not identical. [cin-002, cin-005, pm-029]' },
   'wan-2.2': { name: 'Wan 2.2 (open weights)', negative_mode: 'field', max_chars: null, ideal_words: [80, 120], max_refs: 1, end_picture: true, native_audio: false, max_seconds: 5, rewrites_prompt: false, notes: 'Subject, scene, movement, then style; overloaded or conflicting prompts hurt. Last-frame conditioning on the hosted version. [pm-004, pm-024]' },
-  'ltx-video': { name: 'LTX Video / LTX-2', negative_mode: 'none', max_chars: null, ideal_words: [60, 200], max_refs: null, end_picture: true, native_audio: false, max_seconds: 10, rewrites_prompt: false, notes: 'One flowing paragraph in the present tense; say the camera, the speed and the lens; flicker and exposure shifts are known weaknesses; emotion labels do not work. Negative support was not confirmed in the sources. [pm-005, pm-026]' },
-  'minimax-hailuo': { name: 'MiniMax Hailuo (cloud 2.x)', negative_mode: 'none', max_chars: 2000, max_refs: 1, end_picture: true, native_audio: false, max_seconds: 10, rewrites_prompt: true, notes: 'Camera first, then subject, one action, setting and light. Its prompt optimiser is on by default; turn it off for exact prompts. Stacked emotions and stunts fail. [pm-011, pm-012]' },
+  'ltx-video': { name: 'LTX Video / LTX-2', grid: 'sizes divisible by 32, frame counts of 8k+1', negative_mode: 'none', max_chars: null, ideal_words: [60, 200], max_refs: null, end_picture: true, native_audio: false, max_seconds: 10, rewrites_prompt: false, notes: 'One flowing paragraph in the present tense; say the camera, the speed and the lens; flicker and exposure shifts are known weaknesses; emotion labels do not work. Negative support was not confirmed in the sources. [pm-005, pm-026]' },
+  'minimax-hailuo': { name: 'MiniMax Hailuo (cloud 2.x)', camera_style: 'bracket', negative_mode: 'none', max_chars: 2000, max_refs: 1, end_picture: true, native_audio: false, max_seconds: 10, rewrites_prompt: true, notes: 'Camera first, then subject, one action, setting and light. Its prompt optimiser is on by default; turn it off for exact prompts. Stacked emotions and stunts fail. [pm-011, pm-012]' },
   generic: { name: 'Any generator', negative_mode: 'field', max_chars: null, max_refs: null, end_picture: true, native_audio: true, max_seconds: 8, rewrites_prompt: false, notes: '' },
 };
 // The lines of a prompt that go first when it is too long, least important first.
@@ -165,8 +165,12 @@ export function compactPrompt(prompt, max) {
 const nouns = (s) => String(s || '').split(/[.;,]/).map((x) => x.trim().replace(/^(no|not|never)\s+/i, '')).filter(Boolean).join(', ');
 export function forGenerator(clip, id) {
   const k = Object.hasOwn(GENERATORS, id) ? id : 'generic', g = GENERATORS[k], mode = g.negative_mode, neg = clip.negative || '';
-  const base = mode === 'prompt' && neg ? `${clip.prompt}\nDo not show: ${neg}.` : clip.prompt, fitted = compactPrompt(base, g.max_chars);
-  return { ...clip, generator: { id: k, ...g }, prompt: fitted.prompt, compacted: fitted.compacted, negative: mode === 'field' ? nouns(neg) : '' };
+  let text = mode === 'prompt' && neg ? `${clip.prompt}\nDo not show: ${neg}.` : clip.prompt;
+  if (g.camera_style === 'bracket') text = text.replace(/^Camera: (.*?), one continuous shot$/m, (m, c) => { const cmd = cameraCommand(c); return cmd ? `Camera: [${cmd}]` : m; });
+  const fitted = compactPrompt(text, g.max_chars), hints = [];
+  if (g.rewrites_prompt) hints.push('This generator rewrites prompts. Turn its prompt optimiser off when you need the exact words.');
+  if (g.grid) hints.push(`Size and length must fit its grid: ${g.grid}.`);
+  return { ...clip, generator: { id: k, ...g }, prompt: fitted.prompt, compacted: fitted.compacted, hints, negative: mode === 'field' ? nouns(neg) : '' };
 }
 // The words a generator receives for one clip, built only from approved film canon and this scene's brief. Pure, so the page, the pack and the Worker agree.
 // film = { look, speech, cast: { '<canon.cast ref>': { name, desc } } }
@@ -175,10 +179,10 @@ export function composeClip(scene, film, clipIndex = 1) {
   const look = film.look || {}, never = [...new Set([...(String(n.never || '').split(/[.;\n]/).map((s) => s.trim()).filter(Boolean)), ...(Array.isArray(look.forbidden) ? look.forbidden : String(look.forbidden || '').split(',').map((s) => s.trim()).filter(Boolean)).map((t) => `no ${t}`)])];
   const lines = linesOfClip(d, k), beats = clipBeats(d), endPic = k === spans.length ? hasEnd(d) : midEnds(d), policy = audioPolicy(d, k), cast = film.cast || {};
   const who = (d.who || []).map((r) => cast[r]).filter((p) => p && p.desc);
-  const parts = [beats[k - 1] || (spans.length > 1 ? 'Carry on calmly from the clip before.' : n.happens), movesOf(d)[k - 1] && `How it moves: ${movesOf(d)[k - 1]}`, k > 1 && beats[k - 2] ? `The clip before ended on: ${beats[k - 2]} Do not repeat it.` : '', n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${oneMove(n.cam)}, one continuous shot`, n.sound && `Sound: ${n.sound}`,
+  const parts = [beats[k - 1] || (spans.length > 1 ? 'Carry on calmly from the clip before.' : n.happens), movesOf(d)[k - 1] && `How it moves: ${movesOf(d)[k - 1]}`, k > 1 && beats[k - 2] ? `The clip before ended on: ${beats[k - 2]} Do not repeat it.` : '', n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${normalizeCamera(n.cam)}, one continuous shot`, n.sound && `Sound: ${n.sound}`,
     PHYSICS,
     who.length ? (film.pictures ? `Characters: ${who.map((p) => p.name).join(' and ')} look exactly as in the start picture, with the same clothes, colours and shapes in every frame.` : `Characters (keep each one exactly as in its reference picture): ${who.map((p) => `${p.name}: ${p.desc}`).join(' ')}`) : '', // with a start picture the words never describe a character again: a word that disagrees with the picture makes the generator flip between the two
-    isHandmade(look) ? 'Motion feel: stepped, like stop-motion animation shot at about 12 frames per second, with small handmade imperfections.' : '',
+    isHandmade(look) ? 'Motion feel: stepped, like stop-motion animation shot at about 12 frames per second, with small handmade imperfections.' : isDrawn(look) ? 'Motion feel: soft squash and stretch, gentle exaggeration, smooth arcs.' : '',
     `Look: ${look.look || look.base || 'as in the film'}. ${look.aspect || '9:16'}, ${look.fps || 24} fps, ${c.seconds} seconds. The medium, colours, exposure and time of day stay exactly the same for the whole clip. No scene change, no cuts, no text on screen.`];
   if (lines.length) parts.push(`Dialogue: ${lines.map((l) => `${l.who || 'NARRATOR'} says${film.speech ? `, in ${film.speech},` : ''} "${l.text}"${l.en && String(l.en).trim().toLowerCase() !== String(l.text).trim().toLowerCase() ? ` (${l.en})` : ''}`).join(' ')}`);
   if (k > 1) parts.push(c.join === 'cut' ? 'This clip is a cut to a new view. It has its own start picture.' : endPic ? 'It begins from the end picture of the clip before.' : 'Continue from the last picture of the previous clip.');
@@ -208,3 +212,42 @@ export const mediumOf = (look) => (isDrawn(look) ? 'illustration' : 'photograph'
 const STRONG = /\b(man|woman|boy|girl|person|human|lady|gentleman|grandfather|grandmother|mother|father|teenager|\d+[- ]year[- ]old)\b/i, BEAST = /\b(penguin|bear|seal|cub|cat|kitten|dog|puppy|bird|animal|creature|robot|dragon|fox|rabbit|bunny|elephant|horse|pony|monkey|owl|mouse|duck|duckling|fish|lion|tiger|monster|alien|toy|doll|frog|toad|tortoise|turtle|hedgehog|pig|piglet|cow|calf|sheep|lamb|goat|deer|fawn|snake|lizard|bee|butterfly|ladybug|squirrel|panda|koala|kangaroo|giraffe|zebra|hippo|whale|dolphin|octopus|crab|chick|chicken|hen|bat|hamster|otter|beaver|wolf|raccoon|mole|snail|caterpillar|dinosaur|unicorn|ghost|puppet)s?\b/i;
 // 'person' unless the description names an animal or creature before it names a human.
 export function beingOf(desc) { const t = String(desc || ''), a = t.search(BEAST), p = t.search(STRONG); return a >= 0 && (p < 0 || a < p) ? 'creature' : 'person'; }
+
+// ---- camera words (cin-p-004, cin-p-005, pm-p-013) ----
+const SPEED = /\b(slow|slowly|steady|steadily|gentle|gently|fast|quick|quickly|rapid|swift|smooth|smoothly|gradual|gradually)\b/i;
+// A move always gets a speed word, and a still camera is said in positive words.
+export function normalizeCamera(cam) {
+  const c = oneMove(cam); if (!c) return '';
+  if (/\b(static|still|locked|fixed|no movement)\b/i.test(c)) return /\bholds?\b/i.test(c) ? c : `${c}, the camera holds still`;
+  return SPEED.test(c) ? c : `${c}, slowly`;
+}
+// Hailuo takes bracketed camera commands; one is a move, several in one bracket would be simultaneous.
+const CAMERA_COMMANDS = [[/pan left/i, 'Pan left'], [/pan right/i, 'Pan right'], [/tilt up/i, 'Tilt up'], [/tilt down/i, 'Tilt down'], [/truck left|track(?:ing)? left|slide left/i, 'Truck left'], [/truck right|track(?:ing)? right|slide right/i, 'Truck right'], [/pedestal up|crane up|rising|\brise\b/i, 'Pedestal up'], [/pedestal down|crane down|descend/i, 'Pedestal down'], [/zoom in/i, 'Zoom in'], [/zoom out/i, 'Zoom out'], [/pull|dolly out|back(?:ward)?/i, 'Pull out'], [/push|dolly in|move in|closer/i, 'Push in'], [/shake|handheld/i, 'Shake'], [/follow|tracking|orbit|arc|around/i, 'Tracking shot'], [/static|still|hold/i, 'Static shot']];
+export const cameraCommand = (cam) => { const hit = CAMERA_COMMANDS.find(([re]) => re.test(String(cam || ''))); return hit ? hit[1] : ''; };
+
+// ---- how risky a clip is, and so how many tries it deserves (wf-p-006) ----
+const RISKY = /\b(hand|hands|paw|paws|pour|pours|water|liquid|pick|picks|throw|throws|catch|catches|dig|digs|walk|walks|run|runs|jump|jumps|dance|dances|fight|crowd|fire|smoke|bubble|bubbles|cloth|rain)\b/gi;
+export function clipRisk(d, k) {
+  const text = [clipBeats(d)[k - 1], movesOf(d)[k - 1], (clipStates(d) || [])[k]].join(' '); let score = linesOfClip(d, k).length ? 2 : 0;
+  score += (d.who || []).length >= 2 ? 1 : 0; score += Math.min(3, new Set((text.match(RISKY) || []).map((x) => x.toLowerCase())).size);
+  return score >= 4 ? 'high' : score >= 2 ? 'medium' : 'low';
+}
+export const attemptBudget = (risk) => ({ low: 2, medium: 3, high: 4 })[risk] || 3;
+
+// ---- speech that fits the clip (aud-p-002, aud-p-012) ----
+export function dialogueLoad(d, k) {
+  const lines = linesOfClip(d, k), words = lines.reduce((a, l) => a + String(l.text).trim().split(/\s+/).filter(Boolean).length, 0), speakers = [...new Set(lines.map((l) => l.who || 'NARRATOR'))], seconds = (clipSpans(d)[k - 1] || {}).seconds || 0, warnings = [];
+  if (seconds && words > Math.ceil(seconds * 2.5)) warnings.push(`${words} words in ${seconds} s is too fast to speak; cut it to about ${Math.floor(seconds * 2.5)} words`);
+  if (speakers.length > 2) warnings.push(`${speakers.length} speakers in one clip; generators handle two at most`);
+  return { words, speakers, warnings };
+}
+
+// ---- the yes/no questions a reviewer answers about a finished clip (qa-p-001) ----
+export function clipChecklist(d, k) {
+  const st = clipStates(d), q = [], mv = movesOf(d)[k - 1];
+  if (st) q.push(`Does the first frame match this: ${st[k - 1]}`, `Does the last frame match this: ${st[k]}`);
+  for (const p of propsInClip(d, k)) if (p.count) q.push(`Is there exactly ${p.count} ${p.name} in every frame where it is visible?`);
+  q.push('Do the place, the background and the framing stay the same in every frame?', 'Does every character look the same in every frame (same clothes, colours, shape)?', 'Does anything appear, vanish, multiply or change size without being asked for?');
+  if (mv) q.push(`Does the clip show this, in this order: ${mv}`);
+  return q;
+}

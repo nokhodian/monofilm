@@ -36,7 +36,7 @@ test('a clip gets one camera move, an English line has no repeated gloss, and a 
   assert.equal(oneMove('slow push-in'), 'slow push-in'); assert.equal(oneMove(''), '');
   const sc = { data: { seconds: 6, notes: { happens: 'A speaks.', cam: 'static wide, then cut to a close-up', never: 'no crowds' }, transcript: [{ who: 'A', text: 'Hello there.', en: 'Hello there.', sec: 2 }, { who: 'A', text: 'Hallo.', en: 'Hello.', sec: 2 }] } };
   const p = composeClip(sc, { speech: 'German' }, 1).prompt;
-  assert.match(p, /Camera: static wide, one continuous shot/); assert.doesNotMatch(p, /close-up/); assert.match(p, /"Hello there\."(?! \()/); assert.match(p, /"Hallo\." \(Hello\.\)/);
+  assert.match(p, /Camera: static wide, the camera holds still, one continuous shot/); assert.doesNotMatch(p, /close-up/); assert.match(p, /"Hello there\."(?! \()/); assert.match(p, /"Hallo\." \(Hello\.\)/);
   const g = forGenerator(composeClip(sc, {}, 1), 'minimax-h3'); assert.match(g.prompt, /Do not show: no crowds/); assert.equal(g.negative, ''); assert.equal(g.generator.id, 'minimax-h3');
   assert.equal(forGenerator(composeClip(sc, {}, 1), 'nope').generator.id, 'generic'); assert.equal(forGenerator(composeClip(sc, {}, 1), 'constructor').generator.id, 'generic');
 });
@@ -113,7 +113,7 @@ test('with a start picture the words do not describe the characters again', () =
 import { compactPrompt, isHandmade, GENERATORS } from '../public/js/wizard-model.js';
 test('the words are fitted to the generator: negatives by its mode, length by its limit, and a handmade look moves in steps', () => {
   const sc = { data: { seconds: 6, notes: { happens: 'A fox looks up.', cam: 'slow push-in', mood: 'calm', sound: 'wind', never: 'no crowds. no cars' }, who: ['canon.cast:fox'], moves: ['The fox lifts its head slowly.'] } }, film = { cast: { 'canon.cast:fox': { name: 'Fox', desc: 'A small red fox.' } }, look: { look: 'felt stop-motion, soft light' } }, clip = composeClip(sc, film, 1);
-  assert.match(clip.prompt, /Motion feel: stepped, like stop-motion/); assert.doesNotMatch(composeClip(sc, { ...film, look: { look: 'soft 3D cartoon' } }, 1).prompt, /Motion feel/);
+  assert.match(clip.prompt, /Motion feel: stepped, like stop-motion/); assert.match(composeClip(sc, { ...film, look: { look: 'soft 3D cartoon' } }, 1).prompt, /Motion feel: soft squash and stretch/); assert.doesNotMatch(composeClip(sc, { ...film, look: { look: 'muted film grain' } }, 1).prompt, /Motion feel/);
   assert.equal(isHandmade({ look: 'Smooth round shapes', options: [{ id: 'a', name: 'Clay Play' }], chosen: 'a' }), true); assert.equal(mediumOf({ look: 'needle felt puppets' }), 'illustration'); assert.equal(mediumOf({ look: 'paper cut-out collage' }), 'illustration'); assert.equal(mediumOf({ look: 'muted film grain' }), 'photograph');
   assert.match(forGenerator(clip, 'minimax-h3').prompt, /Do not show: no crowds/); assert.equal(forGenerator(clip, 'minimax-h3').negative, '');
   assert.equal(forGenerator(clip, 'veo-3.1').negative, 'crowds, cars', 'a negative field takes nouns'); assert.doesNotMatch(forGenerator(clip, 'veo-3.1').prompt, /Do not show/);
@@ -125,4 +125,24 @@ test('a prompt over the limit loses its least important lines first and keeps th
   const r = compactPrompt(p, 200); assert.equal(r.compacted, true); assert.ok(r.prompt.length <= 200); assert.match(r.prompt, /^The fox looks up\.\nHow it moves/); assert.doesNotMatch(r.prompt, /Physics|Characters/);
   assert.deepEqual(compactPrompt('short', 200), { prompt: 'short', compacted: false });
   const hard = compactPrompt('A. ' + 'word '.repeat(100), 120); assert.ok(hard.prompt.length <= 120);
+});
+
+import { normalizeCamera, cameraCommand, clipRisk, attemptBudget, dialogueLoad, clipChecklist } from '../public/js/wizard-model.js';
+test('a camera move always gets a speed word, a still camera is said positively, and Hailuo gets a bracketed command', () => {
+  assert.equal(normalizeCamera('push-in'), 'push-in, slowly'); assert.equal(normalizeCamera('slow push-in'), 'slow push-in'); assert.equal(normalizeCamera('static wide'), 'static wide, the camera holds still'); assert.equal(normalizeCamera(''), '');
+  assert.equal(cameraCommand('slow push-in'), 'Push in'); assert.equal(cameraCommand('pan left'), 'Pan left'); assert.equal(cameraCommand('gentle arc around'), 'Tracking shot'); assert.equal(cameraCommand('static wide'), 'Static shot');
+  const clip = composeClip({ data: { seconds: 6, notes: { happens: 'x', cam: 'slow push-in' } } }, {}, 1);
+  assert.match(forGenerator(clip, 'minimax-hailuo').prompt, /^Camera: \[Push in\]$/m); assert.match(forGenerator(clip, 'veo-3.1').prompt, /Camera: slow push-in, one continuous shot/);
+  assert.ok(forGenerator(clip, 'minimax-hailuo').hints.some((h) => /optimiser/.test(h))); assert.ok(forGenerator(clip, 'ltx-video').hints.some((h) => /divisible by 32/.test(h)));
+});
+test('a risky clip gets more tries than a quiet one, and speech that is too long or has too many speakers is warned about', () => {
+  const quiet = { seconds: 6, notes: { happens: 'A fox looks at the sky.' }, who: ['canon.cast:a'], moves: ['The fox lifts its head.'] }, risky = { seconds: 6, notes: { happens: 'x' }, who: ['canon.cast:a', 'canon.cast:b'], moves: ['Bo pours water from the can while Mimi digs with her paws and jumps.'], transcript: [{ who: 'A', text: 'Hello', sec: 2 }] };
+  assert.equal(clipRisk(quiet, 1), 'low'); assert.equal(clipRisk(risky, 1), 'high'); assert.deepEqual([2, 3, 4], [attemptBudget('low'), attemptBudget('medium'), attemptBudget('high')]);
+  const talk = { seconds: 4, transcript: [{ who: 'A', text: 'one two three four five six seven eight nine ten eleven twelve', sec: 4 }, { who: 'B', text: 'x', sec: 0.1 }, { who: 'C', text: 'y', sec: 0.1 }] };
+  const l = dialogueLoad(talk, 1); assert.equal(l.words >= 12, true); assert.equal(l.warnings.length, 2); assert.deepEqual(dialogueLoad({ seconds: 6, transcript: [{ who: 'A', text: 'Hi there', sec: 2 }] }, 1).warnings, []);
+});
+test('the reviewer gets atomic yes/no questions built from the states, the counts and the moves', () => {
+  const d = { seconds: 12, clips: [{ seconds: 6 }, { seconds: 6 }], notes: { happens: 'x' }, states: ['A seed lies in a hollow.', 'The hollow is half filled.', 'Flat soil.'], props: [{ name: 'seed', look: 'a pea-sized seed', count: 1 }], moves: ['She pushes soil in.', 'She pats it flat.'] };
+  const q = clipChecklist(d, 1); assert.match(q[0], /first frame match this: A seed lies in a hollow/); assert.match(q[1], /last frame match this: The hollow is half filled/); assert.ok(q.some((x) => /exactly 1 seed/.test(x))); assert.ok(q.some((x) => /same in every frame/.test(x))); assert.match(q[q.length - 1], /She pushes soil in/);
+  assert.ok(!clipChecklist({ seconds: 6, notes: {} }, 1).some((x) => /first frame match/.test(x)), 'no states, no state questions');
 });
