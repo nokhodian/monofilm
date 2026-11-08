@@ -72,6 +72,16 @@ Muse Image makes three candidates for the start and the end of each scene. SAM 3
 
 Meta has no video model, so Monofilm does not pretend to make video. Each scene leaves as a **pack**: the prompt and what must not appear, the start and end pictures, the stage controls (layout, depth, object ids, pose, camera path), the transcript and subtitles, and a manifest, trimmed to what your generator accepts. Make the clip anywhere, **bring it back**, and the studio checks its first and last frame against your start and end pictures.
 
+### What keeps a film from drifting
+
+Generators fail in the same few ways: a plant appears before its seed, one seed becomes three, a bottle is blown through while closed, the place reshapes, a character changes clothes. Monofilm plans against these before any picture is made and checks after.
+
+- **States, not actions.** Each scene is written as a list of frozen pictures (how it looks at each clip boundary), with a fixed look and an exact count for every tracked thing, and one real-physics "how it moves" line per clip. The last state of a scene is the first of the next.
+- **A continuity review** reads every scene in order and corrects skipped growth stages, changed sizes, actions whose precondition is missing (the cap comes off before the bubble), and a character who is not there in the first state.
+- **Every picture is looked at** by Muse Spark, against the description and the character's reference picture (kind of being, medium, clothes, stage). A wrong picture is redrawn up to twice with the correction; Roll camera stops only on a wrong being, medium, character or stage.
+- **End pictures are drawn from the picture before them,** so the place cannot jump. A clip's words never describe a character again once it has a start picture, so words and pictures cannot disagree.
+- **A finished clip is reviewed too.** `review_take` takes a few frames and returns what is physically wrong and what to add to the prompt; `get_clip` then gives the next seed and that advice, up to three tries. `npm run measure -- clip.mp4` finds cuts, jumps and a frozen tail. `list_generators` and the `generator` option on `get_clip` adapt the words to a model's known weaknesses.
+
 <table>
 <tr>
 <td><img src="public/shots/people.png" alt="People: three faces to choose from for each person"></td>
@@ -110,7 +120,7 @@ flowchart LR
 - **An MCP server** at `/mcp`, so any AI agent can read the human's feedback (`next_work`, `get_feedback`), revise, and answer. The wizard and the agent work on the same artifacts.
 - **Connecting a video generation model.** Make an AI actor (`POST /api/actors` with `{"name":"videobot","kind":"ai","role":"agent"}`; the token is shown once), then point any MCP client at `https://<your-worker>/mcp` with `Authorization: Bearer <token>`. The model calls `list_clips`, then `get_clip` (prompt, negative prompt, length, shape, start and end pictures, references, stage controls, each with a url it can fetch with the same token; `get_media` returns a picture inline), makes the clip, and calls `submit_take` with a `url`, `data_base64` or `uri` (25 MB max). The take waits for the human on the Pack page; the model can never approve its own work. The studio is also served at `https://monofilm.monoes.me`, where scripts with a default User-Agent (such as Python's `urllib`) reach `/mcp`, `/api` and picture links. On the `workers.dev` address Cloudflare answers those with `403` and `error code: 1010` before the request reaches the Worker; send any User-Agent of your own there, for example `monofilm-agent/1`.
 - **Accounts.** Email and password (salted PBKDF2), sessions in HttpOnly cookies, a header check on every change and guess limits. A new sign-up waits until the person who runs the studio approves it on the Accounts page, and is emailed when it is (an invite code skips the wait). Each account sees only its own productions and has one allowance of credits for all of them, which only the studio owner can raise.
-- **83 tests** (`npm test`, no network and no key needed): the state machine, accounts, the wizard actions with Meta stood in, the export pack (including a real `unzip -t`), and the stage maths.
+- **104 tests** (`npm test`, no network and no key needed): the state machine, accounts, the wizard actions with Meta stood in, the export pack (including a real `unzip -t`), and the stage maths.
 
 ## Run it
 
