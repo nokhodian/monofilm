@@ -7,7 +7,9 @@
     "dev": "wrangler dev --port 8787",
     "db:local": "wrangler d1 execute artistic-intelligence-studio --local --file=schema.sql",
     "seed": "node scripts/seed.mjs",
-    "measure": "node scripts/measure-take.mjs"
+    "measure": "node scripts/measure-take.mjs",
+    "kb:check": "node scripts/kb-check.mjs",
+    "kb:build": "node scripts/kb-check.mjs --build"
   },
   "devDependencies": { "wrangler": "^4" }
 }
