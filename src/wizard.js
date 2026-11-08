@@ -218,9 +218,11 @@ async function paint(env, db, actor, pid, ref, input, f) {
   if (!metaConfigured(env)) throw new HttpError(503, 'MODEL_API_KEY is not set, so Muse Image is off.');
   await ensureMuse(db);
   try { return await callTool(db, env, actor, pid, { tool: 'muse-image', ref, input }, f); }
-  catch (e) { // Meta's content filter sometimes refuses an innocent prompt; the same picture without the "never show" clause goes through
-    if (!/content management policy|filtered/i.test(String(e.message)) || !/Never show:/.test(String(input.prompt))) throw e;
-    return callTool(db, env, actor, pid, { tool: 'muse-image', ref, input: { ...input, prompt: String(input.prompt).replace(/\s*Never show: [^.]*\.?/, '') } }, f);
+  catch (e) { // Meta's content filter sometimes refuses an innocent prompt. Try again without the "never show" clause, then with every sentence cut at its first comma.
+    if (!/content management policy|filtered/i.test(String(e.message))) throw e;
+    const plain = String(input.prompt).replace(/\s*Never show: [^.]*\.?/, '');
+    try { return await callTool(db, env, actor, pid, { tool: 'muse-image', ref, input: { ...input, prompt: plain } }, f); }
+    catch (e2) { if (!/content management policy|filtered/i.test(String(e2.message))) throw e2; return callTool(db, env, actor, pid, { tool: 'muse-image', ref, input: { ...input, prompt: plain.split(/(?<=\.)\s+/).map((s) => s.split(', ')[0].replace(/\.?$/, '.')).join(' ') } }, f); }
   }
 }
 // Several pictures for one item are made at once; each reads the item, adds its own and writes the next version. A clash is retried on fresh data, never lost.
