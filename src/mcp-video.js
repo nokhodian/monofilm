@@ -48,7 +48,7 @@ function clipSpec(c, pid, L, sc, n) {
     references: (d.who || []).map((w) => { const cast = L.data(w) || {}, uri = cast.anchor ? L.uriOf(w, cast.anchor) : null; return uri ? { id: keyOf(w), name: cast.name || keyOf(w), ...pic(c, pid, uri) } : null; }).filter(Boolean),
     stage_controls: stage.map((a) => ({ role: a.provenance.role, ...pic(c, pid, a.uri) })),
     takes: takes.map((t) => ({ ref: t.ref, status: t.status, picked: !!t.data.picked, ...(t.data.seed != null ? { seed: t.data.seed } : {}), ...(t.data.cuts ? { cuts: t.data.cuts } : {}), ...(t.data.hold ? { stands_still_at_end_seconds: t.data.hold } : {}), ...(t.data.smooth && t.data.smooth.flag ? { jumps_at_seconds: t.data.smooth.at } : {}) })),
-    retry: retryAdvice(id, n, takes.map((t) => t.data)),
+    retry: retryAdvice(id, n, takes.filter((t) => !(t.updated < sc.updated)).map((t) => t.data)), // takes made before the scene was last changed belong to an older plan and do not count against the tries
     next: 'Make this clip with retry.seed, then measure it (npm run measure -- <file>) and call submit_take with the video, the seed and the measures. If retry.try_again is true, add retry.add_to_prompt to the prompt and make it again with the new seed.',
   };
 }
