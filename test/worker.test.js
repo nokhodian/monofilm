@@ -86,3 +86,18 @@ test('mcp: a client that cannot sign in is told how; the browser preflight needs
   const no = await worker.fetch(new Request('https://x.test/mcp', { method: 'POST', body: '{}' }));
   assert.equal(no.status, 401); assert.match(no.headers.get('www-authenticate'), /Bearer/); assert.equal((await no.json()).error.code, -32001);
 });
+
+test('a production can be removed for good, only by the person who runs the studio, only with its exact name, and nothing else is touched', async () => {
+  const R2 = { m: new Map([['gone/a.png', 1], ['gone/b.png', 1], ['keep/c.png', 1]]), list: async ({ prefix }) => ({ objects: [...R2.m.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })), truncated: false }), delete: async (keys) => { for (const k of [].concat(keys)) R2.m.delete(k); } };
+  env.MEDIA = R2;
+  const mk = async (name) => (await call('/api/p', { method: 'POST', body: { name, format: 'movie', budget: 10 } })).body.id;
+  const gone = await mk('Test to remove'), keep = await mk('Real film'); R2.m.clear(); R2.m.set(`${gone}/a.png`, 1); R2.m.set(`${gone}/b.png`, 1); R2.m.set(`${keep}/c.png`, 1);
+  for (const id of [gone, keep]) await call(`/api/p/${id}/propose`, { method: 'POST', body: { ref: 'logline:main', data: { text: 'x' }, auto_approve: true, rationale: 'x' } });
+  assert.equal((await call(`/api/p/${gone}`, { method: 'DELETE', body: { name: 'wrong' } })).status, 400, 'the exact name is required');
+  assert.equal((await call(`/api/p/${gone}`, { token: env.ai, method: 'DELETE', body: { name: 'Test to remove' } })).status, 403, 'an agent cannot');
+  assert.equal((await call(`/api/p/${gone}`, { token: env.ann, method: 'DELETE', body: { name: 'Test to remove' } })).status, 403, 'an approver cannot');
+  const r = await call(`/api/p/${gone}`, { method: 'DELETE', body: { name: 'Test to remove' } }); assert.equal(r.status, 200); assert.deepEqual([r.body.name, r.body.removed.artifacts, r.body.files], ['Test to remove', 1, 2]);
+  assert.equal((await call(`/api/p/${gone}`)).status, 404); assert.equal((await call(`/api/p/${keep}`)).status, 200); assert.deepEqual([...R2.m.keys()], [`${keep}/c.png`]);
+  assert.equal((await call('/api/p')).body.some((p) => p.id === gone), false); assert.equal((await call(`/api/p/${keep}/artifacts`)).body.length, 1);
+  delete env.MEDIA;
+});

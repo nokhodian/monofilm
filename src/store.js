@@ -321,6 +321,19 @@ export async function backup(db, pid) {
   return { schema: 'monofilm/backup@1', saved: new Date().toISOString(), production, artifacts: arts, versions: vers, deps, assets, comments, events, ledger, note: 'Media files are in R2 under media/<production>/ and are not included here.' };
 }
 
+// ---- remove a production for good: its rows in every table. The caller removes the media files. ----
+const OWN_TABLES = ['artifact_versions', 'artifacts', 'deps', 'events', 'assets', 'ledger', 'comments', 'autopilot'];
+export async function removeProduction(db, actor, pid, name) {
+  needHuman(actor, 'manage');
+  const prod = await getProduction(db, pid);
+  if (!prod) throw new HttpError(404, 'no such production');
+  if (String(name || '').trim() !== prod.name) throw bad('to remove a production, send its exact name in "name"');
+  const counts = {};
+  for (const t of OWN_TABLES) counts[t] = (await p(db, `SELECT COUNT(*) n FROM ${t} WHERE production=?`, pid).first()).n;
+  await db.batch([...OWN_TABLES.map((t) => p(db, `DELETE FROM ${t} WHERE production=?`, pid)), p(db, 'DELETE FROM presence WHERE project=?', pid), p(db, 'DELETE FROM productions WHERE id=?', pid)]);
+  return { id: pid, name: prod.name, removed: counts };
+}
+
 // ---- restore: replay a backup file into a new production ----
 const COLS = { artifacts: ['ref', 'kind', 'parent', 'version', 'status', 'stale', 'data', 'rationale', 'cost', 'author', 'created', 'updated'], artifact_versions: ['ref', 'version', 'data', 'rationale', 'cost', 'author', 'ts'], deps: ['ref', 'on_ref'], assets: ['ref', 'uri', 'mime', 'bytes', 'provenance', 'cost', 'author', 'ts'], events: ['ref', 'version', 'action', 'actor', 'comment', 'ts'], ledger: ['ref', 'scope', 'tool', 'credits', 'actor', 'ts'] };
 export async function restoreBackup(db, actor, b) {

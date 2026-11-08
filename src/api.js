@@ -54,6 +54,11 @@ export async function api(req, env, actor, ctx) {
   }
   const pid = b;
   if (actor.role === 'member') await S.ownProduction(db, actor, pid);
+  if (!c && m === 'DELETE') { // remove a production for good (its rows and its media files): only the person who runs the studio, who must send the production's exact name
+    must(actor, 'manage'); const res = await S.removeProduction(db, actor, pid, (await body(req).catch(() => ({}))).name); let files = 0;
+    if (env.MEDIA) for (let cursor; ;) { const page = await env.MEDIA.list({ prefix: `${pid}/`, cursor, limit: 500 }); if (page.objects.length) { await env.MEDIA.delete(page.objects.map((o) => o.key)); files += page.objects.length; } if (!page.truncated) break; cursor = page.cursor; }
+    return json({ ...res, files });
+  }
   if (!c && m === 'GET') {
     const pr = await S.getProduction(db, pid), cnt = {};
     for (const x of (await db.prepare('SELECT status, COUNT(*) n FROM artifacts WHERE production=? GROUP BY status').bind(pid).all()).results) cnt[x.status] = x.n;
