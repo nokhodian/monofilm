@@ -58,7 +58,7 @@ async function exec(env, db, actor, pid, a, d) {
     case 'face': return worry(await retry(() => W.makeFace(env, db, actor, pid, { id: a.id, variant: 0 })), `the picture of ${a.name}`);
     case 'anchor': return edit(a.ref, (x) => ({ ...x, anchor: a.assetId }), 'Main face chosen by Roll camera');
     case 'plate': return worry(await retry(() => W.makePlate(env, db, actor, pid, { id: a.id })), `the picture of ${a.name}`);
-    case 'scenes': { if ((await S.listArtifacts(db, pid, { kind: 'scene' })).length) return; return retry(() => W.draftScenes(env, db, actor, pid)); } // never draft twice: a second draft would add a second set of scenes with other names
+    case 'scenes': return retry(async () => { if ((await S.listArtifacts(db, pid, { kind: 'scene' })).length) return; return W.draftScenes(env, db, actor, pid); }); // checked again inside every try: a try that failed after making some scenes must not make a second set // never draft twice: a second draft would add a second set of scenes with other names
     case 'stage': { const sc = d.by[R.scene(a.scene)]; return S.propose(db, actor, pid, { ref: R.stage(a.scene), data: starterStage(a.scene, sc.data, (r) => (d.by[r] || {}).data, (r) => (r && d.by[r] || {}).data || null), parent: R.scene(a.scene), deps: [], auto_approve: true, rationale: 'A first layout made by Roll camera' }); }
     case 'frame': return worry(await retry(() => W.makeFrame(env, db, actor, pid, { scene: a.scene, clip: a.clip, which: a.which })), `the ${a.which} picture for scene ${a.n}, ${a.name}`);
     case 'pick': return edit(a.ref, (x) => ({ ...x, chosen: a.assetId }), 'Picture put in use by Roll camera');
