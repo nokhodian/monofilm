@@ -1,7 +1,7 @@
 // The knowledge base format: the rules in docs/knowledge/README.md, checked by scripts/kb-check.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,4 +33,11 @@ test('urls compare without www, tracking parameters, a fragment or a trailing sl
 test('the knowledge base in the repository is valid', () => {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'knowledge'), r = checkKb(root);
   assert.deepEqual(r.errors, []);
+});
+
+test('every practice id cited in a playbook page exists', () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'knowledge'), r = checkKb(root), have = new Set([...r.practices.map((p) => p.id), ...r.sources.map((x) => x.id)]), dir = join(root, 'playbook');
+  const pages = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.md')) : [], missing = [];
+  for (const f of pages) for (const m of readFileSync(join(dir, f), 'utf8').matchAll(/\[([a-z]{2,6}-(?:p-)?\d{3,4})\]/g)) if (!have.has(m[1])) missing.push(`${f}: ${m[1]}`);
+  assert.deepEqual(missing, []);
 });

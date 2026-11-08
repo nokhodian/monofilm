@@ -66,6 +66,10 @@ Drag people, objects and the camera on a floor plan, aim the camera, pick a lens
 
 Muse Image makes three candidates for the start and the end of each scene. SAM 3.1 can check a picture against the layout and say what drifted. You choose one. That choice is the review.
 
+### A knowledge base that keeps growing
+
+`docs/knowledge/` holds what we have learned about directing AI films: 412 sources that were really opened, 267 practices that cite them (each says whether the studio already does it), 16 model profiles, and a short playbook. Any agent can add to it by the rules in its README, and `npm run kb:check` keeps it honest. The studio's generator profiles, prompts and checks are built from it.
+
 ### A pack for any video generator
 
 <img src="public/shots/pack.png" alt="The Pack page: the files for each clip, the prompt, and a place to bring a generated clip back" width="860">
