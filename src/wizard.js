@@ -263,8 +263,8 @@ export async function makeView(env, db, actor, pid, { id, kind = 'body', instruc
 export async function makePlate(env, db, actor, pid, { id, instruction = '' }, f) {
   human(actor);
   const cur = await must(db, pid, R.place(id), `place ${id}`), d = dataOf(cur);
-  const medium = mediumOf(dataOf(await row(db, pid, REFS.look)) || {}), prompt = [`${medium === 'photograph' ? 'Photograph' : 'Illustration'} of a film location, no people or characters, wide establishing view.`, d.name, d.desc, d.time && `Time of day: ${d.time}.`, (d.must_keep || []).length && `It must clearly show: ${d.must_keep.join(', ')}.`, await lookText(db, pid), instruction].filter(Boolean).join(' ');
-  const { r, check } = await drawChecked(env, db, actor, pid, cur.ref, { prompt, aspect: [16, 9], tag: 'plate', medium }, `Medium: ${medium}. A place with no people and no characters: ${d.name}. ${d.desc || ''}`, f);
+  const medium = mediumOf(dataOf(await row(db, pid, REFS.look)) || {}), prompt = [`${medium === 'photograph' ? 'Photograph' : 'Illustration'} of a film location, wide establishing view. Nothing living or figure-like is in it: no people, no animals, no creatures, no figurines or toys; only ground, rock, plants, buildings and sky.`, d.name, d.desc, d.time && `Time of day: ${d.time}.`, (d.must_keep || []).length && `It must clearly show: ${d.must_keep.join(', ')}.`, await lookText(db, pid), instruction].filter(Boolean).join(' ');
+  const { r, check } = await drawChecked(env, db, actor, pid, cur.ref, { prompt, aspect: [16, 9], tag: 'plate', medium }, `Medium: ${medium}. An empty place with no people, no animals, no creatures and no figurines in it: ${d.name}. ${d.desc || ''}`, f);
   await merge(db, pid, cur.ref, (fresh) => ({ ...fresh, source: fresh.source === 'photo' ? 'photo' : 'made', plates: [...(fresh.plates || []), { id: r.asset.id, check }] }), 'Made a place plate.');
   return { asset: r.asset, check };
 }
