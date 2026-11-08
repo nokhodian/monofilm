@@ -258,9 +258,15 @@ export function shortLook(desc, name = '') {
   let t = String(desc || '').trim().replace(new RegExp(`^${String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+(is|was)\\s+`, 'i'), '').replace(/^(an?|the)\s+/i, '');
   t = t.split(/\s+(?:with|who|that|wearing|always)\s+|[,.;]/)[0].trim(); return t.length > 70 ? t.slice(0, 70).replace(/\s+\S*$/, '') : t;
 }
-// "Moss left and Pip right" becomes "Moss the small grey-green clay snail left and Pip the tiny orange clay beetle right" (the first time each name appears).
+// A name that is also a common word (Moss, Pip, Rose, Sunny) pulls an image model toward that word, so an image prompt never uses the name: "Moss left and Pip right" becomes
+// "the small grey-green clay snail left and the tiny orange clay beetle right". The look comes from the character's description.
 export function expandNames(text, chars) {
   let out = String(text || '');
-  for (const c of chars || []) { if (!c.name || !c.look) continue; const re = new RegExp(`\\b${c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`); out = out.replace(re, `${c.name} the ${c.look}`); }
-  return out;
+  for (const c of chars || []) { if (!c.name || !c.look) continue; out = out.replace(new RegExp(`\\b${c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g'), `the ${c.look}`); }
+  return out.replace(/(^|[.!?]\s+)the /g, (m, a) => `${a}The `);
+}
+// A description without the character's name in it ("Moss is a small snail" becomes "A small snail"), for an image prompt.
+export function plainDesc(desc, name = '') {
+  const t = String(desc || '').trim().replace(new RegExp(`^${String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+(is|was)\\s+`, 'i'), '').replace(new RegExp(`\\b${String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g'), 'it');
+  return t ? t[0].toUpperCase() + t.slice(1) : t;
 }
