@@ -132,7 +132,7 @@ test('a camera move always gets a speed word, a still camera is said positively,
   assert.equal(normalizeCamera('push-in'), 'push-in, slowly'); assert.equal(normalizeCamera('slow push-in'), 'slow push-in'); assert.equal(normalizeCamera('static wide'), 'static wide, the camera holds still'); assert.equal(normalizeCamera(''), '');
   assert.equal(cameraCommand('slow push-in'), 'Push in'); assert.equal(cameraCommand('pan left'), 'Pan left'); assert.equal(cameraCommand('gentle arc around'), 'Tracking shot'); assert.equal(cameraCommand('static wide'), 'Static shot');
   const clip = composeClip({ data: { seconds: 6, notes: { happens: 'x', cam: 'slow push-in' } } }, {}, 1);
-  assert.match(forGenerator(clip, 'minimax-hailuo').prompt, /^Camera: \[Push in\]$/m); assert.match(forGenerator(clip, 'veo-3.1').prompt, /Camera: slow push-in, one continuous shot/);
+  assert.match(forGenerator(clip, 'minimax-hailuo').prompt, /^Camera: \[Push in\]$/m); assert.match(forGenerator(clip, 'veo-3.1').prompt, /Camera: slow push-in, only a small move, one continuous shot/); assert.match(forGenerator(clip, 'minimax-h3').prompt, /^Camera: static, the camera holds still, one continuous shot$/m, 'H3 reshapes the scene on a camera move, so its camera is held still'); assert.ok(forGenerator(clip, 'minimax-h3').hints.some((h) => /camera is held still/.test(h)));
   assert.ok(forGenerator(clip, 'minimax-hailuo').hints.some((h) => /optimiser/.test(h))); assert.ok(forGenerator(clip, 'ltx-video').hints.some((h) => /divisible by 32/.test(h)));
 });
 test('a risky clip gets more tries than a quiet one, and speech that is too long or has too many speakers is warned about', () => {
@@ -153,4 +153,17 @@ test('a character is known by its kind: the animal word, a short look, and a nam
   assert.equal(shortLook('Moss is a small grey-green clay snail with a low soft body and a big round spiral shell', 'Moss'), 'small grey-green clay snail'); assert.equal(shortLook('A tiny baby bunny with soft cream fur, long ears', 'Mimi'), 'tiny baby bunny');
   assert.equal(expandNames('Moss left and Pip right, Moss looking up.', [{ name: 'Moss', look: 'small clay snail' }, { name: 'Pip', look: 'orange clay beetle' }]), 'The small clay snail left and the orange clay beetle right, the small clay snail looking up.', 'the name is replaced, because a name like Moss pulls the picture toward moss');
   assert.equal(expandNames('Nobody here.', [{ name: 'Moss', look: 'snail' }]), 'Nobody here.'); assert.equal(plainDesc('Moss is a small grey-green clay snail with a shell.', 'Moss'), 'A small grey-green clay snail with a shell.');
+});
+import { sizesOf, sizesLine, gentleCamera, cameraNote } from '../public/js/wizard-model.js';
+test('sizes are kept in every clip prompt, a camera move is small and changes only the framing, and the end picture knows what the camera did', () => {
+  const sc = { data: { seconds: 6, notes: { happens: 'x', cam: 'slow push-in' }, sizes: [{ name: 'Moss', size: 'about a quarter of the frame height' }, { name: 'Pip', size: 'half of Moss' }, { name: '', size: 'x' }] } };
+  assert.equal(sizesOf(sc.data).length, 2); assert.equal(sizesLine(sc.data), 'Sizes (kept in every frame, in this proportion): Moss about a quarter of the frame height; Pip half of Moss.'); assert.equal(sizesLine({}), '');
+  const p = composeClip(sc, {}, 1).prompt; assert.match(p, /Sizes \(kept in every frame/); assert.match(p, /Camera: slow push-in, only a small move, one continuous shot/); assert.match(p, /A camera move changes only the framing: it never reshapes, redraws or moves the ground, the background or any object/); assert.doesNotMatch(p, /the framing[^.]* stay the same/);
+  assert.equal(gentleCamera('slow push-in'), 'slow push-in, only a small move'); assert.equal(gentleCamera('slight slow pan left'), 'slight slow pan left'); assert.equal(gentleCamera('static wide'), 'static wide, the camera holds still'); assert.equal(gentleCamera(''), '');
+  assert.match(cameraNote('static wide', 'end'), /has not moved/); assert.match(cameraNote('slow push-in', 'end'), /only a little closer/); assert.match(cameraNote('slow pull back', 'end'), /only a little further back/); assert.match(cameraNote('', 'end'), /has not moved/); assert.equal(cameraNote('slow push-in', 'start'), '');
+});
+test('the reviewer is asked about the background, the framing, every size and one of each character', () => {
+  const d = { seconds: 6, notes: { happens: 'x' }, states: ['a', 'b'] }, q = clipChecklist(d, 1, [{ name: 'Moss', kind: 'snail' }, { name: 'Pip', kind: 'beetle' }]);
+  assert.ok(q.some((x) => /background keep exactly the same shapes/.test(x))); assert.ok(q.some((x) => /framing change only by one slow camera move/.test(x))); assert.ok(q.some((x) => /same size relative to the frame/.test(x)));
+  assert.ok(q.includes('Is there exactly one snail (Moss) in every frame, never two?')); assert.ok(q.includes('Is there exactly one beetle (Pip) in every frame, never two?'));
 });

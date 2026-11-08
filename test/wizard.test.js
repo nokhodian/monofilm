@@ -286,3 +286,18 @@ test('an empty frame of the film\'s shape is a valid PNG, so a picture made from
   writeFileSync(f, b.bytes); let probe = ''; try { probe = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', f], { encoding: 'utf8' }).trim(); } catch { return; }
   assert.equal(probe, '192,108', 'a real decoder reads it');
 });
+
+test('an end picture is told what the camera did, is drawn from the picture before, and is checked against that picture too', async () => {
+  const t = await setup(); await W.readStory(t.env, t.db, human, t.id, stand()); await ok(t, REFS.reading); await ok(t, R.cast('ines')); await ok(t, R.place('cathedral-scaffold'));
+  await W.draftScenes(t.env, t.db, human, t.id, stand()); await ok(t, REFS.look); await ok(t, 'scene:the-beam');
+  const face = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines' }, stand()), cur = await S.getArtifact(t.db, t.id, R.cast('ines'));
+  await S.propose(t.db, human, t.id, { ref: R.cast('ines'), data: { ...cur.data, anchor: face.asset.id }, parent: cur.parent || undefined, auto_approve: true, base_version: cur.version });
+  const sc = await S.getArtifact(t.db, t.id, 'scene:the-beam'); await S.propose(t.db, human, t.id, { ref: sc.ref, data: { ...sc.data, notes: { ...sc.data.notes, cam: 'static wide' }, sizes: [{ name: 'Ines', size: 'about a third of the frame height' }] }, parent: sc.parent || undefined, auto_approve: true, base_version: sc.version });
+  const prompts = [], images = []; const base = stand();
+  const g = async (url, init) => { const b = init && init.body ? JSON.parse(init.body) : {}; if (url.includes('/images/')) prompts.push(b.prompt); if (url.endsWith('/responses') && /check ONE picture/.test(b.instructions || '')) images.push(b.input[0].content.filter((c) => c.type === 'input_image').length); return base(url, init); };
+  const start = await W.makeFrame(t.env, t.db, human, t.id, { scene: 'the-beam', clip: 1, which: 'start' }, g), kf = await S.getArtifact(t.db, t.id, start.ref);
+  await S.propose(t.db, human, t.id, { ref: start.ref, data: { ...kf.data, chosen: start.asset.id }, parent: kf.parent || undefined, deps: (kf.deps || []).filter((y) => y !== kf.parent), auto_approve: true, base_version: kf.version });
+  prompts.length = 0; images.length = 0; await W.makeFrame(t.env, t.db, human, t.id, { scene: 'the-beam', clip: 1, which: 'end' }, g);
+  assert.match(prompts[0], /The camera has not moved: the same position, angle and framing as the previous picture\./); assert.match(prompts[0], /Sizes \(kept in every frame, in this proportion\): the woman in her forties about a third of the frame height\./);
+  assert.match(prompts[0], /Image 1 is the picture just before this one/, 'drawn from the picture before'); assert.ok(images[0] >= 3, `the check saw the new picture, the previous picture and the character (${images[0]})`);
+});

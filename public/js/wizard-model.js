@@ -101,7 +101,7 @@ export function propsInClip(d, k) {
 }
 // How each clip really moves, one natural, physically possible description per clip (the beats say WHAT happens, this says HOW a body, a hand or a thing moves while it does).
 export function movesOf(d) { const n = clipSpans(d).length, m = Array.isArray(d.moves) ? d.moves.map((x) => String(x || '').trim()) : []; return m.length === n && m.every(Boolean) ? m : []; }
-export const PHYSICS = 'Physics: everything behaves exactly as in real life. Nothing appears, vanishes, multiplies or changes shape or size. Every object keeps its number (one seed stays one seed, one bottle stays one bottle). Characters touch and carry things the way real animals do. The place, the framing and the background stay the same for the whole clip.';
+export const PHYSICS = 'Physics: everything behaves exactly as in real life. Nothing appears, vanishes, multiplies or changes shape or size. Every object keeps its number (one seed stays one seed, one bottle stays one bottle). Characters touch and carry things the way real animals do. The place and the background stay exactly the same for the whole clip. Every character keeps its own size, in proportion to the others; it looks bigger or smaller only by really walking toward or away from the camera. A camera move changes only the framing: it never reshapes, redraws or moves the ground, the background or any object.';
 // A clip has an end picture unless the scene's end pictures are skipped. The last clip ends on the scene's end picture; a clip in the middle ends on a picture of its own, and the next clip starts from it.
 export const hasEnd = (d) => (d.end || {}).mode !== 'skip';
 // Clips in the middle only get an end picture of their own when the scene asks for every clip (the default). With d.ends === 'last' only the scene's last clip has one, which costs fewer credits.
@@ -144,7 +144,7 @@ export const oneMove = (cam) => String(cam || '').split(/[,;.]?\s+(?:and then|th
 //   negative_mode: 'field' = a separate negative field that wants plain nouns; 'prompt' = no field, so the words are added as "Do not show"; 'none' = negation can backfire, so leave it out.
 //   max_chars: the longest prompt it takes (null = unknown); max_refs: the most reference pictures; end_picture: whether a last frame can be given; rewrites_prompt: it has its own prompt rewriter.
 export const GENERATORS = {
-  'minimax-h3': { name: 'MiniMax H3 (local, ComfyUI)', negative_mode: 'prompt', max_chars: 2000, max_refs: 1, end_picture: true, native_audio: true, max_seconds: 8, rewrites_prompt: false, notes: 'No negative prompt input (it is added to the prompt as "Do not show"). Cuts when the prompt lists several shots. Natural walking and consistent voices across clips are weak. Draws poured water as a flat blue disc, adds floating bubbles and sparkles when the words mention bubbles, and cannot show a tiny object being picked up.' },
+  'minimax-h3': { name: 'MiniMax H3 (local, ComfyUI)', static_camera: true, negative_mode: 'prompt', max_chars: 2000, max_refs: 1, end_picture: true, native_audio: true, max_seconds: 8, rewrites_prompt: false, notes: 'No negative prompt input (it is added to the prompt as "Do not show"). Cuts when the prompt lists several shots. Natural walking and consistent voices across clips are weak. Draws poured water as a flat blue disc, adds floating bubbles and sparkles when the words mention bubbles, and cannot show a tiny object being picked up. A slow push-in sometimes pushes in and then jumps back wide, so its camera is held still.' },
   'veo-3.1': { name: 'Google Veo 3.1', negative_mode: 'field', max_chars: null, max_refs: 3, end_picture: true, native_audio: true, max_seconds: 8, rewrites_prompt: false, notes: 'Negative field takes nouns, not "no X". The last frame is only a guide, looser on 8 s than on 4 s. Audio goes in its own sentences. The Gemini API preview models were shut down on 2026-10-22; check which model your account still has. [pm-001, pm-017, phy-023]' },
   'kling-2.5': { name: 'Kling 2.5', negative_mode: 'field', max_chars: null, ideal_words: [50, 100], max_refs: 4, end_picture: true, native_audio: false, max_seconds: 10, rewrites_prompt: false, notes: 'One hero subject and one action; name the camera move exactly. Over-describing a character\'s appearance makes identity drift. End image does not combine with multi-prompt. [pm-008, pm-028, scn]' },
   'runway-gen-4.5': { name: 'Runway Gen-4.5', negative_mode: 'none', max_chars: 1000, max_refs: null, end_picture: false, native_audio: false, max_seconds: 10, rewrites_prompt: false, notes: 'Image-to-video: describe only the change, subject motion and camera separately, and say what stays still. Negation can backfire: use positive wording. A fixed seed is similar, not identical. [cin-002, cin-005, pm-029]' },
@@ -166,8 +166,10 @@ const nouns = (s) => String(s || '').split(/[.;,]/).map((x) => x.trim().replace(
 export function forGenerator(clip, id) {
   const k = Object.hasOwn(GENERATORS, id) ? id : 'generic', g = GENERATORS[k], mode = g.negative_mode, neg = clip.negative || '';
   let text = mode === 'prompt' && neg ? `${clip.prompt}\nDo not show: ${neg}.` : clip.prompt;
+  if (g.static_camera) text = text.replace(/^Camera: .*$/m, 'Camera: static, the camera holds still, one continuous shot');
   if (g.camera_style === 'bracket') text = text.replace(/^Camera: (.*?), one continuous shot$/m, (m, c) => { const cmd = cameraCommand(c); return cmd ? `Camera: [${cmd}]` : m; });
   const fitted = compactPrompt(text, g.max_chars), hints = [];
+  if (g.static_camera) hints.push('This generator is known to reshape the scene on a camera move, so its camera is held still: let the characters carry the action.');
   if (g.rewrites_prompt) hints.push('This generator rewrites prompts. Turn its prompt optimiser off when you need the exact words.');
   if (g.grid) hints.push(`Size and length must fit its grid: ${g.grid}.`);
   return { ...clip, generator: { id: k, ...g }, prompt: fitted.prompt, compacted: fitted.compacted, hints, negative: mode === 'field' ? nouns(neg) : '' };
@@ -179,8 +181,8 @@ export function composeClip(scene, film, clipIndex = 1) {
   const look = film.look || {}, never = [...new Set([...(String(n.never || '').split(/[.;\n]/).map((s) => s.trim()).filter(Boolean)), ...(Array.isArray(look.forbidden) ? look.forbidden : String(look.forbidden || '').split(',').map((s) => s.trim()).filter(Boolean)).map((t) => `no ${t}`)])];
   const lines = linesOfClip(d, k), beats = clipBeats(d), endPic = k === spans.length ? hasEnd(d) : midEnds(d), policy = audioPolicy(d, k), cast = film.cast || {};
   const who = (d.who || []).map((r) => cast[r]).filter((p) => p && p.desc);
-  const parts = [beats[k - 1] || (spans.length > 1 ? 'Carry on calmly from the clip before.' : n.happens), movesOf(d)[k - 1] && `How it moves: ${movesOf(d)[k - 1]}`, k > 1 && beats[k - 2] ? `The clip before ended on: ${beats[k - 2]} Do not repeat it.` : '', n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${normalizeCamera(n.cam)}, one continuous shot`, n.sound && `Sound: ${n.sound}`,
-    PHYSICS,
+  const parts = [beats[k - 1] || (spans.length > 1 ? 'Carry on calmly from the clip before.' : n.happens), movesOf(d)[k - 1] && `How it moves: ${movesOf(d)[k - 1]}`, k > 1 && beats[k - 2] ? `The clip before ended on: ${beats[k - 2]} Do not repeat it.` : '', n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${gentleCamera(n.cam)}, one continuous shot`, n.sound && `Sound: ${n.sound}`,
+    PHYSICS, sizesLine(d),
     who.length ? (film.pictures ? `Characters: ${who.map((p) => p.name).join(' and ')} look exactly as in the start picture, with the same clothes, colours and shapes in every frame.` : `Characters (keep each one exactly as in its reference picture): ${who.map((p) => `${p.name}: ${p.desc}`).join(' ')}`) : '', // with a start picture the words never describe a character again: a word that disagrees with the picture makes the generator flip between the two
     isHandmade(look) ? 'Motion feel: stepped, like stop-motion animation shot at about 12 frames per second, with small handmade imperfections.' : isDrawn(look) ? 'Motion feel: soft squash and stretch, gentle exaggeration, smooth arcs.' : '',
     `Look: ${look.look || look.base || 'as in the film'}. ${look.aspect || '9:16'}, ${look.fps || 24} fps, ${c.seconds} seconds. The medium, colours, exposure and time of day stay exactly the same for the whole clip. No scene change, no cuts, no text on screen.`];
@@ -243,11 +245,12 @@ export function dialogueLoad(d, k) {
 }
 
 // ---- the yes/no questions a reviewer answers about a finished clip (qa-p-001) ----
-export function clipChecklist(d, k) {
+export function clipChecklist(d, k, cast = []) {
   const st = clipStates(d), q = [], mv = movesOf(d)[k - 1];
   if (st) q.push(`Does the first frame match this: ${st[k - 1]}`, `Does the last frame match this: ${st[k]}`);
   for (const p of propsInClip(d, k)) if (p.count) q.push(`Is there exactly ${p.count} ${p.name} in every frame where it is visible?`);
-  q.push('Do the place, the background and the framing stay the same in every frame?', 'Does every character look the same in every frame (same clothes, colours, shape)?', 'Is it true that nothing appears, vanishes, multiplies or changes size without being asked for?');
+  q.push('Does the background keep exactly the same shapes and positions in every frame, with nothing reshaped, redrawn or jumping?', 'Does the framing change only by one slow camera move, with no sudden jump closer or further?', 'Does each character keep the same size relative to the frame and to the others in every frame, changing only by really walking toward or away from the camera?', 'Does every character look the same in every frame (same clothes, colours, shape)?', 'Is it true that nothing appears, vanishes, multiplies or changes size without being asked for?');
+  for (const c of cast) if (c.name && c.kind) q.push(`Is there exactly one ${c.kind} (${c.name}) in every frame, never two?`);
   if (mv) q.push(`Does the clip show this, in this order: ${mv}`);
   return q;
 }
@@ -269,4 +272,23 @@ export function expandNames(text, chars) {
 export function plainDesc(desc, name = '') {
   const t = String(desc || '').trim().replace(new RegExp(`^${String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+(is|was)\\s+`, 'i'), '').replace(new RegExp(`\\b${String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g'), 'it');
   return t ? t[0].toUpperCase() + t.slice(1) : t;
+}
+
+// ---- how big each character is, and what the camera may do (the size of a character must not drift, and a camera move must not change the scene) ----
+// A scene's sizes: [{ name, size }] where size is a plain phrase such as "about a quarter of the frame height". Written by the scene draft.
+export const sizesOf = (d) => (Array.isArray(d.sizes) ? d.sizes : []).filter((x) => x && x.name && x.size);
+export const sizesLine = (d) => { const z = sizesOf(d); return z.length ? `Sizes (kept in every frame, in this proportion): ${z.map((x) => `${x.name} ${x.size}`).join('; ')}.` : ''; };
+// A move is small and slow. A still camera says so. Anything that is not a move is left alone.
+export function gentleCamera(cam) {
+  const c = normalizeCamera(cam); if (!c || /holds still/i.test(c)) return c;
+  return /\b(small|slight|subtle|tiny|barely)\b/i.test(c) ? c : `${c}, only a small move`;
+}
+// What the end picture of a clip must do about the camera: nothing, or a little closer. (The generator morphs between two pictures of different framing, so the pictures agree on it.)
+export function cameraNote(cam, which) {
+  if (which !== 'end') return '';
+  const c = String(cam || '').toLowerCase();
+  if (!c || /\b(static|still|locked|fixed|hold)/.test(c)) return 'The camera has not moved: the same position, angle and framing as the previous picture.';
+  if (/\b(push|dolly in|move in|closer|zoom in)\b/.test(c)) return 'The camera is only a little closer than in the previous picture (about ten percent): the same angle and the same background.';
+  if (/\b(pull|dolly out|back|zoom out)\b/.test(c)) return 'The camera is only a little further back than in the previous picture (about ten percent): the same angle and the same background.';
+  return 'The camera is in nearly the same position and angle as in the previous picture.';
 }
