@@ -291,21 +291,6 @@
  },
  "todo": [
   {
-   "id": "ani-p-002",
-   "title": "Say clay, felt or paper, not just stop motion",
-   "idea": "Add those words to isDrawn so a felt or paper look is treated as illustration, not photograph."
-  },
-  {
-   "id": "ani-p-003",
-   "title": "Ask for handmade imperfections and ban the polished words",
-   "idea": "Add a handmade-texture phrase set to the clay and felt look descriptions the READ_SYSTEM makes."
-  },
-  {
-   "id": "ani-p-006",
-   "title": "Ask for stepped motion in words; do not trust an fps setting",
-   "idea": "Add a motion-feel phrase to clip prompts for stop-motion looks."
-  },
-  {
    "id": "ani-p-007",
    "title": "Fix frame-rate feel in post when the model refuses",
    "idea": "Optional ffmpeg step: fps=12 then fps=24 on clips of a stop-motion look."
@@ -361,26 +346,6 @@
    "idea": "Let the scene writer pick static or push-in when the subject moves fast."
   },
   {
-   "id": "cin-p-017",
-   "title": "Open a scene wide, then move in",
-   "idea": "Scene writer should mark an establishing shot size for the first clip of a new place."
-  },
-  {
-   "id": "cin-p-018",
-   "title": "Keep screen direction and the 180-degree line across scenes",
-   "idea": "Add a screen-direction note to the cont field and check it in review."
-  },
-  {
-   "id": "cin-p-021",
-   "title": "Cut on motion, not on a still frame",
-   "idea": "Export clips with the last frame still moving and suggest trimmed in-points."
-  },
-  {
-   "id": "cin-p-022",
-   "title": "Trim the first and last frames of every clip",
-   "idea": "Add default trim values to the export pack."
-  },
-  {
    "id": "qa-p-021",
    "title": "Set the made-for-kids flag and know COPPA when the film is for children",
    "idea": "Ship page question \"Is this made for children?\" with the consequences."
@@ -396,44 +361,9 @@
    "idea": "Export step that preserves or writes a C2PA manifest and notes the generator."
   },
   {
-   "id": "phy-p-009",
-   "title": "Wider framing for fine detail",
-   "idea": "Pick wider default framing when the clip action involves hands or small props."
-  },
-  {
-   "id": "phy-p-018",
-   "title": "Put readable text in post, not in the generator",
-   "idea": "Studio caption/title layer for text; tell the scene writer to avoid readable words on props."
-  },
-  {
-   "id": "pm-p-011",
-   "title": "Respect the reference-picture cap",
-   "idea": "Add max_refs to GENERATORS and have the pack choose the most important references when a scene has more."
-  },
-  {
    "id": "pm-p-013",
    "title": "Use the generator's own camera words",
    "idea": "Map the planner's camera field to a vocabulary table per generator in GENERATORS."
-  },
-  {
-   "id": "pm-p-014",
-   "title": "Keep the prompt inside the generator's length range",
-   "idea": "Add max_chars per generator, and a compact variant that keeps beat, camera, dialogue and timing first."
-  },
-  {
-   "id": "pm-p-015",
-   "title": "Know whether the generator rewrites your prompt",
-   "idea": "Add rewrites_prompt to the generator profile and show a hint in the pack when it is on."
-  },
-  {
-   "id": "pm-p-016",
-   "title": "Show emotion as action, not as a label",
-   "idea": "Add a line to the scene-writing instructions in src/wizard.js SCENES_SYSTEM and check beats for bare emotion words."
-  },
-  {
-   "id": "res-p-003",
-   "title": "Treat extension drift as error accumulation and cap chain length",
-   "idea": "Count chained clips per scene and force a fresh keyframe past a configurable cap."
   },
   {
    "id": "res-p-015",
@@ -446,24 +376,9 @@
    "idea": "Let the shot list place a mid-clip keyframe picture."
   },
   {
-   "id": "scn-p-014",
-   "title": "Trim the first frames of a continued clip",
-   "idea": "Trim handles of 2 frames at a join in the assembly step."
-  },
-  {
    "id": "scn-p-023",
    "title": "Match frame size and counts to the model's grid",
    "idea": "Put per-model size and frame rules in the generator profile."
-  },
-  {
-   "id": "sty-p-006",
-   "title": "One reversal per minute",
-   "idea": "Add a check that flags a beat list with two reversals."
-  },
-  {
-   "id": "sty-p-007",
-   "title": "Pick the ending first and write backward",
-   "idea": "Ask for the final image and feeling at story intake and feed it to the beat writer."
   },
   {
    "id": "wf-p-006",
@@ -565,9 +480,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "public/js/wizard-model.js isDrawn regex lacks felt, paper cut, puppet, stop motion, plasticine, cel, vector, flat; only clay and claymation match",
-    "idea": "Add those words to isDrawn so a felt or paper look is treated as illustration, not photograph."
+    "status": "done",
+    "where": "public/js/wizard-model.js isDrawn / isHandmade (felt, paper, puppet, clay, stop-motion, vector, watercolour and more)",
+    "idea": ""
    },
    "contributor": "researcher-ani",
    "date": "2026-11-08",
@@ -618,9 +533,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Add a handmade-texture phrase set to the clay and felt look descriptions the READ_SYSTEM makes."
+    "status": "partial",
+    "where": "src/wizard.js READ_SYSTEM: handmade looks must name the material and its traces",
+    "idea": "Add the handmade-texture phrase to clip prompts too"
    },
    "contributor": "researcher-ani",
    "date": "2026-11-08",
@@ -770,9 +685,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Add a motion-feel phrase to clip prompts for stop-motion looks."
+    "status": "done",
+    "where": "public/js/wizard-model.js composeClip: Motion feel line for handmade looks",
+    "idea": ""
    },
    "contributor": "researcher-ani",
    "date": "2026-11-08",
@@ -1718,9 +1633,9 @@
    "strength": "anecdotal",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "AUDIO_TEXT.silent uses only bans (No speech, no voices, no music)",
-    "idea": "When notes.sound is empty, add a default ambient line and \"mouth closed\" for visible characters in silent clips."
+    "status": "done",
+    "where": "public/js/wizard-model.js AUDIO_TEXT: quiet room tone and closed mouths instead of a list of bans",
+    "idea": ""
    },
    "contributor": "researcher-aud",
    "date": "2026-11-08",
@@ -4681,9 +4596,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Scene writer should mark an establishing shot size for the first clip of a new place."
+    "status": "partial",
+    "where": "src/wizard.js SCENES_SYSTEM: a scene in a new place opens wide",
+    "idea": "Check it in the continuity review"
    },
    "contributor": "cin-researcher",
    "date": "2026-11-08",
@@ -4734,9 +4649,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Add a screen-direction note to the cont field and check it in review."
+    "status": "partial",
+    "where": "src/wizard.js SCENES_SYSTEM: keep screen direction state to state",
+    "idea": "Check screen direction across scenes in the continuity review"
    },
    "contributor": "cin-researcher",
    "date": "2026-11-08",
@@ -4864,9 +4779,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Export clips with the last frame still moving and suggest trimmed in-points."
+    "status": "partial",
+    "where": "get_clip and clip.json carry assembly.cut_on_motion",
+    "idea": "Trim automatically when the film is assembled"
    },
    "contributor": "cin-researcher",
    "date": "2026-11-08",
@@ -4910,9 +4825,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Add default trim values to the export pack."
+    "status": "partial",
+    "where": "get_clip and clip.json carry assembly.trim_start_frames (2 for a continued clip)",
+    "idea": "Also trim the end frames"
    },
    "contributor": "cin-researcher",
    "date": "2026-11-08",
@@ -6753,9 +6668,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "Not in composeClip",
-    "idea": "Pick wider default framing when the clip action involves hands or small props."
+    "status": "partial",
+    "where": "src/wizard.js SCENES_SYSTEM: paw and small-prop actions framed medium-wide",
+    "idea": "Choose the default framing from the action in code, not only in the prompt"
    },
    "contributor": "researcher-phy",
    "date": "2026-11-08",
@@ -7238,9 +7153,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "Not handled",
-    "idea": "Studio caption/title layer for text; tell the scene writer to avoid readable words on props."
+    "status": "partial",
+    "where": "src/wizard.js SCENES_SYSTEM: no readable words on props or signs",
+    "idea": "A caption and title layer in post"
    },
    "contributor": "researcher-phy",
    "date": "2026-11-08",
@@ -8147,9 +8062,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Add max_refs to GENERATORS and have the pack choose the most important references when a scene has more."
+    "status": "partial",
+    "where": "GENERATORS max_refs; src/mcp-video.js get_clip trims references and says which were dropped",
+    "idea": "Choose which references to keep by importance in the scene, not by order"
    },
    "contributor": "researcher-pm",
    "date": "2026-11-08",
@@ -8303,9 +8218,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "public/js/wizard-model.js composeClip builds a long multi-line prompt with no length check",
-    "idea": "Add max_chars per generator, and a compact variant that keeps beat, camera, dialogue and timing first."
+    "status": "done",
+    "where": "GENERATORS max_chars and compactPrompt in public/js/wizard-model.js (forGenerator)",
+    "idea": ""
    },
    "contributor": "researcher-pm",
    "date": "2026-11-08",
@@ -8363,9 +8278,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Add rewrites_prompt to the generator profile and show a hint in the pack when it is on."
+    "status": "partial",
+    "where": "GENERATORS rewrites_prompt flag (data only)",
+    "idea": "Show a hint in the pack when the generator rewrites prompts"
    },
    "contributor": "researcher-pm",
    "date": "2026-11-08",
@@ -8409,9 +8324,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Add a line to the scene-writing instructions in src/wizard.js SCENES_SYSTEM and check beats for bare emotion words."
+    "status": "done",
+    "where": "src/wizard.js SCENES_SYSTEM: every feeling shown as something visible",
+    "idea": ""
    },
    "contributor": "researcher-pm",
    "date": "2026-11-08",
@@ -8924,9 +8839,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Count chained clips per scene and force a fresh keyframe past a configurable cap."
+    "status": "partial",
+    "where": "Every clip has its own end picture, so a chain restarts from a fresh drawn keyframe at each clip",
+    "idea": "A cap on clips chained without a new keyframe when end pictures are skipped (ends: last)"
    },
    "contributor": "researcher-res",
    "date": "2026-11-08",
@@ -10383,9 +10298,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Trim handles of 2 frames at a join in the assembly step."
+    "status": "partial",
+    "where": "assembly.trim_start_frames in get_clip and clip.json",
+    "idea": "Apply the trim in an assembly step"
    },
    "contributor": "researcher-scn",
    "date": "2026-11-08",
@@ -11265,9 +11180,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Add a check that flags a beat list with two reversals."
+    "status": "partial",
+    "where": "src/wizard.js SCENES_SYSTEM: at most one reversal in a film under a minute",
+    "idea": "A check that counts reversals in the beat list"
    },
    "contributor": "researcher-sty",
    "date": "2026-11-08",
@@ -11316,9 +11231,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "",
-    "idea": "Ask for the final image and feeling at story intake and feed it to the beat writer."
+    "status": "partial",
+    "where": "src/wizard.js SCENES_SYSTEM: decide the last image first and write backward",
+    "idea": "Ask for the ending at story intake"
    },
    "contributor": "researcher-sty",
    "date": "2026-11-08",

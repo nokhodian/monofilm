@@ -135,16 +135,39 @@ export function slotsOf(id, d) {
 }
 // Sound policy for a clip, so a silent clip is asked for as silent (generators invent speech and music otherwise).
 export function audioPolicy(d, n) { return linesOfClip(d, n).length ? 'dialogue' : String((d.notes || {}).sound || '').trim() ? 'ambient' : 'silent'; }
-const AUDIO_TEXT = { dialogue: 'Audio: only the spoken lines above, with quiet room sound. No music.', ambient: 'Audio: only the ambient sound described above. No speech, no music.', silent: 'Audio: none. No speech, no voices, no music.' };
+const AUDIO_TEXT = { dialogue: 'Audio: only the spoken lines above, over quiet room sound.', ambient: 'Audio: only the ambient sound described above. Every character keeps their mouth closed.', silent: 'Audio: only quiet room tone. Every character keeps their mouth closed.' }; // concrete sound and a closed mouth, not a list of bans (a ban names the thing and generators add it)
 
 // A generator cuts when the camera line lists several shots ("close on hands, then her face"). A clip gets only the first move.
 export const oneMove = (cam) => String(cam || '').split(/[,;.]?\s+(?:and then|then|followed by|cut to|next|after that|before)\s+/i)[0].replace(/\bshots\b/i, 'shot').trim();
 // What a video generator can take. A clip's words are adapted to it; an unknown generator gets the plain prompt.
+// What a video generator can take, from the knowledge base (docs/knowledge/models/*.md, ids in brackets there). A clip's words are fitted to it; an unknown generator gets the plain prompt.
+//   negative_mode: 'field' = a separate negative field that wants plain nouns; 'prompt' = no field, so the words are added as "Do not show"; 'none' = negation can backfire, so leave it out.
+//   max_chars: the longest prompt it takes (null = unknown); max_refs: the most reference pictures; end_picture: whether a last frame can be given; rewrites_prompt: it has its own prompt rewriter.
 export const GENERATORS = {
-  'minimax-h3': { name: 'MiniMax H3 (local, ComfyUI)', negative: false, end_picture: true, native_audio: true, max_seconds: 8, notes: 'No negative prompt input (it is added to the prompt as "Do not show"). Cuts when the prompt lists several shots. Natural walking and consistent voices across clips are weak. Draws poured water as a flat blue disc, adds floating bubbles and sparkles when the words mention bubbles, and cannot show a tiny object being picked up.' },
-  generic: { name: 'Any generator', negative: true, end_picture: true, native_audio: true, max_seconds: 8, notes: '' },
+  'minimax-h3': { name: 'MiniMax H3 (local, ComfyUI)', negative_mode: 'prompt', max_chars: 2000, max_refs: 1, end_picture: true, native_audio: true, max_seconds: 8, rewrites_prompt: false, notes: 'No negative prompt input (it is added to the prompt as "Do not show"). Cuts when the prompt lists several shots. Natural walking and consistent voices across clips are weak. Draws poured water as a flat blue disc, adds floating bubbles and sparkles when the words mention bubbles, and cannot show a tiny object being picked up.' },
+  'veo-3.1': { name: 'Google Veo 3.1', negative_mode: 'field', max_chars: null, max_refs: 3, end_picture: true, native_audio: true, max_seconds: 8, rewrites_prompt: false, notes: 'Negative field takes nouns, not "no X". The last frame is only a guide, looser on 8 s than on 4 s. Audio goes in its own sentences. The Gemini API preview models were shut down on 2026-10-22; check which model your account still has. [pm-001, pm-017, phy-023]' },
+  'kling-2.5': { name: 'Kling 2.5', negative_mode: 'field', max_chars: null, ideal_words: [50, 100], max_refs: 4, end_picture: true, native_audio: false, max_seconds: 10, rewrites_prompt: false, notes: 'One hero subject and one action; name the camera move exactly. Over-describing a character\'s appearance makes identity drift. End image does not combine with multi-prompt. [pm-008, pm-028, scn]' },
+  'runway-gen-4.5': { name: 'Runway Gen-4.5', negative_mode: 'none', max_chars: 1000, max_refs: null, end_picture: false, native_audio: false, max_seconds: 10, rewrites_prompt: false, notes: 'Image-to-video: describe only the change, subject motion and camera separately, and say what stays still. Negation can backfire: use positive wording. A fixed seed is similar, not identical. [cin-002, cin-005, pm-029]' },
+  'wan-2.2': { name: 'Wan 2.2 (open weights)', negative_mode: 'field', max_chars: null, ideal_words: [80, 120], max_refs: 1, end_picture: true, native_audio: false, max_seconds: 5, rewrites_prompt: false, notes: 'Subject, scene, movement, then style; overloaded or conflicting prompts hurt. Last-frame conditioning on the hosted version. [pm-004, pm-024]' },
+  'ltx-video': { name: 'LTX Video / LTX-2', negative_mode: 'none', max_chars: null, ideal_words: [60, 200], max_refs: null, end_picture: true, native_audio: false, max_seconds: 10, rewrites_prompt: false, notes: 'One flowing paragraph in the present tense; say the camera, the speed and the lens; flicker and exposure shifts are known weaknesses; emotion labels do not work. Negative support was not confirmed in the sources. [pm-005, pm-026]' },
+  'minimax-hailuo': { name: 'MiniMax Hailuo (cloud 2.x)', negative_mode: 'none', max_chars: 2000, max_refs: 1, end_picture: true, native_audio: false, max_seconds: 10, rewrites_prompt: true, notes: 'Camera first, then subject, one action, setting and light. Its prompt optimiser is on by default; turn it off for exact prompts. Stacked emotions and stunts fail. [pm-011, pm-012]' },
+  generic: { name: 'Any generator', negative_mode: 'field', max_chars: null, max_refs: null, end_picture: true, native_audio: true, max_seconds: 8, rewrites_prompt: false, notes: '' },
 };
-export const forGenerator = (clip, id) => { const k = Object.hasOwn(GENERATORS, id) ? id : 'generic', g = GENERATORS[k]; return { ...clip, generator: { id: k, ...g }, prompt: !g.negative && clip.negative ? `${clip.prompt}\nDo not show: ${clip.negative}.` : clip.prompt, negative: g.negative ? clip.negative : '' }; };
+// The lines of a prompt that go first when it is too long, least important first.
+const DROP_FIRST = [/^Physics:/, /^Things in this scene/, /^Characters/, /^Look:/, /^Sound:/, /^Mood and pace:/, /^The clip before ended on:/, /^Motion feel:/, /^Timing:/, /^Audio:/];
+export function compactPrompt(prompt, max) {
+  if (!max || prompt.length <= max) return { prompt, compacted: false };
+  const lines = prompt.split('\n');
+  for (const re of DROP_FIRST) { if (lines.join('\n').length <= max) break; const at = lines.findIndex((l, i) => i > 0 && re.test(l)); if (at > 0) lines.splice(at, 1); }
+  let out = lines.join('\n'); if (out.length > max) { out = out.slice(0, max); const cut = Math.max(out.lastIndexOf('. '), out.lastIndexOf('\n')); out = cut > max * 0.6 ? out.slice(0, cut + 1) : out; }
+  return { prompt: out, compacted: true };
+}
+const nouns = (s) => String(s || '').split(/[.;,]/).map((x) => x.trim().replace(/^(no|not|never)\s+/i, '')).filter(Boolean).join(', ');
+export function forGenerator(clip, id) {
+  const k = Object.hasOwn(GENERATORS, id) ? id : 'generic', g = GENERATORS[k], mode = g.negative_mode, neg = clip.negative || '';
+  const base = mode === 'prompt' && neg ? `${clip.prompt}\nDo not show: ${neg}.` : clip.prompt, fitted = compactPrompt(base, g.max_chars);
+  return { ...clip, generator: { id: k, ...g }, prompt: fitted.prompt, compacted: fitted.compacted, negative: mode === 'field' ? nouns(neg) : '' };
+}
 // The words a generator receives for one clip, built only from approved film canon and this scene's brief. Pure, so the page, the pack and the Worker agree.
 // film = { look, speech, cast: { '<canon.cast ref>': { name, desc } } }
 export function composeClip(scene, film, clipIndex = 1) {
@@ -155,6 +178,7 @@ export function composeClip(scene, film, clipIndex = 1) {
   const parts = [beats[k - 1] || (spans.length > 1 ? 'Carry on calmly from the clip before.' : n.happens), movesOf(d)[k - 1] && `How it moves: ${movesOf(d)[k - 1]}`, k > 1 && beats[k - 2] ? `The clip before ended on: ${beats[k - 2]} Do not repeat it.` : '', n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${oneMove(n.cam)}, one continuous shot`, n.sound && `Sound: ${n.sound}`,
     PHYSICS,
     who.length ? (film.pictures ? `Characters: ${who.map((p) => p.name).join(' and ')} look exactly as in the start picture, with the same clothes, colours and shapes in every frame.` : `Characters (keep each one exactly as in its reference picture): ${who.map((p) => `${p.name}: ${p.desc}`).join(' ')}`) : '', // with a start picture the words never describe a character again: a word that disagrees with the picture makes the generator flip between the two
+    isHandmade(look) ? 'Motion feel: stepped, like stop-motion animation shot at about 12 frames per second, with small handmade imperfections.' : '',
     `Look: ${look.look || look.base || 'as in the film'}. ${look.aspect || '9:16'}, ${look.fps || 24} fps, ${c.seconds} seconds. The medium, colours, exposure and time of day stay exactly the same for the whole clip. No scene change, no cuts, no text on screen.`];
   if (lines.length) parts.push(`Dialogue: ${lines.map((l) => `${l.who || 'NARRATOR'} says${film.speech ? `, in ${film.speech},` : ''} "${l.text}"${l.en && String(l.en).trim().toLowerCase() !== String(l.text).trim().toLowerCase() ? ` (${l.en})` : ''}`).join(' ')}`);
   if (k > 1) parts.push(c.join === 'cut' ? 'This clip is a cut to a new view. It has its own start picture.' : endPic ? 'It begins from the end picture of the clip before.' : 'Continue from the last picture of the previous clip.');
@@ -175,7 +199,11 @@ export const emptyScene = (n, o = {}) => ({ n, name: o.name || `Scene ${n}`, tag
 export const pictureCount = (id, d) => slotsOf(id, d).filter((x) => x.mode === 'stage').length;
 
 // ---- what kind of picture and what kind of being, so a cartoon penguin is not drawn as a photographed man ----
-export const isDrawn = (look) => { const pick = look && Array.isArray(look.options) ? look.options.find((o) => o.id === look.chosen) : null; return /cartoon|animat|\b3d\b|illustrat|drawn|painted|pixar|anime|claymation|storybook|stylis|toon|picture book|clay/i.test([look && look.look, look && look.name, look && look.period, pick && pick.name, pick && pick.sub, pick && pick.desc].filter(Boolean).join(' ')); };
+const DRAWN = /cartoon|animat|\b3d\b|\b2d\b|illustrat|drawn|painted|pixar|anime|claymation|clay|plasticine|felt|paper|cut-?out|puppet|stop[- ]?motion|storybook|stylis|toon|picture book|vector|flat colou?r|watercolou?r|gouache|crayon|pencil|sketch|comic|manga|woodcut/i;
+const lookText = (look) => { const pick = look && Array.isArray(look.options) ? look.options.find((o) => o.id === look.chosen) : null; return [look && look.look, look && look.name, look && look.period, pick && pick.name, pick && pick.sub, pick && pick.desc].filter(Boolean).join(' '); };
+export const isDrawn = (look) => DRAWN.test(lookText(look));
+// A handmade stop-motion look (clay, felt, paper, puppets): it moves in steps, like animation shot on twos.
+export const isHandmade = (look) => /stop[- ]?motion|clay|plasticine|felt|paper|cut-?out|puppet/i.test(lookText(look));
 export const mediumOf = (look) => (isDrawn(look) ? 'illustration' : 'photograph');
 const STRONG = /\b(man|woman|boy|girl|person|human|lady|gentleman|grandfather|grandmother|mother|father|teenager|\d+[- ]year[- ]old)\b/i, BEAST = /\b(penguin|bear|seal|cub|cat|kitten|dog|puppy|bird|animal|creature|robot|dragon|fox|rabbit|bunny|elephant|horse|pony|monkey|owl|mouse|duck|duckling|fish|lion|tiger|monster|alien|toy|doll|frog|toad|tortoise|turtle|hedgehog|pig|piglet|cow|calf|sheep|lamb|goat|deer|fawn|snake|lizard|bee|butterfly|ladybug|squirrel|panda|koala|kangaroo|giraffe|zebra|hippo|whale|dolphin|octopus|crab|chick|chicken|hen|bat|hamster|otter|beaver|wolf|raccoon|mole|snail|caterpillar|dinosaur|unicorn|ghost|puppet)s?\b/i;
 // 'person' unless the description names an animal or creature before it names a human.

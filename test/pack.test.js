@@ -87,7 +87,7 @@ test('the look stays constant, characters are described the same way each time, 
   const quiet = { data: { seconds: 6, clips: clipPlan(6), who: ['canon.cast:mira', 'canon.cast:x'], notes: { happens: 'She walks.' }, start: { mode: 'stage' }, end: { mode: 'stage' } } };
   const a = composeClip(quiet, film, 1); assert.match(a.prompt, /Characters \(keep each one exactly as in its reference picture\): Mira: A small alpaca with a long neck/); assert.doesNotMatch(a.prompt, /X:/);
   assert.match(a.prompt, /Look: felt stop-motion\. 16:9, 24 fps, 6 seconds\. The medium, colours, exposure and time of day stay exactly the same for the whole clip\. No scene change, no cuts, no text on screen\./);
-  assert.equal(a.audio, 'silent'); assert.match(a.prompt, /Audio: none\. No speech, no voices, no music\./);
+  assert.equal(a.audio, 'silent'); assert.match(a.prompt, /Audio: only quiet room tone\. Every character keeps their mouth closed\./);
   assert.equal(composeClip({ data: { ...quiet.data, notes: { happens: 'x', sound: 'rain' } } }, film, 1).audio, 'ambient');
   const talk = composeClip({ data: { ...quiet.data, transcript: [{ who: 'MIRA', text: 'Hi', sec: 2 }] } }, film, 1); assert.equal(talk.audio, 'dialogue'); assert.match(talk.prompt, /Audio: only the spoken lines above/);
 });

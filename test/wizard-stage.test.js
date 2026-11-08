@@ -109,3 +109,20 @@ test('with a start picture the words do not describe the characters again', () =
   assert.match(composeClip(sc, film, 1).prompt, /Mimi: A bunny in tiny blue overalls\./);
   const p = composeClip(sc, { ...film, pictures: true }, 1).prompt; assert.doesNotMatch(p, /blue overalls/); assert.match(p, /Characters: Mimi look exactly as in the start picture/);
 });
+
+import { compactPrompt, isHandmade, GENERATORS } from '../public/js/wizard-model.js';
+test('the words are fitted to the generator: negatives by its mode, length by its limit, and a handmade look moves in steps', () => {
+  const sc = { data: { seconds: 6, notes: { happens: 'A fox looks up.', cam: 'slow push-in', mood: 'calm', sound: 'wind', never: 'no crowds. no cars' }, who: ['canon.cast:fox'], moves: ['The fox lifts its head slowly.'] } }, film = { cast: { 'canon.cast:fox': { name: 'Fox', desc: 'A small red fox.' } }, look: { look: 'felt stop-motion, soft light' } }, clip = composeClip(sc, film, 1);
+  assert.match(clip.prompt, /Motion feel: stepped, like stop-motion/); assert.doesNotMatch(composeClip(sc, { ...film, look: { look: 'soft 3D cartoon' } }, 1).prompt, /Motion feel/);
+  assert.equal(isHandmade({ look: 'Smooth round shapes', options: [{ id: 'a', name: 'Clay Play' }], chosen: 'a' }), true); assert.equal(mediumOf({ look: 'needle felt puppets' }), 'illustration'); assert.equal(mediumOf({ look: 'paper cut-out collage' }), 'illustration'); assert.equal(mediumOf({ look: 'muted film grain' }), 'photograph');
+  assert.match(forGenerator(clip, 'minimax-h3').prompt, /Do not show: no crowds/); assert.equal(forGenerator(clip, 'minimax-h3').negative, '');
+  assert.equal(forGenerator(clip, 'veo-3.1').negative, 'crowds, cars', 'a negative field takes nouns'); assert.doesNotMatch(forGenerator(clip, 'veo-3.1').prompt, /Do not show/);
+  assert.equal(forGenerator(clip, 'runway-gen-4.5').negative, ''); assert.doesNotMatch(forGenerator(clip, 'runway-gen-4.5').prompt, /Do not show|crowds/, 'negation can backfire, so it is left out');
+  const short = forGenerator(clip, 'runway-gen-4.5', 1); assert.ok(GENERATORS['runway-gen-4.5'].max_chars === 1000 && short.prompt.length <= 1000);
+});
+test('a prompt over the limit loses its least important lines first and keeps the action, the move, the states and the dialogue', () => {
+  const p = ['The fox looks up.', 'How it moves: the head lifts slowly.', 'Camera: slow push-in', 'Physics: ' + 'x'.repeat(300), 'Characters: Fox: ' + 'y'.repeat(300), 'Look: z', 'Audio: a', 'Timing: t'].join('\n');
+  const r = compactPrompt(p, 200); assert.equal(r.compacted, true); assert.ok(r.prompt.length <= 200); assert.match(r.prompt, /^The fox looks up\.\nHow it moves/); assert.doesNotMatch(r.prompt, /Physics|Characters/);
+  assert.deepEqual(compactPrompt('short', 200), { prompt: 'short', compacted: false });
+  const hard = compactPrompt('A. ' + 'word '.repeat(100), 120); assert.ok(hard.prompt.length <= 120);
+});
