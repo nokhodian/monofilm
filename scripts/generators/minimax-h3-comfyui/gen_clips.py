@@ -49,7 +49,7 @@ def measure(mp4):
     out = subprocess.run(["node", os.path.join("measure", "scripts", "measure-take.mjs"), mp4], cwd=HERE, env=env, capture_output=True, text=True, check=True).stdout
     return json.loads(out.strip().splitlines()[-1])
 
-def frames_of(mp4, secs, count=8):
+def frames_of(mp4, secs, count=12):
     out = []
     for i in range(count):
         t = max(0.05, (i + 0.5) * secs / count - 0.1)

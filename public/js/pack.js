@@ -154,3 +154,30 @@ export function publishChecklist(film = {}, scenes = []) {
   if (scenes.some((s) => ((s.data || {}).transcript || []).some((l) => l.text))) items.push({ id: 'voice', text: 'If you add a cloned or synthetic voice, you need the voice owner\'s consent, and the film should say the speech is synthetic.', practice: 'aud-p-025' });
   return items;
 }
+
+// ---- sizes across a finished clip (measured by SAM, frame by frame) ----
+// series = { name: [size of that character in each frame, as a fraction of the frame (0 when not found)] }. A character may look bigger or smaller only by really walking toward or away
+// from the camera (depth[name]); when the camera pushes in, everything scales together, so only the RATIO between characters is held. The tolerances are wide enough for a few frames of
+// measuring noise and narrow enough to catch a snail that shrinks to 60% or a pair whose proportion changes.
+const med = (a) => { const s = a.filter((x) => x > 0.02).sort((p, q) => p - q); return s.length ? s[Math.floor(s.length / 2)] : 0; };
+export function sizeFaults(series, { seconds = 6.6, depth = {}, push = false } = {}) {
+  const names = Object.keys(series), n = names.length ? series[names[0]].length : 0, at = (i) => Math.round(((i + 0.5) * seconds) / Math.max(1, n) * 10) / 10, out = [];
+  if (!push) for (const name of names) { const m = med(series[name]); if (!m) continue; const lo = depth[name] ? 0.5 : 0.75, hi = depth[name] ? 1.7 : 1.3;
+    series[name].forEach((v, i) => { if (v > 0.02 && (v / m < lo || v / m > hi)) out.push({ kind: 'size', name, i, at: at(i), ratio: Math.round((v / m) * 100) / 100 }); }); }
+  for (let a = 0; a < names.length; a++) for (let b = a + 1; b < names.length; b++) {
+    const A = series[names[a]], B = series[names[b]], rs = A.map((v, i) => (v > 0.02 && B[i] > 0.02 ? v / B[i] : 0)), m = med(rs); if (!m) continue;
+    const loose = depth[names[a]] || depth[names[b]], lo = loose ? 0.5 : 0.75, hi = loose ? 1.7 : 1.33;
+    rs.forEach((v, i) => { if (v > 0 && (v / m < lo || v / m > hi)) out.push({ kind: 'ratio', name: `${names[a]} to ${names[b]}`, i, at: at(i), ratio: Math.round((v / m) * 100) / 100 }); });
+  }
+  return out.sort((x, y) => x.i - y.i);
+}
+export function sizeIssues(faults) {
+  const seen = new Set(), out = [];
+  for (const f of faults) { const key = `${f.kind}:${f.name}`; if (seen.has(key)) continue; seen.add(key);
+    const first = faults.filter((x) => x.kind === f.kind && x.name === f.name), t = first[0].at, pct = Math.round(first.reduce((m, x) => (Math.abs(1 - x.ratio) > Math.abs(1 - m) ? x.ratio : m), first[0].ratio) * 100);
+    out.push(f.kind === 'size' ? { kind: 'size', problem: `The ${f.name} ${pct < 100 ? 'shrinks' : 'grows'} to ${pct}% of its usual size from about ${t} s, with nothing that explains it`, frames: first.map((x) => x.i + 1).join(', ') }
+      : { kind: 'size', problem: `The size of ${f.name} changes to ${pct}% of its usual proportion from about ${t} s`, frames: first.map((x) => x.i + 1).join(', ') }); }
+  return out;
+}
+// Where the clip is good until: just before the first fault (never less than 1.2 s), or null when there is none.
+export const goodUntil = (faults) => (faults.length ? Math.max(1.2, Math.round((faults[0].at - 0.2) * 10) / 10) : null);

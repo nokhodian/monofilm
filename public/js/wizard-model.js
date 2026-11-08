@@ -292,3 +292,10 @@ export function cameraNote(cam, which) {
   if (/\b(pull|dolly out|back|zoom out)\b/.test(c)) return 'The camera is only a little further back than in the previous picture (about ten percent): the same angle and the same background.';
   return 'The camera is in nearly the same position and angle as in the previous picture.';
 }
+
+// Which characters really travel nearer to or further from the camera in a clip (so their size may change): their move sentence says they climb, run, walk toward or away.
+export function depthMovers(d, k, cast = []) {
+  const text = `${movesOf(d)[k - 1] || ''} ${clipBeats(d)[k - 1] || ''}`, out = {};
+  for (const c of cast) { if (!c.name) continue; const sentence = text.split(/(?<=[.!?])\s+/).filter((x) => new RegExp(`\\b${c.name}\\b`, 'i').test(x) || (c.kind && new RegExp(`\\b${c.kind}\\b`, 'i').test(x))).join(' '); out[c.name] = /\b(climb\w*|scurr\w*|scamper\w*|runs?|running|walks?|toward\w*|away|up the|down the|higher|further|nearer|descend\w*|approach\w*|goes|moves? (up|down|forward|back))\b/i.test(sentence); }
+  return out;
+}

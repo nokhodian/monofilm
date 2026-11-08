@@ -3,7 +3,7 @@
 import { HttpError, bad, parseJson } from './util.js';
 import * as S from './store.js';
 import { retryAdvice, voicePlan } from '../public/js/pack.js';
-import { R, REFS, keyOf, clipPlan, composeClip, startOf, hasEnd, midEnds, forGenerator, GENERATORS, clipRisk, attemptBudget, dialogueLoad, clipChecklist, beastOf } from '../public/js/wizard-model.js';
+import { R, REFS, keyOf, clipPlan, composeClip, startOf, hasEnd, midEnds, forGenerator, GENERATORS, clipRisk, attemptBudget, dialogueLoad, clipChecklist, beastOf, depthMovers, shortLook } from '../public/js/wizard-model.js';
 import { ensureClips, addTake } from './wizard.js';
 import { reviewFrames, reviewPair } from './takereview.js';
 
@@ -92,7 +92,8 @@ export const VIDEO_TOOLS = [
     const L = await load(c, a.production), sc = sceneList(L, a.scene)[0]; if (!sc) throw new HttpError(404, `no scene ${a.scene}`);
     const n = Math.round(Number(a.clip) || 1), spec = clipSpec(c, a.production, L, sc, n);
     const pics = []; for (const [what, x] of [['start', spec.start_picture], ['end', spec.end_picture]]) if (x && x.uri) pics.push({ what, uri: x.uri });
-    return reviewFrames(c.env, { frames: a.frames, asked: spec.prompt, pictures: pics, checklist: clipChecklist(sc.data, n, Object.values(L.film.cast).map((c) => ({ name: c.name, kind: beastOf(c.desc) })).filter((c) => c.kind)) });
+    const inScene = (sc.data.who || []).map((w) => L.film.cast[w]).filter(Boolean).map((c) => ({ name: c.name, kind: beastOf(c.desc), concept: beastOf(c.desc) || shortLook(c.desc, c.name) })), look = /\b(push|closer|zoom in|pull|back)\b/i.test((sc.data.notes || {}).cam || '');
+    return reviewFrames(c.env, { frames: a.frames, asked: spec.prompt, pictures: pics, checklist: clipChecklist(sc.data, n, inScene.filter((x) => x.kind)), measure: { concepts: inScene.map((x) => ({ name: x.name, concept: x.concept })), seconds: spec.seconds, depth: depthMovers(sc.data, n, inScene), push: look } });
   }),
   T('compare_takes', 'Which of two takes of the same clip is better? Send 6 to 8 small jpeg frames (base64, in time order) of each. A judge agrees with people most when it compares two takes, so use this to pick between takes instead of scoring each. It answers {winner: A, B or tie, reason, a_problems, b_problems}.', { ...prod, scene: str, clip: { ...num, description: 'clip number, from 1' }, frames_a: { type: 'array', items: str }, frames_b: { type: 'array', items: str } }, ['production', 'scene', 'clip', 'frames_a', 'frames_b'], async (c, a) => {
     const L = await load(c, a.production), sc = sceneList(L, a.scene)[0]; if (!sc) throw new HttpError(404, `no scene ${a.scene}`);

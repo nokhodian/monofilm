@@ -326,3 +326,13 @@ test('a character that changed size between two pictures is caught by measuring 
   const { checkPicture } = await import('../src/picturecheck.js'); const r = await checkPicture(env, 'media/p/b.png', 'x', sam(400, 200), [], [], sizes(false));
   assert.deepEqual([r.ok, r.kind, r.major], [false, 'size', true]);
 });
+
+test('the clip review measures every character in every frame with SAM and reports the moment a size changes', async () => {
+  const { reviewFrames } = await import('../src/takereview.js'), frames = Array.from({ length: 12 }, (_, i) => `QUJD${i}`);
+  const box = (side) => `<|box;x1=100;y1=100;x2=${100 + side};y2=${100 + side};w=1000;h=1000;c=0.9|>`; let calls = 0;
+  const f = async (url, init) => { const b = JSON.parse(init.body); if (b.model === 'sam-3.1') { const frame = Math.floor(calls++ / 2), snail = b.input[0].content[0].text === 'snail'; return reply({ output_text: box(snail ? (frame >= 6 ? 120 : 250) : 120) }); } return reply(msg({ ok: true, seen: 'x', issues: [], advice: '', answers: [] })); };
+  const r = await reviewFrames({ MODEL_API_KEY: 'k' }, { frames, asked: 'x', measure: { concepts: [{ name: 'Moss', concept: 'snail' }, { name: 'Pip', concept: 'beetle' }], seconds: 6, depth: {}, push: false } }, f);
+  assert.equal(r.ok, false, 'a measured size fault fails the review even when the judge said ok'); assert.ok(r.size_faults.some((x) => x.name === 'Moss' && x.kind === 'size')); assert.equal(r.sizes.Moss.length, 12); assert.ok(r.good_until >= 1.2 && r.good_until < 3.3);
+  assert.match(r.issues.find((i) => i.kind === 'size').problem, /Moss shrinks to/); assert.match(r.advice, /Keep every character the same size and the same proportion/);
+  assert.equal(calls, 24, 'every frame, every character');
+});

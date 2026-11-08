@@ -167,3 +167,10 @@ test('the reviewer is asked about the background, the framing, every size and on
   assert.ok(q.some((x) => /background keep exactly the same shapes/.test(x))); assert.ok(q.some((x) => /framing change only by one slow camera move/.test(x))); assert.ok(q.some((x) => /same size relative to the frame/.test(x)));
   assert.ok(q.includes('Is there exactly one snail (Moss) in every frame, never two?')); assert.ok(q.includes('Is there exactly one beetle (Pip) in every frame, never two?'));
 });
+
+import { depthMovers } from '../public/js/wizard-model.js';
+test('a character that climbs or walks toward or away may change size; one that only glides in place may not', () => {
+  const d = { seconds: 6, clips: [{ seconds: 6 }], notes: { happens: 'x' }, moves: ['Pip scurries up the path on six legs. Moss glides a short way along its foot.'] };
+  assert.deepEqual(depthMovers(d, 1, [{ name: 'Pip', kind: 'beetle' }, { name: 'Moss', kind: 'snail' }]), { Pip: true, Moss: false });
+  assert.deepEqual(depthMovers({ seconds: 6, notes: { happens: 'Moss runs toward the camera.' } }, 1, [{ name: 'Moss', kind: 'snail' }]), { Moss: true });
+});
