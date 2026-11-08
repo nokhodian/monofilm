@@ -3,7 +3,7 @@
 import { st, api, P, toast, mediaSrc, copyText, esc } from './core.js';
 import { get, threads } from './data.js';
 import { R, TARGETS, REFS, SUBS, sceneReadiness, composeClip, keyOf, slug } from './wizard-model.js';
-import { filmEntries, buildZip, sceneDir } from './pack.js';
+import { filmEntries, buildZip, sceneDir, publishChecklist } from './pack.js';
 import { registerStep, spine, sceneArts, lk, hrefOf, nothing } from './w-core.js';
 import { settings, setSettings, filmOf, sceneInput, clipsOf, takesOf, fetchBytes, saveBlob, rctx } from './w-pack.js';
 
@@ -80,8 +80,10 @@ function htmlShip(ctx) {
   const stale = st.d.arts.filter((a) => a.stale); if (stale.length) notes.push(['warn', `${stale.length} item${stale.length === 1 ? ' is' : 's are'} out of date because something under ${stale.length === 1 ? 'it' : 'them'} changed: ${stale.slice(0, 3).map((a) => lk(esc(((a.data || {}).name || (a.data || {}).title || a.ref)), pageOf(a))).join(', ')}.`]);
 
   const slate = `<div class="slate"><div class="clapr top"></div><div class="clapr"></div><div class="sg"><div><small>Film</small><b>${esc(film.name)}</b></div><div><small>Scenes</small><b>${scenes.length}</b></div><div><small>Runtime</small><b>${total} s</b></div><div><small>Shape</small><b>${esc(((film.look || {}).aspect) || fmt.aspect || '9:16')}</b></div></div></div>`;
+  const pub = `<span class="lbl">Before you publish</span><ul class="sm" style="margin:0 0 8px;padding-left:18px">${publishChecklist({}, sceneArts()).map((i) => `<li>${esc(i.text)}</li>`).join('')}</ul>`;
   const B = `${slate}<span class="lbl" style="margin-top:0">Scenes at a glance</span><p class="sm mute" style="margin:0 0 6px">Four bars each: Brief, Stage, Pictures, Sound. Click a scene to open it.</p><div class="wzp-rows">${rows || nothing('No scenes yet.')}</div>
   <span class="lbl">The film in order</span><div class="wzp-lane">${lane || nothing('No scenes yet.')}</div>
+  ${pub}
   <div class="cd wzp-after"><h5>After the generator</h5><p class="sm" style="margin:0 0 6px">Make each clip in your generator from its scene pack. Then bring the clip file back on that scene's Pack page. I check the first and last picture against yours.</p><div>${scenes.map((sc) => lk(`Scene ${sc.data.n} · Pack`, hrefOf('scenes', keyOf(sc.ref), 'pack'))).join(' · ') || ''}</div></div>`;
   return spine(ctx, { A, B, items: [], notice: notes, ai: 'This is the film so far. I list what I noticed, and where to fix it. Download the pack when you are ready.',
     next: { label: 'Download the film pack · .zip', act: 'wsh-zip' }, gate: { ready: scenes.length > 0, reason: !scenes.length ? 'There are no scenes to pack yet.' : notReady.length ? `${notReady.length} of ${scenes.length} scenes are not ready. You can still download. Missing parts are listed in the zip.` : 'Everything is ready. The zip holds all you ticked above.' }, act: 'C' });
