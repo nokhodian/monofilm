@@ -10,18 +10,18 @@ const SYSTEM = 'If reference pictures of characters follow the first picture, co
 const BLIND = 'List every character or creature you see in the picture. Output JSON {beings: [{kind (what kind of being or animal it really is, one or two words), colour}]}. Do not guess what it is meant to be: say what it looks like.';
 async function blindKinds(env, uri, kinds, f) {
   try {
-    const image = await read(env, uri); if (!image) return '';
+    const image = await read(env, uri); if (!image) return { why: '', seen: [] };
     const r = await spark(env, { instructions: `${BLIND}\nReply with one JSON object and nothing else.`, input: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'The picture:' }, { type: 'input_image', image_url: image }] }] }, f), m = /\{[\s\S]*\}/.exec(outputText(r)), j = m && parseJson(m[0], null);
-    const seen = (j && Array.isArray(j.beings) ? j.beings : []).map((b) => String((b && b.kind) || '').toLowerCase()).filter(Boolean); if (!seen.length) return '';
-    const missing = kinds.filter((k) => !seen.some((x) => sameKind(k.kind, x))); return missing.length ? `The picture shows ${seen.join(' and ')}; it must show ${missing.map((k) => `a ${k.kind}`).join(' and ')} (${missing.map((k) => k.name).join(', ')})` : '';
-  } catch (e) { return ''; }
+    const seen = (j && Array.isArray(j.beings) ? j.beings : []).map((b) => String((b && b.kind) || '').toLowerCase()).filter(Boolean); if (!seen.length) return { why: '', seen: [], error: `no beings in the answer: ${outputText(r).slice(0, 200)}` };
+    const missing = kinds.filter((k) => !seen.some((x) => sameKind(k.kind, x))); return { why: missing.length ? `The picture shows ${seen.join(' and ')}; it must show ${missing.map((k) => `a ${k.kind}`).join(' and ')} (${missing.map((k) => k.name).join(', ')})` : '', seen };
+  } catch (e) { return { why: '', seen: [], error: String(e && e.message).slice(0, 160) }; }
 }
 export async function checkPicture(env, uri, expect, f, refs = [], kinds = []) {
-  if (kinds.length) { const why = await blindKinds(env, uri, kinds, f); if (why) return { ok: false, kind: 'being', major: true, seen: '', problem: why.slice(0, 220) }; }
+  let beings = [], beingsError = ''; if (kinds.length) { const b = await blindKinds(env, uri, kinds, f); beings = b.seen; beingsError = b.error || ''; if (b.why) return { ok: false, kind: 'being', major: true, seen: '', beings, problem: b.why.slice(0, 220) }; }
   const first = await checkOnce(env, uri, expect, f, refs, kinds);
-  if (first.ok || first.skipped) return first;
+  if (first.ok || first.skipped) return { ...first, beings, beingsError };
   const second = await checkOnce(env, uri, expect, f, refs, kinds);
-  return second.ok || second.skipped ? { ...second, ok: true, secondOpinion: true } : first;
+  return second.ok || second.skipped ? { ...second, ok: true, secondOpinion: true, beings, beingsError } : { ...first, beings, beingsError };
 }
 const read = async (env, uri) => { const o = await env.MEDIA.get(String(uri).replace(/^media\//, '')); return o ? dataUrl(await o.arrayBuffer(), (o.httpMetadata && o.httpMetadata.contentType) || 'image/png') : null; };
 // A bear is not a snail: the kind of every named character is compared in code, because a judge that is asked only "does it match?" says yes to a bear.

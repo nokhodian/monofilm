@@ -266,3 +266,14 @@ test('a bear drawn for a snail is caught by comparing the kind of being in code,
   assert.equal((await checkPicture(env, 'media/p/x.png', 'x', say([], [{ kind: 'clay snail' }, { kind: 'orange bug' }]), [], kinds)).ok, true, 'a snail and a bug are a snail and a beetle');
   assert.deepEqual([sameKind('bunny', 'white rabbit'), sameKind('frog', 'toad'), sameKind('snail', 'bear'), sameKind('', 'bear')], [true, true, false, true]);
 });
+
+test('a start picture is drawn with the reference pictures of the characters in it and their descriptions', async () => {
+  const t = await setup(), calls = [], f = stand(calls);
+  await W.readStory(t.env, t.db, human, t.id, f); await ok(t, REFS.reading); await ok(t, R.cast('ines')); await ok(t, R.place('cathedral-scaffold'));
+  await W.draftScenes(t.env, t.db, human, t.id, f); await ok(t, REFS.look); await ok(t, 'scene:the-beam');
+  const face = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines' }, f), cur = await S.getArtifact(t.db, t.id, R.cast('ines'));
+  await S.propose(t.db, human, t.id, { ref: R.cast('ines'), data: { ...cur.data, anchor: face.asset.id }, parent: cur.parent || undefined, auto_approve: true, base_version: cur.version });
+  const fr = await W.makeFrame(t.env, t.db, human, t.id, { scene: 'the-beam', which: 'start' }, f), inp = (await S.getArtifact(t.db, t.id, fr.ref)).assets[0].provenance.input;
+  assert.deepEqual(inp.anchors.map((a) => a.id), ['ines'], 'the character reference reaches the image model'); assert.ok(calls.filter((u) => u.includes('/images/')).pop().endsWith('/images/edits'), 'with a reference the edit endpoint is used');
+  assert.match(inp.prompt, /Only these appear, exactly as in their reference pictures: A woman in her forties/);
+});
