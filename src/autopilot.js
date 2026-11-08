@@ -9,7 +9,7 @@ import { R } from '../public/js/wizard-model.js';
 import { starterStage } from '../public/js/w-stage-pure.js';
 import { plan, remaining, describe, pageOf } from '../public/js/w-auto-pure.js';
 
-const LEASE_MS = 150 * 1000, MAX_STEPS = 7, MAX_MS = 8 * 60 * 1000; // one worker run does a few moves, then the next tick carries on (a worker may only make so many calls at a time)
+const LEASE_MS = 6 * 60 * 1000, MAX_STEPS = 7, MAX_MS = 8 * 60 * 1000; // one worker run does a few moves, then the next tick carries on. The lease must outlast the longest step (drafting the scenes asks the model twice): a shorter one let a second runner start while the first was still drafting, and the film got two sets of scenes
 const now = () => Date.now();
 const NO_CREDITS = 'The credits for this production are used up. Ask the person who runs this studio to add credits, then press Resume. Everything made so far is kept.';
 
