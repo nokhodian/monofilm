@@ -6,6 +6,8 @@
   // The competition address (monofilm.nokhodian.workers.dev) keeps working. This second address is on our own Cloudflare zone, where the browser check can be switched off for /mcp and /api/*.
   "routes": [{ "pattern": "monofilm.monoes.me", "custom_domain": true }],
   "workers_dev": true,
+  // A picture repair moves millions of pixels in JavaScript (src/rescale.js); the default CPU limit ended it with error 1102.
+  "limits": { "cpu_ms": 120000 },
   "assets": { "directory": "public", "run_worker_first": ["/api/*", "/mcp"] },
   "d1_databases": [
     { "binding": "DB", "database_name": "artistic-intelligence-studio", "database_id": "542c623e-82e6-4b7d-bd80-ec0708b30975" }
