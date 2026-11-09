@@ -318,6 +318,15 @@ test('a box that another character found with more confidence is not taken as th
   assert.deepEqual(ownBoxes([[snail], []])[0], [snail], 'a character nobody else found keeps its box');
 });
 
+test('a character whose shape changed (a shell flattened into a turtle) is caught even when its size did not change', async () => {
+  const { sizeProblem } = await import('../src/picturecheck.js'), env = { MODEL_API_KEY: 'k', MEDIA: fakeR2() };
+  env.MEDIA.m.set('p/a.png', PNG); env.MEDIA.m.set('p/b.png', PNG);
+  const box = (w, h) => `<|box;x1=100;y1=100;x2=${100 + w};y2=${100 + h};w=1000;h=1000;c=0.9|>`, seq = (list) => { let n = 0; return async () => reply({ output_text: box(...list[n++]) }); };
+  const one = { baseUri: 'media/p/a.png', frame: 16 / 9, looks: [{ name: 'Moss', look: 'snail' }] };
+  assert.equal(await sizeProblem(env, 'media/p/b.png', one, seq([[300, 300], [320, 280]])), '', 'a small change of posture is fine');
+  assert.match(await sizeProblem(env, 'media/p/b.png', one, seq([[300, 300], [450, 200]])), /snail has changed shape: it is wider for its height/, 'about the same area, 2.25 times wider for its height');
+});
+
 test('SAM is asked for colour and kind, which is what finds one character and not the others', async () => {
   const { samConcept } = await import('../public/js/wizard-model.js');
   assert.equal(samConcept('very small grey-green clay snail with a spiral shell', 'Moss'), 'grey-green snail'); assert.equal(samConcept('a tiny orange clay beetle', 'Pip'), 'orange beetle');
