@@ -45,6 +45,8 @@ export async function sam(env, { image, concept }, f) {
   return parseBoxes(outputText(r)); // no match is an empty list, not an error
 }
 
+// The boxes for one character. When its colour-and-kind search finds nothing (SAM missed a snail in two pictures of one film), the bare kind is tried; ownBoxes then keeps it apart from the others.
+export async function findBoxes(env, image, c, f) { const found = await sam(env, { image, concept: c.concept }, f); return found.length || !c.fallback || c.fallback === c.concept ? found : sam(env, { image, concept: c.fallback }, f); }
 // "snail" also matches the beetle, and with a higher confidence in some pictures, so the most confident box for a character may be another character. A box that another character's
 // search found with more confidence (they overlap, intersection over the smaller box above 0.5) belongs to that character: `lists` = one box list per character, the same lists come back without the stolen boxes.
 export function ownBoxes(lists) {

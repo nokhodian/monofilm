@@ -324,6 +324,13 @@ test('SAM is asked for colour and kind, which is what finds one character and no
   assert.equal(samConcept('a snail', 'Moss'), 'snail', 'no colour in the description: the bare kind'); assert.equal(samConcept('an old man in a grey coat', 'Ines'), 'old man in a grey coat'.slice(0, 70), 'no kind: the short look, as before');
 });
 
+test('when SAM finds nothing for colour and kind, the bare kind is tried', async () => {
+  const { findBoxes } = await import('../src/meta.js'), asked = [];
+  const f = async (url, init) => { const c = JSON.parse(init.body).input[0].content[0].text; asked.push(c); return reply({ output_text: c === 'snail' ? '<|box;x1=100;y1=100;x2=300;y2=300;w=1000;h=1000;c=0.9|>' : 'no match' }); };
+  const r = await findBoxes({ MODEL_API_KEY: 'k' }, 'data:image/png;base64,AA', { concept: 'grey-green snail', fallback: 'snail' }, f);
+  assert.deepEqual(asked, ['grey-green snail', 'snail']); assert.equal(r.length, 1);
+});
+
 test('a scene with two characters gets a scale sheet once, and every picture of the scene is drawn with it', async () => {
   const t = await setup(); await W.readStory(t.env, t.db, human, t.id, stand()); await ok(t, REFS.reading); await ok(t, R.cast('ines')); await ok(t, R.place('cathedral-scaffold'));
   await W.draftScenes(t.env, t.db, human, t.id, stand()); await ok(t, REFS.look); await ok(t, 'scene:the-beam');
