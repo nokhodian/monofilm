@@ -150,7 +150,7 @@ export async function rescaleCharacter(env, uri, fix, f) {
 export async function repairSized(env, db, actor, pid, ref, uri, check, recheck, f) {
   const fix = check && check.sizeFix, key = `${pid}/fix-${id8()}.png`; let stored = false;
   try {
-    if (!fix || !env.MEDIA || !(Math.abs(Math.log(fix.factor)) > 0.04)) return null;
+    if (!fix || !env.MEDIA || !(fix.factor > 1.04)) return null; // only an enlarged character: the hole a shrunk one leaves was filled with a visible smudge on a busy ground
     const png = await rescaleCharacter(env, uri, fix, f); if (!png) return null;
     await env.MEDIA.put(key, png, { httpMetadata: { contentType: 'image/png' } }); stored = true;
     const again = await recheck(`media/${key}`), worse = (c) => (c.sizeFix ? Math.abs(Math.log(c.sizeFix.factor)) : 0);
