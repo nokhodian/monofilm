@@ -166,7 +166,7 @@ const nouns = (s) => String(s || '').split(/[.;,]/).map((x) => x.trim().replace(
 export function forGenerator(clip, id) {
   const k = Object.hasOwn(GENERATORS, id) ? id : 'generic', g = GENERATORS[k], mode = g.negative_mode, neg = clip.negative || '';
   let text = mode === 'prompt' && neg ? `${clip.prompt}\nDo not show: ${neg}.` : clip.prompt;
-  if (g.static_camera) text = text.replace(/^Camera: .*$/m, 'Camera: static, the camera holds still, one continuous shot');
+  if (g.static_camera) text = text.replace(/^Camera: .*$/m, 'Camera: static, locked-off, the camera holds still, one continuous shot. Every character keeps the same size and the background stays fixed');
   if (g.camera_style === 'bracket') text = text.replace(/^Camera: (.*?), one continuous shot$/m, (m, c) => { const cmd = cameraCommand(c); return cmd ? `Camera: [${cmd}]` : m; });
   const fitted = compactPrompt(text, g.max_chars), hints = [];
   if (g.static_camera) hints.push('This generator is known to reshape the scene on a camera move, so its camera is held still: let the characters carry the action.');

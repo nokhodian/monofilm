@@ -59,3 +59,11 @@ Distilled from the practices in this knowledge base. Every line points at practi
 ## What Monofilm does not do yet (the strongest open ideas)
 
 `npm run kb:build` writes the current list to `docs/knowledge/index.json` under `todo` (practices with status `none` and at least multi-source evidence). The big ones built after this research: reference views per character [chr-p-003], a voice plan per scene [aud-p-010], a pairwise take judge [qa-p-010], risk-based attempt budgets [wf-p-006], an assembly script [cin-p-022], and a publishing checklist [qa-p-021]. Still open at the time of writing: a voice pass generated inside the studio [aud-p-010], camera vocabularies for generators other than Hailuo [pm-p-013], draft-then-final model tiers [wf-p-009], an upscale and shared-grade step [wf-p-019], a score with ducking [aud-p-019], and reversal counting [sty-p-006].
+
+## Sizes and camera: research round of 2026-11-09
+
+- Size is not obeyed from words or references; set it by construction and measure it. [chr-p-024] [chr-p-025] Hold each picture to the scene's first picture as well as the previous one. [scn-p-028] Match first and last frames in size before a first/last-frame call. [scn-p-029]
+- Fix a wrong size by a local rescale and re-check before a full redraw. [res-p-024] Layout, box or depth conditioning is the real size control where the image model offers it. [res-p-025]
+- The only measured tolerance found is about plus or minus 20% for plausible relative size; our tighter bands are our own choice. [qa-p-025] Measure with a short-noun-phrase segmenter per frame and distrust a single propagated mask. [qa-p-026]
+- Lock the camera with a positive phrase plus invariants; where a generator reshapes on camera moves, keep it static and move the camera in post. [cin-p-030] [cin-p-031] Use a provider's fixed-camera flag too. [pm-p-025]
+- Image-to-video under-moves; write a change with a target and distance. [cin-p-032] Seed joins from before the final slowdown. [wf-p-025]

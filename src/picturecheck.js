@@ -19,16 +19,24 @@ async function blindKinds(env, uri, kinds, f) {
 // How big each character is, measured and not judged: SAM finds the character by what it looks like and returns its box. A character that is half the size it was in the
 // previous picture, with a camera that did not move, is a fault; a vision judge does not see it (nor does it see the opposite). `sizes` = { baseUri, looks: [{ name, look }], push }.
 const sizeOf = (boxes) => { const b = (boxes || []).slice().sort((x, y) => (y.conf || 0) - (x.conf || 0))[0]; if (!b) return 0; const [x1, y1, x2, y2] = b.box; return Math.sqrt(Math.max(0, x2 - x1) * Math.max(0, y2 - y1)); };
+// Every picture is held to the previous one (`baseUri`) and to the first picture of its scene (`originUri`), so small steps cannot add up to a big drift; the size of one character
+// relative to another is held too (a snail that shrinks next to a beetle is a fault even when the camera "moved").
 export async function sizeProblem(env, uri, sizes, f, out = {}) {
   try {
-    const now = await read(env, uri), before = await read(env, sizes.baseUri); if (!now || !before) return '';
-    const lo = sizes.push ? 0.85 : 0.65, hi = sizes.push ? 1.6 : 1.5, bad = [];
-    for (const c of sizes.looks.slice(0, 3)) {
-      const concept = c.concept || c.look, [a, b] = await Promise.all([sam(env, { image: before, concept }, f), sam(env, { image: now, concept }, f)]), sa = sizeOf(a), sb = sizeOf(b);
-      (out.report = out.report || []).push({ look: concept, before: Math.round(sa * 100) / 100, now: Math.round(sb * 100) / 100 });
-      if (sa > 0.02 && sb > 0.02) { const ratio = sb / sa; if (ratio < lo || ratio > hi) bad.push(`the ${c.look} is ${Math.round(ratio * 100)}% of the size it was in the previous picture`); }
+    const now = await read(env, uri); if (!now) return '';
+    const refs = [{ uri: sizes.baseUri, what: 'the previous picture' }, ...(sizes.originUri && sizes.originUri !== sizes.baseUri ? [{ uri: sizes.originUri, what: "the scene's first picture" }] : [])];
+    const lo = sizes.push ? 0.85 : 0.78, hi = sizes.push ? 1.6 : 1.3, looks = sizes.looks.slice(0, 3), bad = [];
+    for (const r of refs) {
+      const before = await read(env, r.uri); if (!before) continue; const sa = [], sb = [];
+      for (const c of looks) {
+        const concept = c.concept || c.look, [a, b] = await Promise.all([sam(env, { image: before, concept }, f), sam(env, { image: now, concept }, f)]); sa.push(sizeOf(a)); sb.push(sizeOf(b));
+        (out.report = out.report || []).push({ look: concept, against: r.what, before: Math.round(sa[sa.length - 1] * 100) / 100, now: Math.round(sb[sb.length - 1] * 100) / 100 });
+      }
+      looks.forEach((c, i) => { if (sa[i] > 0.02 && sb[i] > 0.02) { const ratio = sb[i] / sa[i]; if (ratio < lo || ratio > hi) bad.push(`the ${c.look} is ${Math.round(ratio * 100)}% of the size it was in ${r.what}`); } });
+      if (!sizes.push && looks.length > 1 && sa[0] > 0.02 && sb[0] > 0.02) for (let i = 1; i < looks.length; i++) if (sa[i] > 0.02 && sb[i] > 0.02) { const q = (sb[0] / sb[i]) / (sa[0] / sa[i]); if (q < 0.8 || q > 1.25) bad.push(`the ${looks[0].look} compared with the ${looks[i].look} is ${Math.round(q * 100)}% of what it was in ${r.what}`); }
+      if (bad.length) break;
     }
-    return bad.length ? `${bad.join('; ')}; it must keep the same size (it may look bigger or smaller only by really walking nearer or further)` : '';
+    return bad.length ? `${bad.join('; ')}; every character must keep the same size, and the same size next to the others (it may look bigger or smaller only by really walking nearer or further)` : '';
   } catch (e) { return ''; }
 }
 export async function checkPicture(env, uri, expect, f, refs = [], kinds = [], sizes = null) {

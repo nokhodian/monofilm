@@ -23,6 +23,7 @@ What we learned by running Monofilm ourselves (2026-11-05 to 2026-11-09), with t
 | 17 | A vision judge did not see a character change size | A judge is poor at proportions | SAM measures each character's box in the new and the previous picture; below 65% or above 150% of the previous size is a fault (`sizeProblem`). Ask SAM for a plain kind word ("snail"), not a long description: it found nothing for "very small grey-green clay snail" |
 | 18 | A snail was drawn rearing up in the first picture and lying flat in the later ones | The first state did not name a posture | Every state names each character's posture |
 | 19 | An empty place picture came out with little clay animals on it | A handmade clay look invites figurines | The place prompt asks for nothing living or figure-like |
+| 20 | A snail shrank by 10–30% from one picture of a scene to the next and against the beetle; scale differed across scene cuts | Each picture was only compared with the one before it (small steps add up), and the first picture of a scene was held to the previous scene only loosely (65%) | Every picture is held to the previous one and to the scene's first picture (78–130%), and the size of one character relative to another is held too (80–125%); the static camera clause also says every character keeps its size and the background stays fixed (`sizeProblem`, `originUri` in `makeFrame`) |
 
 ## MiniMax H3 (local, 8-step turbo): what we saw
 

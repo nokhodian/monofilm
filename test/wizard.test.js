@@ -317,7 +317,7 @@ test('a character that changed size between two pictures is caught by measuring 
   const box = (side) => `<|box;x1=100;y1=100;x2=${100 + side};y2=${100 + side};w=1000;h=1000;c=0.9|>`;
   const sam = (before, now) => { let n = 0; return async (url, init) => { assert.equal(JSON.parse(init.body).model, 'sam-3.1'); return reply({ output_text: n++ % 2 === 0 ? box(before) : box(now) }); }; };
   const sizes = (push) => ({ baseUri: 'media/p/a.png', looks: [{ name: 'Pip', look: 'tiny orange clay beetle' }], push });
-  assert.match(await sizeProblem(env, 'media/p/b.png', sizes(false), sam(400, 200)), /the tiny orange clay beetle is 50% of the size it was in the previous picture; it must keep the same size/);
+  assert.match(await sizeProblem(env, 'media/p/b.png', sizes(false), sam(400, 200)), /the tiny orange clay beetle is 50% of the size it was in the previous picture; every character must keep the same size/);
   assert.equal(await sizeProblem(env, 'media/p/b.png', sizes(false), sam(400, 380)), '', 'a small change is fine');
   assert.match(await sizeProblem(env, 'media/p/b.png', sizes(false), sam(200, 310)), /155%/); assert.equal(await sizeProblem(env, 'media/p/b.png', sizes(true), sam(200, 310)), '', 'a planned camera push allows a bigger character');
   assert.match(await sizeProblem(env, 'media/p/b.png', sizes(true), sam(400, 300)), /75%/, 'but not a smaller one');
@@ -325,6 +325,18 @@ test('a character that changed size between two pictures is caught by measuring 
   assert.equal(await sizeProblem(env, 'media/p/b.png', sizes(false), async () => reply({}, 500)), '', 'a measurement that cannot run never blocks');
   const { checkPicture } = await import('../src/picturecheck.js'); const r = await checkPicture(env, 'media/p/b.png', 'x', sam(400, 200), [], [], sizes(false));
   assert.deepEqual([r.ok, r.kind, r.major], [false, 'size', true]);
+});
+
+test('a picture is held to the scene\'s first picture and to the size between characters, so small steps cannot add up', async () => {
+  const { sizeProblem } = await import('../src/picturecheck.js'), env = { MODEL_API_KEY: 'k', MEDIA: fakeR2() };
+  for (const k of ['a', 'b', 'c']) env.MEDIA.m.set(`p/${k}.png`, PNG);
+  const box = (side) => `<|box;x1=100;y1=100;x2=${100 + side};y2=${100 + side};w=1000;h=1000;c=0.9|>`;
+  const seq = (sides) => { let n = 0; return async () => reply({ output_text: box(sides[n++]) }); }; // order of calls: before, now, per character, per reference
+  const one = { baseUri: 'media/p/a.png', originUri: 'media/p/c.png', looks: [{ name: 'Moss', look: 'snail' }] };
+  assert.equal(await sizeProblem(env, 'media/p/b.png', one, seq([400, 380, 400, 380])), '', 'a small step against both is fine');
+  assert.match(await sizeProblem(env, 'media/p/b.png', one, seq([400, 380, 500, 380])), /snail is 76% of the size it was in the scene's first picture/, 'a drift that is small each step but big from the start');
+  const two = { baseUri: 'media/p/a.png', looks: [{ name: 'Moss', look: 'snail' }, { name: 'Pip', look: 'beetle' }] };
+  assert.match(await sizeProblem(env, 'media/p/b.png', two, seq([400, 310, 300, 300])), /snail compared with the beetle is/, 'one character shrinking next to another is a fault');
 });
 
 test('the clip review measures every character in every frame with SAM and reports the moment a size changes', async () => {

@@ -1,8 +1,8 @@
 {
- "generated": "2026-11-08",
+ "generated": "2026-11-09",
  "counts": {
-  "sources": 412,
-  "practices": 267
+  "sources": 451,
+  "practices": 280
  },
  "stages": {
   "prompt": [
@@ -41,6 +41,8 @@
    "cin-p-025",
    "cin-p-026",
    "cin-p-027",
+   "cin-p-030",
+   "cin-p-032",
    "qa-p-012",
    "qa-p-013",
    "phy-p-002",
@@ -99,6 +101,7 @@
    "pm-p-015",
    "pm-p-017",
    "pm-p-023",
+   "pm-p-025",
    "res-p-001",
    "res-p-016",
    "scn-p-001",
@@ -125,6 +128,7 @@
    "cin-p-016",
    "cin-p-021",
    "cin-p-022",
+   "cin-p-031",
    "qa-p-023",
    "phy-p-018",
    "phy-p-023",
@@ -134,7 +138,8 @@
    "scn-p-024",
    "scn-p-025",
    "sty-p-014",
-   "wf-p-019"
+   "wf-p-019",
+   "wf-p-025"
   ],
   "picture": [
    "ani-p-009",
@@ -144,6 +149,8 @@
    "chr-p-012",
    "chr-p-013",
    "chr-p-016",
+   "chr-p-024",
+   "chr-p-025",
    "cin-p-015",
    "cin-p-023",
    "pm-p-012",
@@ -151,10 +158,13 @@
    "res-p-008",
    "res-p-010",
    "res-p-011",
+   "res-p-024",
+   "res-p-025",
    "scn-p-002",
    "scn-p-011",
    "scn-p-017",
    "scn-p-018",
+   "scn-p-029",
    "wf-p-001",
    "wf-p-003",
    "wf-p-018"
@@ -177,6 +187,8 @@
    "qa-p-005",
    "qa-p-006",
    "qa-p-009",
+   "qa-p-025",
+   "qa-p-026",
    "phy-p-015",
    "phy-p-020",
    "pm-p-007",
@@ -191,6 +203,7 @@
    "scn-p-003",
    "scn-p-009",
    "scn-p-027",
+   "scn-p-028",
    "sty-p-016",
    "sty-p-021",
    "wf-p-015",
@@ -326,9 +339,19 @@
    "idea": "Out of scope for now; keep as an option for a recurring series character."
   },
   {
+   "id": "chr-p-025",
+   "title": "Normalise references to one common scale before they enter a scene",
+   "idea": "Normalise reference crops and add the lineup picture."
+  },
+  {
    "id": "cin-p-010",
    "title": "Give dollies and pull-backs depth to work with",
    "idea": "Let the scene writer pick static or push-in when the subject moves fast."
+  },
+  {
+   "id": "cin-p-032",
+   "title": "Expect image-to-video to under-move; write a change with a target, not a mood",
+   "idea": "Say distance and end state in the clip prompt; test a motion gain in the local generation script."
   },
   {
    "id": "res-p-015",
@@ -339,6 +362,16 @@
    "id": "res-p-017",
    "title": "Several keyframes beat one for long motion",
    "idea": "Let the shot list place a mid-clip keyframe picture."
+  },
+  {
+   "id": "res-p-024",
+   "title": "Repair a wrong size by a local rescale, not by redrawing the whole picture",
+   "idea": "Add a repair step that uses the SAM boxes already measured to rescale the character and then re-check."
+  },
+  {
+   "id": "res-p-025",
+   "title": "Use box, depth or layout conditioning where the image model accepts it",
+   "idea": "Optional path for the local generator: ControlNet depth from the anchor."
   },
   {
    "id": "wf-p-009",
@@ -3778,6 +3811,98 @@
    ]
   },
   {
+   "id": "chr-p-024",
+   "cluster": "character-consistency",
+   "title": "Do not trust words or references to carry size; fix scale in the picture",
+   "rule": "Treat size as something the image model will not obey from words or from reference pictures; set it by construction (a layout, a composite or an edit that starts from a picture that already has the right sizes).",
+   "why": "A user got 1.1x instead of the asked 1.4x height ratio across 15 phrasings and a reference with the right ratio, while plain text-to-image gave 1.4x; GenScale finds no tested generator or editor reliable on relative scale (best 56.5% plausible on common objects).",
+   "how": "Draw the scene (or a lineup of all its characters at the right sizes) first, then apply identity in an edit turn; describe height by body alignment (where one head reaches on the other) rather than a ratio number; say references are for face and clothing only; check by measurement.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "picture",
+   "evidence": [
+    "chr-056",
+    "res-045",
+    "res-047",
+    "chr-057"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "partial",
+    "where": "wizard sizes line per character and sizeProblem check (words plus measurement after the fact)",
+    "idea": "Add a lineup 'scale sheet' picture with all characters of a scene at their relative sizes as the first reference, and use it as the scene's anchor."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-09",
+   "evidenceSources": [
+    {
+     "id": "chr-056",
+     "url": "https://discuss.ai.google.dev/t/reference-images-keep-faces-consistent-but-ignore-character-size-scale-any-way-to-control-relative-height/176840",
+     "title": "Reference images keep faces consistent but ignore character size/scale",
+     "quality": "anecdotal"
+    },
+    {
+     "id": "res-045",
+     "url": "https://arxiv.org/abs/2609.00525",
+     "title": "GenScale: A Benchmark for Relative Object Scale in Image Generation and Editing",
+     "quality": "primary"
+    },
+    {
+     "id": "res-047",
+     "url": "https://arxiv.org/abs/2512.22310",
+     "title": "MoFu: Scale-Aware Modulation and Fourier Fusion for Multi-Subject Video Generation",
+     "quality": "primary"
+    },
+    {
+     "id": "chr-057",
+     "url": "https://hailuoai.video/knowledge/predictable-subject-size-scale-drift-ai-video",
+     "title": "Scaling Consistency: Predictable Subject Size Across Angles",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
+   "id": "chr-p-025",
+   "cluster": "character-consistency",
+   "title": "Normalise references to one common scale before they enter a scene",
+   "rule": "Give every reference of a scene the same framing and zoom level, and one picture that shows the characters side by side at the right relative size.",
+   "why": "Reference images that differ in zoom make subjects come out unnaturally large or small in multi-subject generation (MoFu). Vendor advice is a reference at a neutral focal length with the subject inside the central 60% of the frame.",
+   "how": "Crop or redraw per-character references so the character fills the same fraction of the frame; keep the lineup picture as the size source.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "picture",
+   "evidence": [
+    "res-047",
+    "chr-057"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "none",
+    "where": "references are per character (face, outfit); no common-scale rule",
+    "idea": "Normalise reference crops and add the lineup picture."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-09",
+   "evidenceSources": [
+    {
+     "id": "res-047",
+     "url": "https://arxiv.org/abs/2512.22310",
+     "title": "MoFu: Scale-Aware Modulation and Fourier Fusion for Multi-Subject Video Generation",
+     "quality": "primary"
+    },
+    {
+     "id": "chr-057",
+     "url": "https://hailuoai.video/knowledge/predictable-subject-size-scale-drift-ai-video",
+     "title": "Scaling Consistency: Predictable Subject Size Across Angles",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
    "id": "cin-p-001",
    "cluster": "cinematography",
    "title": "One camera move per clip",
@@ -5106,6 +5231,205 @@
    ]
   },
   {
+   "id": "cin-p-030",
+   "cluster": "cinematography",
+   "title": "Lock the camera with a positive block, invariants and a single clear phrase",
+   "rule": "For a static shot start the prompt with one positive lock phrase (locked tripod, fixed camera), say the background stays static and the character's size stays constant, and keep camera-energy words out.",
+   "why": "Vendors and users agree that a prompt alone may not hold a camera still: models add a slight push-in or pan unless told; negative-only phrasing often has the opposite effect; stacking 'stable, still, smooth' dilutes the instruction. None of the sources measures it.",
+   "how": "Example: 'Locked tripod shot, the camera and background stay fixed, the snail keeps the same size, it glides to the left.' Check first, middle and last frames at the same size: a growing head with the edges moving out is a zoom; bent lines with fixed anchors is background warp.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "prompt",
+   "evidence": [
+    "cin-038",
+    "cin-040",
+    "cin-041",
+    "cin-037",
+    "cin-039",
+    "cin-036"
+   ],
+   "strength": "multi-source",
+   "conflicts": [
+    "cin-p-026"
+   ],
+   "monofilm": {
+    "status": "partial",
+    "where": "normalizeCamera says 'the camera holds still' for a static shot",
+    "idea": "Add invariants (size constant, background fixed) to the static clause."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-09",
+   "evidenceSources": [
+    {
+     "id": "cin-038",
+     "url": "https://www.pippit.ai/blog/stop-unwanted-camera-movement-ai-video",
+     "title": "Stop unwanted camera movement in AI video",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-040",
+     "url": "https://www.imaginary.app/blog/image-to-video-that-actually-moves-not-just-wiggles-a-9-step-troubleshooting-che",
+     "title": "Image-to-video that actually moves, not just wiggles",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-041",
+     "url": "https://runway.com/resources/photo-to-video-tips",
+     "title": "Photo to video tips",
+     "quality": "primary"
+    },
+    {
+     "id": "cin-037",
+     "url": "https://hailuoai.video/knowledge/ai-video-camera-motion-control",
+     "title": "How to Stop Unwanted Camera Motion in AI Prompts",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-039",
+     "url": "https://community.adobe.com/questions-404/no-matter-what-model-i-use-and-even-if-i-give-explicit-instructions-to-not-push-or-pan-or-move-it-still-does-it-1632612",
+     "title": "Firefly image to video keeps adding a slight push-in or pan",
+     "quality": "anecdotal"
+    },
+    {
+     "id": "cin-036",
+     "url": "https://lumaai-help.freshdesk.com/support/solutions/articles/151000222547-how-do-i-create-static-camera-shots-in-dream-machine-",
+     "title": "How do I create static camera shots in Dream Machine?",
+     "quality": "primary"
+    }
+   ]
+  },
+  {
+   "id": "cin-p-031",
+   "cluster": "cinematography",
+   "title": "Where a generator reshapes the scene on camera moves, move the camera in post",
+   "rule": "For a generator that cannot separate camera from object motion, ask for a static camera in every clip and make any push-in or pan as a uniform crop and scale of the finished clip.",
+   "why": "Temporal attention links the same pixel positions, so large camera shifts break consistency; text-only and trajectory-only control entangle camera and object motion; practitioners see the subject grow when a zoom prompt is aggressive. A crop scales every part of the picture together.",
+   "how": "Keep generator profile flag static_camera; in assembly, apply a slow scale (a suggested 3-8%, not from a source) with a fixed centre on the joined clip where the story wants a push-in. Camera-conditioned models (CameraCtrl, CamI2V, Direct-a-Video) exist for the case where real camera motion is needed.",
+   "applies_to": [
+    "minimax-hailuo",
+    "all"
+   ],
+   "stage": "assembly",
+   "evidence": [
+    "res-060",
+    "res-052",
+    "res-059",
+    "res-064",
+    "res-063",
+    "chr-057"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "partial",
+    "where": "static_camera per generator in the film format (assumption (c) supported); no post-production push-in",
+    "idea": "Add an optional crop push-in to assembly for scenes that asked for one."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-09",
+   "evidenceSources": [
+    {
+     "id": "res-060",
+     "url": "https://arxiv.org/abs/2410.15957",
+     "title": "CamI2V: Camera-Controlled Image-to-Video Diffusion Model",
+     "quality": "primary"
+    },
+    {
+     "id": "res-052",
+     "url": "https://arxiv.org/abs/2402.03162",
+     "title": "Direct-a-Video: Customized Video Generation with User-Directed Camera Movement and Object Motion",
+     "quality": "primary"
+    },
+    {
+     "id": "res-059",
+     "url": "https://arxiv.org/abs/2412.05848",
+     "title": "MotionStone: Decoupled Motion Intensity Modulation with Diffusion Transformer for Image-to-Video Generation",
+     "quality": "primary"
+    },
+    {
+     "id": "res-064",
+     "url": "https://arxiv.org/abs/2505.20287",
+     "title": "MotionPro: A Precise Motion Controller for Image-to-Video Generation",
+     "quality": "primary"
+    },
+    {
+     "id": "res-063",
+     "url": "https://arxiv.org/abs/2404.15789",
+     "title": "MotionMaster: Training-free Camera Motion Transfer For Video Generation",
+     "quality": "primary"
+    },
+    {
+     "id": "chr-057",
+     "url": "https://hailuoai.video/knowledge/predictable-subject-size-scale-drift-ai-video",
+     "title": "Scaling Consistency: Predictable Subject Size Across Angles",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
+   "id": "cin-p-032",
+   "cluster": "cinematography",
+   "title": "Expect image-to-video to under-move; write a change with a target, not a mood",
+   "rule": "When a slow motion barely happens, write the action as a start state to an end state with committed verbs and a distance, and use the generator's own motion setting if it has one.",
+   "why": "I2V clips are more static than text-to-video because later frames over-attend to the reference frame (DyMoS lifts dynamic degree 51.7 to 64.8 on Wan 2.2 and flow about 30%); 4-step LoRAs give a slow-motion look (a node adds 15-50%); low-commitment words give a wiggle.",
+   "how": "'The snail glides one body length to the right, then stops' beats 'moves slowly'; one action per clip. Seedance has camera_fixed; with a local Wan-class sampler consider a motion gain of 1.0-1.5. Pick the best of several takes.",
+   "applies_to": [
+    "wan-2.2",
+    "minimax-hailuo",
+    "all"
+   ],
+   "stage": "prompt",
+   "evidence": [
+    "res-057",
+    "pm-038",
+    "cin-040",
+    "res-058",
+    "res-059"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "none",
+    "where": "field notes: snail barely glides; end holds of 1-4 s; trimmed in assembly",
+    "idea": "Say distance and end state in the clip prompt; test a motion gain in the local generation script."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-09",
+   "evidenceSources": [
+    {
+     "id": "res-057",
+     "url": "https://arxiv.org/abs/2605.19398",
+     "title": "Rebalancing Reference Frame Dominance to Improve Motion in Image-to-Video Models (DyMoS)",
+     "quality": "primary"
+    },
+    {
+     "id": "pm-038",
+     "url": "https://gittrend.io/repo/princepainter/ComfyUI-PainterI2V",
+     "title": "ComfyUI-PainterI2V (repository summary)",
+     "quality": "anecdotal"
+    },
+    {
+     "id": "cin-040",
+     "url": "https://www.imaginary.app/blog/image-to-video-that-actually-moves-not-just-wiggles-a-9-step-troubleshooting-che",
+     "title": "Image-to-video that actually moves, not just wiggles",
+     "quality": "secondary"
+    },
+    {
+     "id": "res-058",
+     "url": "https://arxiv.org/abs/2403.08268",
+     "title": "Follow-Your-Click: Open-domain Regional Image Animation via Short Prompts",
+     "quality": "primary"
+    },
+    {
+     "id": "res-059",
+     "url": "https://arxiv.org/abs/2412.05848",
+     "title": "MotionStone: Decoupled Motion Intensity Modulation with Diffusion Transformer for Image-to-Video Generation",
+     "quality": "primary"
+    }
+   ]
+  },
+  {
    "id": "qa-p-001",
    "cluster": "evaluation-agents",
    "title": "Judge with atomic yes/no questions, not one overall mark",
@@ -6128,6 +6452,105 @@
      "id": "qa-027",
      "url": "https://www.copyright.gov/ai/",
      "title": "Copyright and Artificial Intelligence (hub page)",
+     "quality": "primary"
+    }
+   ]
+  },
+  {
+   "id": "qa-p-025",
+   "cluster": "evaluation-agents",
+   "title": "Judge size by the ratio of box sizes with a tolerance near plus or minus 20%",
+   "rule": "Measure a character's size as the square root of its box area and compare ratios, and read 0.83 to 1.2 as human-plausible and anything tighter as our own strictness.",
+   "why": "The one measured tolerance found: the GenScale judge calls a relative-size error within about 20% plausible (agrees with humans, kappa 0.82). No paper gives a tolerance for size drift inside a single clip. Our 0.88-1.14 (in clip) and 0.85-1.18 (between characters) are stricter than that and are unverified by any source; keep them as a studio choice.",
+   "how": "Use the linear size (sqrt of area) so a 20% change in height reads as 0.8 or 1.25; for ratios between two characters compare the ratio of ratios.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "review",
+   "evidence": [
+    "res-045",
+    "qa-036",
+    "qa-039"
+   ],
+   "strength": "single-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "partial",
+    "where": "src/picturecheck.js sizeProblem: linear sqrt-area, 0.78 to 1.3 for static pictures (0.85 to 1.6 with a camera push), pair ratio 0.8 to 1.25; clip review reports size faults per frame",
+    "idea": "Keep the tighter in-clip band; write down that it is our own choice."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-09",
+   "evidenceSources": [
+    {
+     "id": "res-045",
+     "url": "https://arxiv.org/abs/2609.00525",
+     "title": "GenScale: A Benchmark for Relative Object Scale in Image Generation and Editing",
+     "quality": "primary"
+    },
+    {
+     "id": "qa-036",
+     "url": "https://arxiv.org/abs/2408.00714",
+     "title": "SAM 2: Segment Anything in Images and Videos",
+     "quality": "primary"
+    },
+    {
+     "id": "qa-039",
+     "url": "https://arxiv.org/abs/2511.16719",
+     "title": "SAM 3: Segment Anything with Concepts",
+     "quality": "primary"
+    }
+   ]
+  },
+  {
+   "id": "qa-p-026",
+   "cluster": "evaluation-agents",
+   "title": "Track size with a text-prompted segmenter and guard against tracker error",
+   "rule": "Measure each character's size in every sampled frame with a segmenter prompted by a short noun phrase, and re-detect at checkpoints rather than only propagating one mask through the clip.",
+   "why": "SAM 3 takes short noun phrases and tracks all instances with persistent ids; SAM 2 style memory is greedy, so one wrong or missed mask carries into later frames (SAM2Long, SAMURAI), which looks like a size drift that is not real.",
+   "how": "Per frame detection with the plain kind word (fits field note 17), take the highest confidence box, discard frames where the box area jumps and returns, and flag a trend over time only if it holds across several frames. Occlusion and similar-looking characters are the known weak points.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "review",
+   "evidence": [
+    "qa-036",
+    "qa-037",
+    "qa-038",
+    "qa-039"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "done",
+    "where": "scripts/review-clips.py and src/picturecheck.js (SAM per frame with a plain kind word, good_until); not yet checked: tracker memory vs per-frame detection",
+    "idea": "Add a re-detection check when a box jump is not sustained."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-09",
+   "evidenceSources": [
+    {
+     "id": "qa-036",
+     "url": "https://arxiv.org/abs/2408.00714",
+     "title": "SAM 2: Segment Anything in Images and Videos",
+     "quality": "primary"
+    },
+    {
+     "id": "qa-037",
+     "url": "https://arxiv.org/abs/2411.11922",
+     "title": "SAMURAI: Adapting Segment Anything Model for Zero-Shot Visual Tracking with Motion-Aware Memory",
+     "quality": "primary"
+    },
+    {
+     "id": "qa-038",
+     "url": "https://arxiv.org/abs/2410.16268",
+     "title": "SAM2Long: Enhancing SAM 2 for Long Video Segmentation with a Training-Free Memory Tree",
+     "quality": "primary"
+    },
+    {
+     "id": "qa-039",
+     "url": "https://arxiv.org/abs/2511.16719",
+     "title": "SAM 3: Segment Anything with Concepts",
      "quality": "primary"
     }
    ]
@@ -8691,6 +9114,45 @@
    ]
   },
   {
+   "id": "pm-p-025",
+   "cluster": "prompting-models",
+   "title": "Use the generator's fixed-camera flag where one exists, and still say it in words",
+   "rule": "Set a provider's own fixed-camera option (for example Seedance camera_fixed) and also write the locked-off camera in the prompt.",
+   "why": "The provider doc says to do both when the camera drifts; a flag and a prompt that disagree (flag fixed, prompt says orbit) conflict.",
+   "how": "Add a per-generator capability 'fixed_camera_flag' to the profile (pm-p-004) and set it in the request.",
+   "applies_to": [
+    "seedance"
+   ],
+   "stage": "generation",
+   "evidence": [
+    "pm-037",
+    "pm-032"
+   ],
+   "strength": "vendor",
+   "conflicts": [],
+   "monofilm": {
+    "status": "none",
+    "where": "static_camera is handled by prompt only",
+    "idea": "Send camera_fixed when the generator has it."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-09",
+   "evidenceSources": [
+    {
+     "id": "pm-037",
+     "url": "https://wavespeed.ai/docs/docs-api/bytedance/bytedance-seedance-v1.5-pro-image-to-video",
+     "title": "Seedance 1.5 Pro image-to-video API",
+     "quality": "secondary"
+    },
+    {
+     "id": "pm-032",
+     "url": "https://www.freepik.com/ai/docs/seedance-1-0",
+     "title": "Seedance 1.0 docs (Freepik)",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
    "id": "res-p-001",
    "cluster": "research-papers",
    "title": "Chain clips from the last frame, and check the join",
@@ -9653,6 +10115,133 @@
      "id": "res-044",
      "url": "https://arxiv.org/abs/2507.07202",
      "title": "A Survey on Long-Video Storytelling Generation: Architectures, Consistency, and Cinematic Quality",
+     "quality": "primary"
+    }
+   ]
+  },
+  {
+   "id": "res-p-024",
+   "cluster": "research-papers",
+   "title": "Repair a wrong size by a local rescale, not by redrawing the whole picture",
+   "rule": "When a picture fails the size check, resize the offending character in place (cut out, scale, refill background, re-insert) and re-check, before spending another full redraw.",
+   "why": "GenScale's Rescale agent raised human-judged plausible pairs from 11.7% to 88.3% on representative cases, while whole-picture editors lifted failed images only from 20.4% to 26-53%; editors do better with an explicit resize order (+0.87) than when they must find the error themselves (+0.33).",
+   "how": "Segment the character (SAM), compute the ratio needed from the anchor box, resize around the contact point, inpaint the background, re-insert with an insertion editor, then run the measurement again. Tell an editor the exact factor when redrawing.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "picture",
+   "evidence": [
+    "res-045",
+    "chr-058",
+    "qa-036",
+    "qa-040"
+   ],
+   "strength": "measured",
+   "conflicts": [],
+   "monofilm": {
+    "status": "none",
+    "where": "a failing picture is redrawn with the problem text (picturecheck sizeProblem); no local repair",
+    "idea": "Add a repair step that uses the SAM boxes already measured to rescale the character and then re-check."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-09",
+   "evidenceSources": [
+    {
+     "id": "res-045",
+     "url": "https://arxiv.org/abs/2609.00525",
+     "title": "GenScale: A Benchmark for Relative Object Scale in Image Generation and Editing",
+     "quality": "primary"
+    },
+    {
+     "id": "chr-058",
+     "url": "https://arxiv.org/abs/2504.15009",
+     "title": "Insert Anything: Image Insertion via In-Context Editing in DiT",
+     "quality": "primary"
+    },
+    {
+     "id": "qa-036",
+     "url": "https://arxiv.org/abs/2408.00714",
+     "title": "SAM 2: Segment Anything in Images and Videos",
+     "quality": "primary"
+    },
+    {
+     "id": "qa-040",
+     "url": "https://arxiv.org/abs/2406.09414",
+     "title": "Depth Anything V2",
+     "quality": "primary"
+    }
+   ]
+  },
+  {
+   "id": "res-p-025",
+   "cluster": "research-papers",
+   "title": "Use box, depth or layout conditioning where the image model accepts it",
+   "rule": "If the picture stage can run a model with layout conditioning, give it a coarse layout (boxes or a depth map taken from the scene's anchor picture) so sizes are inherited, not described.",
+   "why": "Grounding boxes (GLIGEN), cross-attention guidance, bounded attention against leakage between similar subjects, and ControlNet depth each fix where and how large things are; in video, box size is the scale control (a growing box looks like moving toward the camera).",
+   "how": "For a local diffusion stack: depth or layout map from the anchor picture plus the new scene's text. Not available in hosted editors without a box input (Muse, Kontext, Gemini take words and references only).",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "picture",
+   "evidence": [
+    "res-053",
+    "res-054",
+    "res-055",
+    "res-056",
+    "res-050",
+    "res-049",
+    "res-051"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "none",
+    "where": "hosted image models are called with prompt and references only",
+    "idea": "Optional path for the local generator: ControlNet depth from the anchor."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-09",
+   "evidenceSources": [
+    {
+     "id": "res-053",
+     "url": "https://arxiv.org/abs/2301.07093",
+     "title": "GLIGEN: Open-Set Grounded Text-to-Image Generation",
+     "quality": "primary"
+    },
+    {
+     "id": "res-054",
+     "url": "https://arxiv.org/abs/2403.16990",
+     "title": "Be Yourself: Bounded Attention for Multi-Subject Text-to-Image Generation",
+     "quality": "primary"
+    },
+    {
+     "id": "res-055",
+     "url": "https://arxiv.org/abs/2304.03373",
+     "title": "Training-Free Layout Control with Cross-Attention Guidance",
+     "quality": "primary"
+    },
+    {
+     "id": "res-056",
+     "url": "https://arxiv.org/abs/2302.05543",
+     "title": "Adding Conditional Control to Text-to-Image Diffusion Models (ControlNet)",
+     "quality": "primary"
+    },
+    {
+     "id": "res-050",
+     "url": "https://arxiv.org/abs/2401.00896",
+     "title": "TrailBlazer: Trajectory Control for Diffusion-Based Video Generation",
+     "quality": "primary"
+    },
+    {
+     "id": "res-049",
+     "url": "https://arxiv.org/abs/2406.05630",
+     "title": "Ctrl-V: Higher Fidelity Video Generation with Bounding-Box Controlled Object Motion",
+     "quality": "primary"
+    },
+    {
+     "id": "res-051",
+     "url": "https://arxiv.org/abs/2402.01566",
+     "title": "Boximator: Generating Rich and Controllable Motions for Video Synthesis",
      "quality": "primary"
     }
    ]
@@ -10826,6 +11415,112 @@
      "url": "https://hackernoon.com/how-to-chain-ai-video-clips-into-one-shot-without-the-hidden-stutter-at-every-cut",
      "title": "How to chain AI video clips into one shot without the hidden stutter",
      "quality": "anecdotal"
+    }
+   ]
+  },
+  {
+   "id": "scn-p-028",
+   "cluster": "scene-continuity",
+   "title": "Hold every picture of a scene to the scene's first picture, not only the previous one",
+   "rule": "Compare the size of each character in a new picture with both the previous picture and the first picture of the scene.",
+   "why": "Editing models re-derive size whenever they compose a scene, and consistency falls as the gap between appearances grows, so small steps add up to a big drift that a previous-picture check never sees.",
+   "how": "Run the same size check against the scene's first picture (the anchor); a character's box within the tolerance of both passes. Keep the anchor as an extra reference where the model takes several.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "review",
+   "evidence": [
+    "chr-056",
+    "res-045",
+    "res-048",
+    "chr-008"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "done",
+    "where": "src/picturecheck.js sizeProblem (checks baseUri and originUri, so assumption (b) is implemented)",
+    "idea": ""
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-09",
+   "evidenceSources": [
+    {
+     "id": "chr-056",
+     "url": "https://discuss.ai.google.dev/t/reference-images-keep-faces-consistent-but-ignore-character-size-scale-any-way-to-control-relative-height/176840",
+     "title": "Reference images keep faces consistent but ignore character size/scale",
+     "quality": "anecdotal"
+    },
+    {
+     "id": "res-045",
+     "url": "https://arxiv.org/abs/2609.00525",
+     "title": "GenScale: A Benchmark for Relative Object Scale in Image Generation and Editing",
+     "quality": "primary"
+    },
+    {
+     "id": "res-048",
+     "url": "https://arxiv.org/abs/2605.15199",
+     "title": "EntityBench: Towards Entity-Consistent Long-Range Multi-Shot Video Generation",
+     "quality": "primary"
+    },
+    {
+     "id": "chr-008",
+     "url": "https://arxiv.org/abs/2506.15742",
+     "title": "FLUX.1 Kontext: Flow Matching for In-Context Image Generation and Editing in Latent Space",
+     "quality": "primary"
+    }
+   ]
+  },
+  {
+   "id": "scn-p-029",
+   "cluster": "scene-continuity",
+   "title": "Match each character's size in the first and last frame before a first/last-frame call",
+   "rule": "Before sending a start and an end picture to a first/last-frame generator, check that every character has nearly the same size in both unless the camera is meant to move.",
+   "why": "A big difference between the frames forces the model to scale, morph or cut between them; keyframe fidelity and natural motion trade off and get worse with more constraints. A vendor doc advises end frames with framing close to the first.",
+   "how": "Measure the sqrt-area of each character's box in both pictures (segmenter) and reject or redraw the end picture beyond the tolerance. Keep side padding so nothing must reframe.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "picture",
+   "evidence": [
+    "pm-037",
+    "res-065",
+    "res-066",
+    "cin-038"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "done",
+    "where": "src/picturecheck.js sizeProblem on end pictures (end is drawn from the picture before and checked against it and the scene's first picture)",
+    "idea": ""
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-09",
+   "evidenceSources": [
+    {
+     "id": "pm-037",
+     "url": "https://wavespeed.ai/docs/docs-api/bytedance/bytedance-seedance-v1.5-pro-image-to-video",
+     "title": "Seedance 1.5 Pro image-to-video API",
+     "quality": "secondary"
+    },
+    {
+     "id": "res-065",
+     "url": "https://arxiv.org/abs/2607.14202",
+     "title": "KeyFrame-Compass: Towards Comprehensive Evaluation of Keyframe-Conditioned Video Generation",
+     "quality": "primary"
+    },
+    {
+     "id": "res-066",
+     "url": "https://arxiv.org/abs/2603.17651",
+     "title": "Anchoring and Rescaling Attention for Semantically Coherent Inbetweening",
+     "quality": "primary"
+    },
+    {
+     "id": "cin-038",
+     "url": "https://www.pippit.ai/blog/stop-unwanted-camera-movement-ai-video",
+     "title": "Stop unwanted camera movement in AI video",
+     "quality": "secondary"
     }
    ]
   },
@@ -13002,6 +13697,45 @@
      "id": "pm-017",
      "url": "https://dev.to/akaranjkar08/veo-31-developer-guide-timestamp-prompting-multi-shot-video-and-full-api-june-2026-3l5i",
      "title": "Veo 3.1 developer guide: timestamp prompting, multi-shot, API",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
+   "id": "wf-p-025",
+   "cluster": "workflows",
+   "title": "Start the next clip from the frame before the slowdown, not the literal last frame",
+   "rule": "Take the frame that seeds a join from before the clip's final deceleration, and ask for more footage than the story needs so the tail can go.",
+   "why": "A practitioner reports generators ease to stillness over roughly the last 10-15% of a clip; Hailuo advises keeping the middle of a short clip. Anecdotal, unmeasured.",
+   "how": "Scrub back from the end to where motion stops speeding up; trim the dead tail; a short speed ramp hides a remaining catch.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "assembly",
+   "evidence": [
+    "scn-020",
+    "cin-037"
+   ],
+   "strength": "anecdotal",
+   "conflicts": [],
+   "monofilm": {
+    "status": "partial",
+    "where": "assembly ends the clip at the frame that looks most like the next clip's first frame; tailHold and keep in scripts/measure-take.mjs",
+    "idea": ""
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-09",
+   "evidenceSources": [
+    {
+     "id": "scn-020",
+     "url": "https://hackernoon.com/how-to-chain-ai-video-clips-into-one-shot-without-the-hidden-stutter-at-every-cut",
+     "title": "How to chain AI video clips into one shot without the hidden stutter",
+     "quality": "anecdotal"
+    },
+    {
+     "id": "cin-037",
+     "url": "https://hailuoai.video/knowledge/ai-video-camera-motion-control",
+     "title": "How to Stop Unwanted Camera Motion in AI Prompts",
      "quality": "secondary"
     }
    ]
@@ -16048,6 +16782,102 @@
    "notes": ""
   },
   {
+   "id": "chr-056",
+   "url": "https://discuss.ai.google.dev/t/reference-images-keep-faces-consistent-but-ignore-character-size-scale-any-way-to-control-relative-height/176840",
+   "title": "Reference images keep faces consistent but ignore character size/scale",
+   "publisher": "Google AI Developers Forum (user report)",
+   "published": "2026-08",
+   "type": "forum",
+   "tags": [
+    "scale",
+    "size",
+    "reference-images",
+    "gemini"
+   ],
+   "models": [
+    "gemini-image"
+   ],
+   "claims": [
+    "A user composing character references into a scene wanted a 1.4x height ratio; every render came near 1.1x, across about 15 phrasings and even a two-figure reference with the true ratio.",
+    "A text-only prompt with no references gave 1.4x at the first try, so the model re-derives size when it composes references.",
+    "A reply suggests limiting references to face and clothing, describing height by body alignment (where one head reaches on the other) and fixing scale first, then applying references in an edit turn; not confirmed by the poster."
+   ],
+   "quality": "anecdotal",
+   "access": "full",
+   "retrieved": "2026-11-09",
+   "notes": "Single user report, replies unconfirmed."
+  },
+  {
+   "id": "chr-057",
+   "url": "https://hailuoai.video/knowledge/predictable-subject-size-scale-drift-ai-video",
+   "title": "Scaling Consistency: Predictable Subject Size Across Angles",
+   "publisher": "Hailuo AI Studio",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "scale",
+    "size",
+    "image-to-video",
+    "minimax-hailuo"
+   ],
+   "models": [
+    "minimax-hailuo"
+   ],
+   "claims": [
+    "Vendor heuristics, not measured: reference at 35-50 mm look, subject inside the central 60% of the frame, one 4-6 s clip per angle anchored to the same still.",
+    "Remove subject descriptors from the motion prompt and use damping words (subtle, slow, steady); a subject that grows during camera motion means the move is too aggressive."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-09",
+   "notes": "Marketing article; its own sample prompt contradicts its advice to leave out subject descriptors."
+  },
+  {
+   "id": "chr-058",
+   "url": "https://arxiv.org/abs/2504.15009",
+   "title": "Insert Anything: Image Insertion via In-Context Editing in DiT",
+   "publisher": "Insert Anything authors",
+   "published": "2025-04",
+   "type": "paper",
+   "tags": [
+    "insertion",
+    "image-editing",
+    "reference"
+   ],
+   "models": [],
+   "claims": [
+    "One model inserts a person, object or garment from a reference into a target scene, mask-guided or text-guided, keeping identity and fine detail while adapting colour and texture to the scene."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "chr-059",
+   "url": "https://blog.google/products-and-platforms/products/gemini/prompting-tips-nano-banana-pro/",
+   "title": "Nano Banana Pro image generation in Gemini: Prompt tips",
+   "publisher": "Google",
+   "published": "",
+   "type": "official-doc",
+   "tags": [
+    "image-editing",
+    "gemini",
+    "prompting"
+   ],
+   "models": [
+    "gemini-image"
+   ],
+   "claims": [
+    "Say what must stay the same ('keeping everything else the same'), give each reference image a role, and name the canvas and framing in the prompt (9:16, 21:9, wide shot).",
+    "Nothing on size or scale of subjects; complex blends and lighting changes can add artifacts."
+   ],
+   "quality": "primary",
+   "access": "full",
+   "retrieved": "2026-11-09",
+   "notes": "Date approximate: the page was read without a date; check before citing."
+  },
+  {
    "id": "cin-001",
    "url": "https://kling.ai/blog/kling-ai-camera-control-video-guide",
    "title": "Kling AI Camera Control: Master Push, Pull, Pan & Tilt in AI Video",
@@ -16973,6 +17803,127 @@
    "notes": "Page returned 404 to fetch; claims from search result text only."
   },
   {
+   "id": "cin-037",
+   "url": "https://hailuoai.video/knowledge/ai-video-camera-motion-control",
+   "title": "How to Stop Unwanted Camera Motion in AI Prompts",
+   "publisher": "Hailuo AI Studio",
+   "published": "2026-07",
+   "type": "blog",
+   "tags": [
+    "camera",
+    "static",
+    "minimax-hailuo"
+   ],
+   "models": [
+    "minimax-hailuo"
+   ],
+   "claims": [
+    "Recommends 'Static camera, locked shot' once; stacking 'stable', 'still', 'smooth' dilutes it. Keep prompts under 15 words with at most 2-3 motion keywords.",
+    "Claims a still source image cuts unwanted motion by 60-70% (internal numbers, not shared) and that drift sets in around 3.5 s, so keep the middle of a short clip.",
+    "Mechanical terms (tripod, locked-off) hold better than handheld, which adds randomness."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-09",
+   "notes": "Vendor claims without data."
+  },
+  {
+   "id": "cin-038",
+   "url": "https://www.pippit.ai/blog/stop-unwanted-camera-movement-ai-video",
+   "title": "Stop unwanted camera movement in AI video",
+   "publisher": "Pippit",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "camera",
+    "static",
+    "image-to-video"
+   ],
+   "models": [],
+   "claims": [
+    "Put a positive lock block first ('locked eye-level medium shot from one fixed tripod position'), then an exclusion list (zoom, push-in, pan, tilt, orbit, dolly, drift, reframing).",
+    "Write invariants: subject size stays constant, side seams and floor line stay put; leave about 10% padding around the widest movement; keep a walking subject free to leave the frame.",
+    "Diagnose by comparing first, middle, last frames: a subject that grows while the edges move out is a zoom; edges sliding together is a pan; bent lines with fixed anchors is background warp."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-09",
+   "notes": "Single practitioner article, no measurements."
+  },
+  {
+   "id": "cin-039",
+   "url": "https://community.adobe.com/questions-404/no-matter-what-model-i-use-and-even-if-i-give-explicit-instructions-to-not-push-or-pan-or-move-it-still-does-it-1632612",
+   "title": "Firefly image to video keeps adding a slight push-in or pan",
+   "publisher": "Adobe Community (user report)",
+   "published": "",
+   "type": "forum",
+   "tags": [
+    "camera",
+    "static",
+    "firefly"
+   ],
+   "models": [
+    "firefly"
+   ],
+   "claims": [
+    "A user reports that with every model in Firefly, the clip still gets a slight push-in or pan despite prompts forbidding zoom, pan, tilt and dolly, and asks for a true locked-camera mode.",
+    "A community expert's reply: negative prompts often do the opposite; state positively that the camera is fixed."
+   ],
+   "quality": "anecdotal",
+   "access": "full",
+   "retrieved": "2026-11-09",
+   "notes": "One thread, 20 views when read."
+  },
+  {
+   "id": "cin-040",
+   "url": "https://www.imaginary.app/blog/image-to-video-that-actually-moves-not-just-wiggles-a-9-step-troubleshooting-che",
+   "title": "Image-to-video that actually moves, not just wiggles",
+   "publisher": "Imaginary",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "motion",
+    "camera",
+    "static",
+    "image-to-video"
+   ],
+   "models": [
+    "veo-3.1"
+   ],
+   "claims": [
+    "Too little motion: write a change (start state to end state, then hold), use committed verbs (open, turn, lift), drop 'subtly move', 'gently animate', 'drift', which give a wiggle; one action per shot.",
+    "Locked camera: state 'locked tripod shot (no camera movement)', give the primary motion to the subject, say the background stays static, avoid handheld words; orbit about 10 degrees keeps a subject centred."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-09",
+   "notes": "Original URL on veo3gen.app redirects here. Practitioner advice, untested claims."
+  },
+  {
+   "id": "cin-041",
+   "url": "https://runway.com/resources/photo-to-video-tips",
+   "title": "Photo to video tips",
+   "publisher": "Runway",
+   "published": "",
+   "type": "official-doc",
+   "tags": [
+    "camera",
+    "static",
+    "image-to-video"
+   ],
+   "models": [
+    "runway-gen-4"
+   ],
+   "claims": [
+    "Name a static setup ('static shot', 'locked camera') even to keep the composition, because without it the model may add drift; a locked shot means the camera stays fixed and only subjects move.",
+    "One primary movement per clip, 5-10 s, prompts of 20-40 words; no numeric drift tolerance is given."
+   ],
+   "quality": "primary",
+   "access": "full",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
    "id": "qa-001",
    "url": "https://arxiv.org/abs/2501.13918",
    "title": "Improving Video Generation with Human Feedback (VideoAlign / VideoReward)",
@@ -17772,6 +18723,110 @@
    "access": "search-summary",
    "retrieved": "2026-11-08",
    "notes": "Details taken from search summaries of coverage; outcome unknown."
+  },
+  {
+   "id": "qa-036",
+   "url": "https://arxiv.org/abs/2408.00714",
+   "title": "SAM 2: Segment Anything in Images and Videos",
+   "publisher": "Meta FAIR",
+   "published": "2024-08",
+   "type": "paper",
+   "tags": [
+    "segmentation",
+    "tracking",
+    "video"
+   ],
+   "models": [],
+   "claims": [
+    "Promptable segmentation for video with a streaming memory; 3x fewer user interactions than earlier approaches on video and about 6x faster than SAM on images."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "qa-037",
+   "url": "https://arxiv.org/abs/2411.11922",
+   "title": "SAMURAI: Adapting Segment Anything Model for Zero-Shot Visual Tracking with Motion-Aware Memory",
+   "publisher": "SAMURAI authors",
+   "published": "2024-11",
+   "type": "paper",
+   "tags": [
+    "segmentation",
+    "tracking"
+   ],
+   "models": [],
+   "claims": [
+    "SAM 2 tracks poorly in crowded scenes and with fast or self-occluding objects, and its fixed memory window lets errors carry on; motion-aware memory selection adds 7.1% AUC on LaSOT_ext, zero-shot."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "qa-038",
+   "url": "https://arxiv.org/abs/2410.16268",
+   "title": "SAM2Long: Enhancing SAM 2 for Long Video Segmentation with a Training-Free Memory Tree",
+   "publisher": "SAM2Long authors",
+   "published": "2024-10",
+   "type": "paper",
+   "tags": [
+    "segmentation",
+    "tracking",
+    "error-accumulation"
+   ],
+   "models": [],
+   "claims": [
+    "SAM 2 picks memory greedily, so one wrong or missed mask spreads to later frames; a tree search over several mask pathways gains 3.0 points on average, up to 5.3 J&F on SA-V and LVOS."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "qa-039",
+   "url": "https://arxiv.org/abs/2511.16719",
+   "title": "SAM 3: Segment Anything with Concepts",
+   "publisher": "Meta",
+   "published": "2025-11",
+   "type": "paper",
+   "tags": [
+    "segmentation",
+    "tracking",
+    "text-prompt"
+   ],
+   "models": [],
+   "claims": [
+    "Detects, segments and tracks all instances of a concept given as a short noun phrase or image exemplars, with persistent identities in video; doubles the accuracy of earlier systems on its SA-Co benchmark (author claim).",
+    "Prompts are short noun phrases, which fits our finding that a plain kind word works and a long description fails."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "qa-040",
+   "url": "https://arxiv.org/abs/2406.09414",
+   "title": "Depth Anything V2",
+   "publisher": "Depth Anything V2 authors",
+   "published": "2024-06",
+   "type": "paper",
+   "tags": [
+    "depth",
+    "monocular"
+   ],
+   "models": [],
+   "claims": [
+    "Monocular depth with models from 25M to 1.3B parameters, over 10x faster than Stable Diffusion based depth models; metric-depth variants are fine-tuned separately."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
   },
   {
    "id": "phy-001",
@@ -19441,6 +20496,79 @@
    "notes": "Not fetched; conflicting number, check BytePlus."
   },
   {
+   "id": "pm-036",
+   "url": "https://kling.ai/quickstart/image-to-video-guide",
+   "title": "Kling image to video guide",
+   "publisher": "Kling AI",
+   "published": "",
+   "type": "official-doc",
+   "tags": [
+    "kling",
+    "image-to-video",
+    "prompting"
+   ],
+   "models": [
+    "kling-2.5"
+   ],
+   "claims": [
+    "Prompt as subject plus movement, list each subject's movement in order; the picture already sets the scene.",
+    "A description far from the image may cause a cut or transition; photos tend to give static clips and the model may pan across a painting-like picture. Clips are 5 or 10 s."
+   ],
+   "quality": "primary",
+   "access": "full",
+   "retrieved": "2026-11-09",
+   "notes": "Camera and start/end frame guidance are on separate Kling pages not read here."
+  },
+  {
+   "id": "pm-037",
+   "url": "https://wavespeed.ai/docs/docs-api/bytedance/bytedance-seedance-v1.5-pro-image-to-video",
+   "title": "Seedance 1.5 Pro image-to-video API",
+   "publisher": "WaveSpeed AI (API host)",
+   "published": "",
+   "type": "official-doc",
+   "tags": [
+    "seedance",
+    "camera",
+    "api",
+    "first-last-frame"
+   ],
+   "models": [
+    "seedance"
+   ],
+   "claims": [
+    "camera_fixed (default false) is a request flag for locked-tripod shots; if the camera drifts, set it true and also describe a locked-off camera in the prompt.",
+    "last_image steers the final composition; choose an end frame with framing and lighting close to the first to reduce jumpy transitions. Duration 4-12 s; the 1.5 family is being retired."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-09",
+   "notes": "Host documentation of ByteDance's model, not ByteDance's own page."
+  },
+  {
+   "id": "pm-038",
+   "url": "https://gittrend.io/repo/princepainter/ComfyUI-PainterI2V",
+   "title": "ComfyUI-PainterI2V (repository summary)",
+   "publisher": "princepainter",
+   "published": "",
+   "type": "repo",
+   "tags": [
+    "wan",
+    "slow-motion",
+    "lora",
+    "motion"
+   ],
+   "models": [
+    "wan-2.2"
+   ],
+   "claims": [
+    "Targets the slow-motion look of 4-step LoRAs (lightx2v) in Wan image-to-video by scaling motion with a motion_amplitude parameter, recommended 1.0 to 1.5 (about 15-50% more motion); no benchmark is given."
+   ],
+   "quality": "anecdotal",
+   "access": "partial",
+   "retrieved": "2026-11-09",
+   "notes": "Read through an aggregator page, not the repository."
+  },
+  {
    "id": "res-001",
    "url": "https://arxiv.org/abs/2403.14773",
    "title": "StreamingT2V: Consistent, Dynamic, and Extendable Long Video Generation from Text",
@@ -20446,6 +21574,507 @@
    "access": "search-summary",
    "retrieved": "2026-11-08",
    "notes": "Seen only in a search result summary."
+  },
+  {
+   "id": "res-045",
+   "url": "https://arxiv.org/abs/2609.00525",
+   "title": "GenScale: A Benchmark for Relative Object Scale in Image Generation and Editing",
+   "publisher": "Li, Whitton, Wu, Gong",
+   "published": "2026-09",
+   "type": "paper",
+   "tags": [
+    "scale",
+    "size",
+    "image-editing",
+    "benchmark",
+    "segmentation"
+   ],
+   "models": [
+    "flux-kontext",
+    "seedream-4"
+   ],
+   "claims": [
+    "Benchmark of 900 images and 1,643 anchor-target size relations; no current generator or editor reliably draws plausible relative scale.",
+    "Plausible = within about 20% error on a five-point ordinal scale; judge agrees with human raters (kappa 0.82).",
+    "Common-object generation: best model 56.5% plausible, SD3.5-Large 31.0%; FLUX.1 Kontext-dev 63.2% on human-product scale.",
+    "Of failed images, only 20.4% start plausible; best editor lifts them to 53.3%, others to 26-33%; editors follow explicit resize orders better than they find errors alone.",
+    "Rescale agent: box the target, estimate a resize factor, SAM 2 cut-out, Depth Anything V2, re-insert (Insert Anything); human-judged plausible pairs rose 11.7% to 88.3% on representative cases."
+   ],
+   "quality": "primary",
+   "access": "partial",
+   "retrieved": "2026-11-09",
+   "notes": "Read the abstract page and the HTML up to about 100k characters; the last 130k characters (appendix) were not read. Numbers are the paper's own."
+  },
+  {
+   "id": "res-046",
+   "url": "https://arxiv.org/abs/2602.23622",
+   "title": "DLEBench: Evaluating Small-scale Object Editing Ability for Instruction-based Image Editing Model",
+   "publisher": "DLEBench authors",
+   "published": "2026-02",
+   "type": "paper",
+   "tags": [
+    "image-editing",
+    "small-objects",
+    "benchmark"
+   ],
+   "models": [],
+   "claims": [
+    "1,889 samples, seven instruction types, target objects covering only 1% to 10% of the image area; ten editing models tested.",
+    "Reports significant gaps in editing small objects, so a small character in a wide picture is a weak spot for instruction-based editors."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-047",
+   "url": "https://arxiv.org/abs/2512.22310",
+   "title": "MoFu: Scale-Aware Modulation and Fourier Fusion for Multi-Subject Video Generation",
+   "publisher": "Ling, Cao, Lu et al.",
+   "published": "2025-12",
+   "type": "paper",
+   "tags": [
+    "scale",
+    "multi-subject",
+    "reference-to-video",
+    "benchmark"
+   ],
+   "models": [
+    "wan-2.2"
+   ],
+   "claims": [
+    "Names scale inconsistency as a main failure of multi-subject reference-to-video: reference images come at different zoom levels, so subjects turn out unnaturally large or small.",
+    "Fix: an LLM reads scale cues from the prompt and modulates features; a loss on area ratios keeps scale stable regardless of reference order.",
+    "MoFu-Bench has 1,000 subject-text pairs (up to 3 references). ScaleScore is a GPT-4o rating from 10 sampled frames: Phantom 0.536, VACE 0.547, MAGREF 0.511, MoFu 0.585."
+   ],
+   "quality": "primary",
+   "access": "partial",
+   "retrieved": "2026-11-09",
+   "notes": "Table numbers read from the arXiv HTML. ScaleScore is an LLM judge, not a measured box ratio."
+  },
+  {
+   "id": "res-048",
+   "url": "https://arxiv.org/abs/2605.15199",
+   "title": "EntityBench: Towards Entity-Consistent Long-Range Multi-Shot Video Generation",
+   "publisher": "EntityBench authors",
+   "published": "2026-05",
+   "type": "paper",
+   "tags": [
+    "consistency",
+    "multi-shot",
+    "benchmark",
+    "memory"
+   ],
+   "models": [],
+   "claims": [
+    "140 episodes, 2,491 shots, up to 50 shots per episode; cross-shot entity consistency degrades sharply as the gap between an entity's appearances grows.",
+    "Measures with GroundingDINO presence, DINOv2 cosine to a per-entity centroid and a multimodal LLM judged against a registry description; only accurate appearances enter cross-shot scoring (a fidelity gate).",
+    "A memory bank of verified references per entity gave the best character fidelity of the four systems compared."
+   ],
+   "quality": "primary",
+   "access": "partial",
+   "retrieved": "2026-11-09",
+   "notes": "Thresholds of the gate and the presence test were not visible in the part read. Only the first 100k characters of the HTML were read."
+  },
+  {
+   "id": "res-049",
+   "url": "https://arxiv.org/abs/2406.05630",
+   "title": "Ctrl-V: Higher Fidelity Video Generation with Bounding-Box Controlled Object Motion",
+   "publisher": "Ctrl-V authors",
+   "published": "2024-06",
+   "type": "paper",
+   "tags": [
+    "layout",
+    "bounding-box",
+    "video"
+   ],
+   "models": [
+    "stable-video-diffusion"
+   ],
+   "claims": [
+    "Video diffusion (fine-tuned Stable Video Diffusion) conditioned on 2D or 3D boxes rendered in pixel space; a second model predicts the box trajectories.",
+    "Validated on driving datasets (KITTI, Virtual-KITTI 2, BDD100k, nuScenes), not on story scenes."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-050",
+   "url": "https://arxiv.org/abs/2401.00896",
+   "title": "TrailBlazer: Trajectory Control for Diffusion-Based Video Generation",
+   "publisher": "TrailBlazer authors",
+   "published": "2024-01",
+   "type": "paper",
+   "tags": [
+    "layout",
+    "bounding-box",
+    "video",
+    "scale"
+   ],
+   "models": [],
+   "claims": [
+    "Steers a subject with simple boxes by editing attention maps of a pretrained text-to-video model, no training.",
+    "A growing box makes the subject appear to move toward the camera, so box size is the scale control and a moving box changes apparent size on purpose."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-051",
+   "url": "https://arxiv.org/abs/2402.01566",
+   "title": "Boximator: Generating Rich and Controllable Motions for Video Synthesis",
+   "publisher": "Boximator authors",
+   "published": "2024-02",
+   "type": "paper",
+   "tags": [
+    "layout",
+    "bounding-box",
+    "motion",
+    "video"
+   ],
+   "models": [],
+   "claims": [
+    "Plug-in module for existing video diffusion models; hard boxes select objects in the first frame, hard or soft boxes then fix position, shape or path in later frames.",
+    "Reports better FVD, higher box-alignment scores and human preference over the base models; no numbers in the abstract."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-052",
+   "url": "https://arxiv.org/abs/2402.03162",
+   "title": "Direct-a-Video: Customized Video Generation with User-Directed Camera Movement and Object Motion",
+   "publisher": "Direct-a-Video authors",
+   "published": "2024-02",
+   "type": "paper",
+   "tags": [
+    "camera",
+    "object-motion",
+    "disentangle"
+   ],
+   "models": [],
+   "claims": [
+    "Controls object motion (attention modulation) and camera pan and zoom (separate temporal layers with numeric parameters) independently, so a camera move is not left to the prompt."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-053",
+   "url": "https://arxiv.org/abs/2301.07093",
+   "title": "GLIGEN: Open-Set Grounded Text-to-Image Generation",
+   "publisher": "GLIGEN authors",
+   "published": "2023-01",
+   "type": "paper",
+   "tags": [
+    "layout",
+    "bounding-box",
+    "image"
+   ],
+   "models": [],
+   "claims": [
+    "Adds grounding boxes tied to concepts to a frozen text-to-image model through gated trainable layers, so a named object is placed in a chosen region at a chosen size.",
+    "Zero-shot layout-to-image on COCO and LVIS beats supervised layout baselines by a large margin."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-054",
+   "url": "https://arxiv.org/abs/2403.16990",
+   "title": "Be Yourself: Bounded Attention for Multi-Subject Text-to-Image Generation",
+   "publisher": "Bounded Attention authors",
+   "published": "2024-03",
+   "type": "paper",
+   "tags": [
+    "layout",
+    "multi-subject",
+    "image"
+   ],
+   "models": [],
+   "claims": [
+    "Layout-to-image methods leak features between similar-looking subjects in the denoising attention; a training-free bound on information flow keeps each subject its own and matches the layout better."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-055",
+   "url": "https://arxiv.org/abs/2304.03373",
+   "title": "Training-Free Layout Control with Cross-Attention Guidance",
+   "publisher": "Chen, Laina, Vedaldi",
+   "published": "2023-04",
+   "type": "paper",
+   "tags": [
+    "layout",
+    "bounding-box",
+    "image"
+   ],
+   "models": [],
+   "claims": [
+    "Steers where objects appear by guiding cross-attention at sampling time, no fine-tuning; backward guidance (gradient on the latent) beat forward guidance and earlier layout methods on three benchmarks."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-056",
+   "url": "https://arxiv.org/abs/2302.05543",
+   "title": "Adding Conditional Control to Text-to-Image Diffusion Models (ControlNet)",
+   "publisher": "Zhang, Rao, Agrawala",
+   "published": "2023-02",
+   "type": "paper",
+   "tags": [
+    "controlnet",
+    "depth",
+    "layout",
+    "image"
+   ],
+   "models": [],
+   "claims": [
+    "Locks a pretrained image model and adds a trainable copy with zero-initialised convolutions; conditions include edges, depth, segmentation and pose, alone or combined."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-057",
+   "url": "https://arxiv.org/abs/2605.19398",
+   "title": "Rebalancing Reference Frame Dominance to Improve Motion in Image-to-Video Models (DyMoS)",
+   "publisher": "DyMoS authors",
+   "published": "2026-05",
+   "type": "paper",
+   "tags": [
+    "motion",
+    "image-to-video",
+    "slow-motion"
+   ],
+   "models": [
+    "wan-2.2",
+    "hunyuanvideo"
+   ],
+   "claims": [
+    "Image-to-video clips are more static than text-to-video because later frames over-attend to the reference frame; DyMoS rebalances this in the first 20-25% of denoising with one scalar.",
+    "VBench-I2V dynamic degree: Wan 2.2-14B 51.7 to 64.8, Wan 2.1 48.7 to 54.5, HunyuanVideo-1.5 48.0 to 55.3, CogVideoX-5B 30.9 to 52.9; flow magnitude up 28-32%.",
+    "Too large a scalar costs appearance consistency; the paper does not discuss camera drift."
+   ],
+   "quality": "primary",
+   "access": "partial",
+   "retrieved": "2026-11-09",
+   "notes": "Last 32k characters of the HTML were not read."
+  },
+  {
+   "id": "res-058",
+   "url": "https://arxiv.org/abs/2403.08268",
+   "title": "Follow-Your-Click: Open-domain Regional Image Animation via Short Prompts",
+   "publisher": "Follow-Your-Click authors",
+   "published": "2024-03",
+   "type": "paper",
+   "tags": [
+    "motion",
+    "image-to-video",
+    "region"
+   ],
+   "models": [],
+   "claims": [
+    "Animates only the region a click selects, with a first-frame masking strategy and flow-based motion magnitude control for the speed of the target movement.",
+    "Reported on 7 baselines and 8 metrics; the abstract gives no numbers for the speed control."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-059",
+   "url": "https://arxiv.org/abs/2412.05848",
+   "title": "MotionStone: Decoupled Motion Intensity Modulation with Diffusion Transformer for Image-to-Video Generation",
+   "publisher": "MotionStone authors",
+   "published": "2024-12",
+   "type": "paper",
+   "tags": [
+    "motion",
+    "camera",
+    "object-motion",
+    "image-to-video"
+   ],
+   "models": [],
+   "claims": [
+    "A learned estimator scores object motion and camera motion intensity separately (pairwise contrastive training), and the score becomes a control input for image-to-video.",
+    "Camera and object motion strength can be set independently, which a text prompt cannot do."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-060",
+   "url": "https://arxiv.org/abs/2410.15957",
+   "title": "CamI2V: Camera-Controlled Image-to-Video Diffusion Model",
+   "publisher": "CamI2V authors",
+   "published": "2024-10",
+   "type": "paper",
+   "tags": [
+    "camera",
+    "image-to-video",
+    "geometry"
+   ],
+   "models": [],
+   "claims": [
+    "Temporal attention only links features at the same pixel position, so large camera shifts break cross-frame consistency; epipolar attention along matching lines improves camera controllability by 25.64% on RealEstate10K."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-061",
+   "url": "https://arxiv.org/abs/2502.10059",
+   "title": "RealCam-I2V: Real-World Image-to-Video Generation with Interactive Complex Camera Control",
+   "publisher": "RealCam-I2V authors",
+   "published": "2025-02",
+   "type": "paper",
+   "tags": [
+    "camera",
+    "image-to-video",
+    "scale",
+    "depth"
+   ],
+   "models": [],
+   "claims": [
+    "Camera parameters are ambiguous in scale for an arbitrary photo; a monocular metric depth estimate turns relative camera motion into absolute scale so the same move means the same on every image."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-062",
+   "url": "https://arxiv.org/abs/2404.02101",
+   "title": "CameraCtrl: Enabling Camera Control for Text-to-Video Generation",
+   "publisher": "CameraCtrl authors",
+   "published": "2024-04",
+   "type": "paper",
+   "tags": [
+    "camera",
+    "video"
+   ],
+   "models": [],
+   "claims": [
+    "Plug-in camera pose control for a video diffusion model; training on clips with diverse camera motion and an appearance close to the base model improved control and generalisation."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-063",
+   "url": "https://arxiv.org/abs/2404.15789",
+   "title": "MotionMaster: Training-free Camera Motion Transfer For Video Generation",
+   "publisher": "MotionMaster authors",
+   "published": "2024-04",
+   "type": "paper",
+   "tags": [
+    "camera",
+    "object-motion",
+    "disentangle"
+   ],
+   "models": [],
+   "claims": [
+    "Separates camera motion from object motion in temporal attention (background motion, Poisson equation in the moving-object region); shows camera and object movement can be pulled apart in generated video."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-064",
+   "url": "https://arxiv.org/abs/2505.20287",
+   "title": "MotionPro: A Precise Motion Controller for Image-to-Video Generation",
+   "publisher": "MotionPro authors",
+   "published": "2025-05",
+   "type": "paper",
+   "tags": [
+    "motion",
+    "camera",
+    "image-to-video",
+    "benchmark"
+   ],
+   "models": [],
+   "claims": [
+    "Region-wise trajectories plus a motion mask (object or camera motion) modulate denoising; MC-Bench has 1.1K user-annotated image-trajectory pairs."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-065",
+   "url": "https://arxiv.org/abs/2607.14202",
+   "title": "KeyFrame-Compass: Towards Comprehensive Evaluation of Keyframe-Conditioned Video Generation",
+   "publisher": "KeyFrame-Compass authors",
+   "published": "2026-07",
+   "type": "paper",
+   "tags": [
+    "first-last-frame",
+    "keyframes",
+    "benchmark"
+   ],
+   "models": [],
+   "claims": [
+    "386 samples; scores keyframe presence, fidelity, temporal order, localization, persistence and uniqueness across nine systems.",
+    "Finds a trade-off between hitting the keyframes and natural video, and worse results as keyframes get denser."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
+  },
+  {
+   "id": "res-066",
+   "url": "https://arxiv.org/abs/2603.17651",
+   "title": "Anchoring and Rescaling Attention for Semantically Coherent Inbetweening",
+   "publisher": "Yonsei University authors",
+   "published": "2026-03",
+   "type": "paper",
+   "tags": [
+    "first-last-frame",
+    "inbetweening",
+    "pacing"
+   ],
+   "models": [
+    "wan-2.2"
+   ],
+   "claims": [
+    "Earlier first-last-frame models struggle as keyframes get sparser or motion larger; a keyframe-anchored attention bias and rescaled temporal RoPE improve frame consistency and pace stability without training (TGI-Bench)."
+   ],
+   "quality": "primary",
+   "access": "abstract",
+   "retrieved": "2026-11-09",
+   "notes": ""
   },
   {
    "id": "scn-001",
