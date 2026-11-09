@@ -327,6 +327,17 @@ test('a character whose shape changed (a shell flattened into a turtle) is caugh
   assert.match(await sizeProblem(env, 'media/p/b.png', one, seq([[300, 300], [450, 200]])), /snail has changed shape: it is wider for its height/, 'about the same area, 2.25 times wider for its height');
 });
 
+test('a change of style or of the way a character faces is caught by comparing the new picture with the film\'s first and the one before', async () => {
+  const { lookProblem } = await import('../src/picturecheck.js'), env = { MODEL_API_KEY: 'k', MEDIA: fakeR2() };
+  for (const k of ['a', 'b', 'c']) env.MEDIA.m.set(`p/${k}.png`, PNG);
+  const say = (o) => { const seen = []; const f = async (url, init) => { const b = JSON.parse(init.body); seen.push(b.input[0].content.filter((c) => c.type === 'input_image').length); return reply({ output_text: JSON.stringify(o) }); }; f.seen = seen; return f; };
+  const look = { filmUri: 'media/p/a.png', baseUri: 'media/p/b.png', state: 'Moss lies left' };
+  const g = say({ style_same: true, facing_same: true }); assert.equal(await lookProblem(env, 'media/p/c.png', look, g), ''); assert.deepEqual(g.seen, [3], 'the judge sees the first picture, the one before and the new one');
+  assert.match(await lookProblem(env, 'media/p/c.png', look, say({ style_same: false, facing_same: true, problem: 'thick paint' })), /the style is not the film's style.*thick paint/);
+  assert.match(await lookProblem(env, 'media/p/c.png', look, say({ style_same: true, facing_same: false })), /faces the other way/);
+  assert.equal(await lookProblem(env, 'media/p/c.png', look, async () => reply({}, 500)), '', 'a judge that cannot run never blocks');
+});
+
 test('SAM is asked for colour and kind, which is what finds one character and not the others', async () => {
   const { samConcept } = await import('../public/js/wizard-model.js');
   assert.equal(samConcept('very small grey-green clay snail with a spiral shell', 'Moss'), 'grey-green snail'); assert.equal(samConcept('a tiny orange clay beetle', 'Pip'), 'orange beetle');

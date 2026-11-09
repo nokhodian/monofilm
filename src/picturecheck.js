@@ -42,8 +42,22 @@ export async function sizeProblem(env, uri, sizes, f, out = {}) {
     return bad.length ? `${bad.join('; ')}; every character must keep the same size, and the same size next to the others (it may look bigger or smaller only by really walking nearer or further)` : '';
   } catch (e) { return ''; }
 }
+// Style and facing, judged by comparing three pictures: the film's first picture (the style), the picture before (the way each character faces) and the new one. A judge that sees only the new picture
+// does not notice that the snail now faces the other way, or that the clay turned into thick paint. `look` = { filmUri, baseUri, state }.
+const LOOK = 'You compare pictures from one film. A is the first picture of the film (the style), B is the picture just before the new one, C is the new picture. Answer JSON {style_same: true or false, facing_same: true or false, problem: one short sentence}. style_same is false when C is drawn in another medium, texture, lighting style or colour treatment than A (for example clay turned into thick paint, or a photograph turned into a drawing); a different time of day is not a different style. facing_same is false when a character that faces left or right in B faces the other way in C, unless the description says it turned around. Judge only these two things.';
+export async function lookProblem(env, uri, look, f) {
+  try {
+    const [c, a, b] = await Promise.all([read(env, uri), look.filmUri ? read(env, look.filmUri) : null, look.baseUri ? read(env, look.baseUri) : null]); if (!c || (!a && !b)) return '';
+    const content = [{ type: 'input_text', text: `${look.state ? `C must show: ${look.state}\n` : ''}A (first picture of the film):` }, ...(a ? [{ type: 'input_image', image_url: a }] : []), { type: 'input_text', text: 'B (the picture before):' }, ...(b ? [{ type: 'input_image', image_url: b }] : []), { type: 'input_text', text: 'C (the new picture):' }, { type: 'input_image', image_url: c }];
+    const r = await spark(env, { instructions: `${LOOK}\nReply with one JSON object and nothing else.`, input: [{ type: 'message', role: 'user', content }] }, f), m = /\{[\s\S]*\}/.exec(outputText(r)), j = m && parseJson(m[0], null);
+    if (!j) return '';
+    const bad = [j.style_same === false && 'the style is not the film\'s style (A)', j.facing_same === false && 'a character faces the other way than in the picture before'].filter(Boolean);
+    return bad.length ? `${bad.join('; ')}${j.problem ? `: ${String(j.problem).slice(0, 120)}` : ''}; draw it in exactly the style of the references and with each character facing the same way as before` : '';
+  } catch (e) { return ''; }
+}
 export async function checkPicture(env, uri, expect, f, refs = [], kinds = [], sizes = null) {
   const sizeOut = {}; if (sizes && sizes.baseUri && (sizes.looks || []).length) { const why = await sizeProblem(env, uri, sizes, f, sizeOut); if (why) return { ok: false, kind: 'size', major: true, seen: '', beings: [], sizeReport: sizeOut.report, badness: sizeOut.badness, sizeFix: (sizeOut.fixes || []).sort((x, y) => Math.abs(Math.log(y.factor)) - Math.abs(Math.log(x.factor)))[0], problem: why.slice(0, 380) }; }
+  if (sizes && sizes.look && (sizes.look.filmUri || sizes.look.baseUri)) { const why = await lookProblem(env, uri, sizes.look, f); if (why) return { ok: false, kind: 'size', major: true, seen: '', beings: [], sizeReport: sizeOut.report, badness: 0.4, problem: why.slice(0, 380) }; } // kind 'size': the picture is kept or replaced by the same rules as a size fault, but it is never repaired by rescaling
   let beings = [], beingsError = ''; if (kinds.length) { const b = await blindKinds(env, uri, kinds, f); beings = b.seen; beingsError = b.error || ''; if (b.why) return { ok: false, kind: 'being', major: true, seen: '', beings, problem: b.why.slice(0, 220) }; }
   const first = await checkOnce(env, uri, expect, f, refs, kinds);
   if (first.ok || first.skipped) return { ...first, beings, beingsError, sizeReport: sizeOut.report };
