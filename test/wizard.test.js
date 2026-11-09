@@ -311,6 +311,19 @@ test('a generator that cannot take camera moves gets a static camera in every sc
   assert.deepEqual(cams, ['static wide', 'static medium', 'static close']); assert.equal((await S.getArtifact(t.db, t.id, R.scene('the-beam'))).data.notes.post, 'push-in', 'a push-in the generator cannot make is kept for the assembly'); assert.ok(seen.some((x) => /cannot take camera moves: every scene's cam must be static/.test(x)));
 });
 
+test('a box that another character found with more confidence is not taken as this character (the search for "snail" also finds the beetle)', async () => {
+  const { ownBoxes } = await import('../src/meta.js'), snail = { box: [0.23, 0.59, 0.43, 0.88], conf: 0.88 }, beetle = { box: [0.68, 0.28, 0.76, 0.57], conf: 0.87 };
+  const [s, b] = ownBoxes([[snail, { ...beetle, conf: 0.93 }], [{ ...beetle, conf: 0.95 }]]);
+  assert.deepEqual(s, [snail], 'the beetle box found for "snail" goes to the beetle'); assert.equal(b.length, 1);
+  assert.deepEqual(ownBoxes([[snail], []])[0], [snail], 'a character nobody else found keeps its box');
+});
+
+test('SAM is asked for colour and kind, which is what finds one character and not the others', async () => {
+  const { samConcept } = await import('../public/js/wizard-model.js');
+  assert.equal(samConcept('very small grey-green clay snail with a spiral shell', 'Moss'), 'grey-green snail'); assert.equal(samConcept('a tiny orange clay beetle', 'Pip'), 'orange beetle');
+  assert.equal(samConcept('a snail', 'Moss'), 'snail', 'no colour in the description: the bare kind'); assert.equal(samConcept('an old man in a grey coat', 'Ines'), 'old man in a grey coat'.slice(0, 70), 'no kind: the short look, as before');
+});
+
 test('a scene with two characters gets a scale sheet once, and every picture of the scene is drawn with it', async () => {
   const t = await setup(); await W.readStory(t.env, t.db, human, t.id, stand()); await ok(t, REFS.reading); await ok(t, R.cast('ines')); await ok(t, R.place('cathedral-scaffold'));
   await W.draftScenes(t.env, t.db, human, t.id, stand()); await ok(t, REFS.look); await ok(t, 'scene:the-beam');

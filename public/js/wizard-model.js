@@ -257,6 +257,10 @@ export function clipChecklist(d, k, cast = []) {
 
 // ---- what kind of creature a character is, in a word, and a short look for it: image models follow a name badly and a kind well ----
 export const beastOf = (desc) => { const m = String(desc || '').match(BEAST); return m ? m[0].toLowerCase().replace(/s$/, '') : ''; };
+// What SAM is asked to find for a character: its colour and its kind ("grey-green snail"). The bare kind ("snail") also finds the other animals (the beetle, with more confidence in some pictures),
+// a long description finds nothing, and colour plus kind finds only that character.
+const COLOUR = /\b((?:grey|gray|green|olive|orange|red|crimson|blue|navy|yellow|golden|brown|black|white|pink|purple|violet|teal|silver|tan|beige|cream)(?:[- ](?:grey|gray|green|orange|red|blue|yellow|brown|pink|purple))?)\b/i;
+export const samConcept = (desc, name = '') => { const kind = beastOf(desc), c = String(desc || '').match(COLOUR); return kind ? (c ? `${c[1].toLowerCase().replace(' ', '-')} ${kind}` : kind) : shortLook(desc, name); };
 export function shortLook(desc, name = '') {
   let t = String(desc || '').trim().replace(new RegExp(`^${String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+(is|was)\\s+`, 'i'), '').replace(/^(an?|the)\s+/i, '');
   t = t.split(/\s+(?:with|who|that|wearing|always)\s+|[,.;]/)[0].trim(); return t.length > 70 ? t.slice(0, 70).replace(/\s+\S*$/, '') : t;

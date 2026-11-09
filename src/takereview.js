@@ -1,6 +1,6 @@
 // A second look at a finished clip. The video model's own measures (cuts, frozen tail) cannot see that one seed became three, that a bottle was closed while someone blew bubbles through it,
 // or that the place changed shape. A few frames of the clip go to Muse Spark with what was asked, and it says what is physically wrong and how to ask again.
-import { spark, outputText, dataUrl, sam } from './meta.js';
+import { spark, outputText, dataUrl, sam, ownBoxes } from './meta.js';
 import { sizeFaults, sizeIssues, goodUntil } from '../public/js/pack.js';
 import { parseJson } from './util.js';
 
@@ -12,8 +12,9 @@ const boxSize = (boxes) => { const b = (boxes || []).slice().sort((x, y) => (y.c
 // Measure how big each character is in every frame (SAM), a few calls at a time. measure = { concepts: [{ name, concept }], seconds, depth, push }.
 export async function measureSizes(env, frames, measure, f) {
   const imgs = frames.slice(0, 12).filter((x) => typeof x === 'string' && x.length < 400000).map(toUrl), series = {}; for (const c of measure.concepts) series[c.name] = new Array(imgs.length).fill(0);
-  const jobs = []; imgs.forEach((image, i) => measure.concepts.forEach((c) => jobs.push({ i, c, image })));
-  for (let k = 0; k < jobs.length; k += 6) await Promise.all(jobs.slice(k, k + 6).map(async (j) => { try { series[j.c.name][j.i] = boxSize(await sam(env, { image: j.image, concept: j.c.concept }, f)); } catch (e) { /* a frame that cannot be measured is left at 0 and ignored */ } }));
+  for (let k = 0; k < imgs.length; k += 3) await Promise.all(imgs.slice(k, k + 3).map(async (image, d) => { try { // a frame at a time: every character's search runs, then each box goes to the character that found it with the most confidence (the search for "snail" also finds the beetle)
+    const lists = await Promise.all(measure.concepts.map((c) => sam(env, { image, concept: c.concept }, f).catch(() => []))), own = ownBoxes(lists); measure.concepts.forEach((c, n) => { series[c.name][k + d] = boxSize(own[n]); });
+  } catch (e) { /* a frame that cannot be measured is left at 0 and ignored */ } }));
   const faults = sizeFaults(series, { seconds: measure.seconds, depth: measure.depth, push: measure.push });
   return { series, faults, issues: sizeIssues(faults), good_until: goodUntil(faults) };
 }

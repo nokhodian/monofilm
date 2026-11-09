@@ -1,7 +1,7 @@
 // A local repair for a character drawn at the wrong size (GenScale, res-045: cut the character out, rescale it, put it back with its feet on the same ground point and fill the
 // seam took plausible relative sizes from 11.7% to 88.3%; asking the image model to "redraw it 1.3 times bigger" is often ignored). A Worker has no canvas, so this works on raw pixels:
 // SAM gives the character's mask (not only its box), src/png.js reads and writes the picture, and the hole the old character leaves is filled by diffusion from its surroundings.
-import { samMasks, dataUrl } from './meta.js';
+import { samMasks, dataUrl, ownBoxes } from './meta.js';
 import { decodePng, encodePng } from './png.js';
 import { attachAsset } from './store.js';
 import { id8 } from './util.js';
@@ -125,7 +125,8 @@ export async function rescaleCharacter(env, uri, fix, f) {
   try {
     const o = await env.MEDIA.get(String(uri).replace(/^media\//, '')); if (!o || !(fix.factor > 0)) return null;
     const bytes = new Uint8Array(await o.arrayBuffer()), img = await decodePng(bytes);
-    const hits = (await samMasks(env, { image: dataUrl(bytes, 'image/png'), concept: fix.concept }, f)).sort((a, b) => (b.conf || 0) - (a.conf || 0));
+    const image = dataUrl(bytes, 'image/png'), found = await Promise.all([fix.concept, ...(fix.others || [])].map((concept) => samMasks(env, { image, concept }, f).catch(() => [])));
+    const hits = ownBoxes(found.map((l) => l.map((h) => ({ box: h.box, conf: h.conf, hit: h }))))[0].map((x) => x.hit).sort((a, b) => (b.conf || 0) - (a.conf || 0)); // not the box another character found with more confidence
     if (!hits.length) return null;
     const out = rescaleOnPixels(img, hits[0], Math.min(2, Math.max(0.5, fix.factor)));
     return await encodePng(out);

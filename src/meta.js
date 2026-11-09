@@ -45,6 +45,13 @@ export async function sam(env, { image, concept }, f) {
   return parseBoxes(outputText(r)); // no match is an empty list, not an error
 }
 
+// "snail" also matches the beetle, and with a higher confidence in some pictures, so the most confident box for a character may be another character. A box that another character's
+// search found with more confidence (they overlap, intersection over the smaller box above 0.5) belongs to that character: `lists` = one box list per character, the same lists come back without the stolen boxes.
+export function ownBoxes(lists) {
+  const inter = (a, b) => { const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]), h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]); return w > 0 && h > 0 ? (w * h) / Math.min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1])) : 0; };
+  return lists.map((list, i) => (list || []).filter((b) => !lists.some((other, j) => j !== i && (other || []).some((c) => (c.conf || 0) > (b.conf || 0) && inter(b.box, c.box) > 0.5))));
+}
+
 // The same request, with the pixel mask of every match: each box is followed by <|mask;x=;y=;c=;data=H,W,PAYLOAD|>, the mask of that box (H rows, W columns, from the box's top left corner).
 // "one_bit" is the small encoding that src/rescale.js decodes (the default "lossless" one is a much heavier coder, and a mask only needs to be on or off).
 const MASK = /<\|box;x1=(\d+);y1=(\d+);x2=(\d+);y2=(\d+);w=(\d+);h=(\d+)(?:;c=([\d.]+))?\|><\|mask;[^|]*?data=(\d+),(\d+),([^|]*)\|>/g;
