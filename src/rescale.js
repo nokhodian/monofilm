@@ -120,11 +120,23 @@ export function rescaleOnPixels(img, hit, factor) {
   return { w: W, h: H, data: out, anchor: [Math.round(axd), Math.round(ay)] };
 }
 
+// The repair holds about a dozen float rasters of the picture in memory, and a Worker has 128 MB: a picture longer than `max` pixels is averaged down first (the video generator takes 1280 wide anyway).
+export function shrink(img, max = 1024) {
+  const k = Math.max(img.w, img.h) / max; if (k <= 1) return img;
+  const w = Math.round(img.w / k), h = Math.round(img.h / k), data = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const x0 = Math.floor(x * k), x1 = Math.max(x0 + 1, Math.min(img.w, Math.floor((x + 1) * k))), y0 = Math.floor(y * k), y1 = Math.max(y0 + 1, Math.min(img.h, Math.floor((y + 1) * k))), n = (x1 - x0) * (y1 - y0), sum = [0, 0, 0];
+    for (let j = y0; j < y1; j++) for (let i = x0; i < x1; i++) for (let q = 0; q < 3; q++) sum[q] += img.data[(j * img.w + i) * 4 + q];
+    for (let q = 0; q < 3; q++) data[(y * w + x) * 4 + q] = sum[q] / n; data[(y * w + x) * 4 + 3] = 255;
+  }
+  return { w, h, data };
+}
+
 // Repair one size fault of a stored picture: `fix` = { concept, factor } (the character, and how many times bigger it must become). Returns PNG bytes, or null when it cannot be done (never throws).
 export async function rescaleCharacter(env, uri, fix, f) {
   try {
     const o = await env.MEDIA.get(String(uri).replace(/^media\//, '')); if (!o || !(fix.factor > 0)) return null;
-    const bytes = new Uint8Array(await o.arrayBuffer()), img = await decodePng(bytes);
+    const full = await decodePng(new Uint8Array(await o.arrayBuffer())), img = shrink(full, Number(env.REPAIR_MAX) || 1024), bytes = img === full ? new Uint8Array(await o.arrayBuffer()) : await encodePng(img); // SAM must see the same pixels the repair works on
     const image = dataUrl(bytes, 'image/png'), found = await Promise.all([fix.concept, ...(fix.others || [])].map((concept) => samMasks(env, { image, concept }, f).catch(() => [])));
     const hits = ownBoxes(found.map((l) => l.map((h) => ({ box: h.box, conf: h.conf, hit: h }))))[0].map((x) => x.hit).sort((a, b) => (b.conf || 0) - (a.conf || 0)); // not the box another character found with more confidence
     if (!hits.length) return null;

@@ -6,7 +6,7 @@ import { makeDb, human } from './d1.js';
 import * as S from '../src/store.js';
 import { REFS } from '../public/js/wizard-model.js';
 import { decodePng, encodePng } from '../src/png.js';
-import { decodeMask, rescaleOnPixels, repairSized } from '../src/rescale.js';
+import { decodeMask, rescaleOnPixels, repairSized, shrink } from '../src/rescale.js';
 import { samMasks } from '../src/meta.js';
 import { checkPicture } from '../src/picturecheck.js';
 
@@ -48,7 +48,7 @@ async function stage() {
   const db = makeDb(), { id } = await S.createProduction(db, human, { name: 'R', format: 'movie', budget: 20 }), objs = new Map(), png = await encodePng(solid(2240, 1120, [110, 120, 100]));
   await S.propose(db, human, id, { ref: REFS.story, data: { text: 'x' }, auto_approve: true }); objs.set('p/a.png', png);
   const MEDIA = { objs, put: async (k, b) => { objs.set(k, b); }, delete: async (k) => { objs.delete(k); }, get: async (k) => (objs.has(k) ? { arrayBuffer: async () => objs.get(k).buffer.slice(objs.get(k).byteOffset, objs.get(k).byteOffset + objs.get(k).byteLength) } : null) };
-  return { db, id, MEDIA, env: { MODEL_API_KEY: 'k', MEDIA } };
+  return { db, id, MEDIA, env: { MODEL_API_KEY: 'k', MEDIA, REPAIR_MAX: 4000 } };
 }
 const failed = { ok: false, kind: 'size', sizeFix: { concept: 'snail', factor: 1.25 } };
 
@@ -78,4 +78,9 @@ test('a size fault from the check names the character and the factor to put it r
   const box = (side) => `<|box;x1=100;y1=100;x2=${100 + side};y2=${100 + side};w=1000;h=1000;c=0.9|>`; let n = 0;
   const r = await checkPicture(t.env, 'media/p/b.png', 'x', async () => reply({ output_text: n++ % 2 === 0 ? box(400) : box(300) }), [], [], { baseUri: 'media/p/a.png', looks: [{ name: 'Moss', look: 'snail' }] });
   assert.equal(r.kind, 'size'); assert.equal(r.sizeFix.concept, 'snail'); assert.equal(Math.round(r.sizeFix.factor * 100) / 100, 1.33);
+});
+
+test('a large picture is averaged down before the repair so it fits a Worker, a small one is left alone', () => {
+  const big = solid(2000, 1000, [100, 150, 200]), small = shrink(big, 1000); assert.deepEqual([small.w, small.h], [1000, 500]); assert.deepEqual([...small.data.subarray(0, 4)], [100, 150, 200, 255]);
+  const mid = solid(800, 400, [1, 2, 3]); assert.equal(shrink(mid, 1000), mid);
 });
