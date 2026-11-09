@@ -351,6 +351,8 @@ test('a picture is held to the scene\'s first picture and to the size between ch
   assert.match(await sizeProblem(env, 'media/p/b.png', one, seq([400, 380, 500, 380])), /snail is 76% of the size it was in the scene's first picture/, 'a drift that is small each step but big from the start');
   const two = { baseUri: 'media/p/a.png', looks: [{ name: 'Moss', look: 'snail' }, { name: 'Pip', look: 'beetle' }] };
   assert.match(await sizeProblem(env, 'media/p/b.png', two, seq([400, 310, 300, 300])), /snail compared with the beetle is/, 'one character shrinking next to another is a fault');
+  const film = { ...two, filmUri: 'media/p/c.png' }; assert.match(await sizeProblem(env, 'media/p/b.png', film, seq([400, 400, 300, 300, 600, 400, 300, 300])), /compared with the beetle is 67% of what it was in the film's first picture/, "the film's first picture holds the ratio between characters");
+  assert.equal(await sizeProblem(env, 'media/p/b.png', film, seq([400, 400, 300, 300, 300, 400, 225, 300])), '', 'but not the size of one character, a scene may change the framing');
 });
 
 test('the clip review measures every character in every frame with SAM and reports the moment a size changes', async () => {

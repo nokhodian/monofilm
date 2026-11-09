@@ -38,6 +38,9 @@ test('the character is scaled about the point where it touches the ground, and w
   const small = rescaleOnPixels(img, hit, 0.6); assert.ok(red(small, 120, 147) && red(small, 120, 125), '30 rows: 120..149'); assert.ok(!red(small, 120, 110), 'the old head is gone');
   for (const [x, y] of [[105, 105], [135, 105], [100, 148], [139, 130]]) assert.deepEqual([...small.data.subarray((y * W + x) * 4, (y * W + x) * 4 + 3)], ground, `${x},${y} shows ground, not a ghost`);
   assert.throws(() => rescaleOnPixels(img, { ...hit, px: [100, 0, 140, 50] }, 3.5), /leave the frame/);
+  const edge = solid(W, H, ground); for (let y = 0; y < mh; y++) for (let x = 0; x < mw; x++) edge.data.set([220, 30, 30, 255], ((100 + y) * W + 5 + x) * 4); // a block at the left edge, feet at (25, 149)
+  const moved = rescaleOnPixels(edge, { px: [5, 100, 45, 150], mask: { w: mw, h: mh, raster } }, 2); assert.deepEqual(moved.anchor, [39, 149], 'it grows past the side of the frame and is moved in along the ground by the 14 pixels it needed');
+  assert.ok(red(moved, 6, 140) && red(moved, 72, 140) && red(moved, 39, 60), 'whole, 80 wide, from the edge');
 });
 
 // the repair against a stand-in for Meta, on a plain 2240x1120 picture with the real snail mask

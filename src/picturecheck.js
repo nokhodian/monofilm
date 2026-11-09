@@ -24,7 +24,7 @@ const sizeOf = (boxes) => { const b = (boxes || []).slice().sort((x, y) => (y.co
 export async function sizeProblem(env, uri, sizes, f, out = {}) {
   try {
     const now = await read(env, uri); if (!now) return '';
-    const refs = [{ uri: sizes.baseUri, what: 'the previous picture' }, ...(sizes.originUri && sizes.originUri !== sizes.baseUri ? [{ uri: sizes.originUri, what: "the scene's first picture" }] : [])];
+    const refs = [{ uri: sizes.baseUri, what: 'the previous picture' }, ...(sizes.originUri && sizes.originUri !== sizes.baseUri ? [{ uri: sizes.originUri, what: "the scene's first picture" }] : []), ...(sizes.filmUri && sizes.filmUri !== sizes.baseUri && sizes.filmUri !== sizes.originUri && (sizes.looks || []).length > 1 ? [{ uri: sizes.filmUri, what: "the film's first picture", ratioOnly: true }] : [])]; // the film's first picture: only the size of one character next to another is held (a scene may change the framing, the snail never changes next to the beetle)
     const lo = sizes.push ? 0.85 : 0.78, hi = sizes.push ? 1.6 : 1.3, looks = sizes.looks.slice(0, 3), bad = [];
     for (const r of refs) {
       const before = await read(env, r.uri); if (!before) continue; const sa = [], sb = [];
@@ -32,8 +32,8 @@ export async function sizeProblem(env, uri, sizes, f, out = {}) {
         const concept = c.concept || c.look, [a, b] = await Promise.all([sam(env, { image: before, concept }, f), sam(env, { image: now, concept }, f)]); sa.push(sizeOf(a)); sb.push(sizeOf(b));
         (out.report = out.report || []).push({ look: concept, against: r.what, before: Math.round(sa[sa.length - 1] * 100) / 100, now: Math.round(sb[sb.length - 1] * 100) / 100 });
       }
-      looks.forEach((c, i) => { if (sa[i] > 0.02 && sb[i] > 0.02) { const ratio = sb[i] / sa[i]; if (ratio < lo || ratio > hi) (out.fixes = out.fixes || []).push({ concept: c.concept || c.look, factor: sa[i] / sb[i] }), bad.push(`the ${c.look} is ${Math.round(ratio * 100)}% of the size it was in ${r.what}: redraw it about ${(Math.round((ratio < 1 ? 1 / ratio : ratio) * 10) / 10).toFixed(1)} times ${ratio < 1 ? 'bigger' : 'smaller'}`); } });
-      if (!sizes.push && looks.length > 1 && sa[0] > 0.02 && sb[0] > 0.02) for (let i = 1; i < looks.length; i++) if (sa[i] > 0.02 && sb[i] > 0.02) { const q = (sb[0] / sb[i]) / (sa[0] / sa[i]); if (q < 0.8 || q > 1.25) (out.fixes = out.fixes || []).push({ concept: looks[0].concept || looks[0].look, factor: 1 / q }), bad.push(`the ${looks[0].look} compared with the ${looks[i].look} is ${Math.round(q * 100)}% of what it was in ${r.what}: scale the ${looks[0].look} by ${(Math.round((1 / q) * 100) / 100).toFixed(2)}`); }
+      if (!r.ratioOnly) looks.forEach((c, i) => { if (sa[i] > 0.02 && sb[i] > 0.02) { const ratio = sb[i] / sa[i]; if (ratio < lo || ratio > hi) (out.fixes = out.fixes || []).push({ concept: c.concept || c.look, factor: sa[i] / sb[i] }), bad.push(`the ${c.look} is ${Math.round(ratio * 100)}% of the size it was in ${r.what}: redraw it about ${(Math.round((ratio < 1 ? 1 / ratio : ratio) * 10) / 10).toFixed(1)} times ${ratio < 1 ? 'bigger' : 'smaller'}`); } });
+      if (!sizes.push && looks.length > 1 && sa[0] > 0.02 && sb[0] > 0.02) for (let i = 1; i < looks.length; i++) if (sa[i] > 0.02 && sb[i] > 0.02) { const q = (sb[0] / sb[i]) / (sa[0] / sa[i]); if (r.ratioOnly ? q < 0.72 || q > 1.38 : q < 0.8 || q > 1.25) (out.fixes = out.fixes || []).push({ concept: looks[0].concept || looks[0].look, factor: 1 / q }), bad.push(`the ${looks[0].look} compared with the ${looks[i].look} is ${Math.round(q * 100)}% of what it was in ${r.what}: scale the ${looks[0].look} by ${(Math.round((1 / q) * 100) / 100).toFixed(2)}`); }
       if (bad.length) break;
     }
     return bad.length ? `${bad.join('; ')}; every character must keep the same size, and the same size next to the others (it may look bigger or smaller only by really walking nearer or further)` : '';

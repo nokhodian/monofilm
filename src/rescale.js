@@ -92,8 +92,10 @@ export function rescaleOnPixels(img, hit, factor) {
   const feet = []; for (let y = mh - 1; y >= Math.max(0, mh - 1 - Math.ceil(mh * 0.04)); y--) for (let x = 0; x < mw; x++) if (m[y * mw + x]) feet.push(x);
   if (!feet.length) throw new Error('the mask is empty');
   const ax = bx1 + feet.reduce((s, v) => s + v, 0) / feet.length, ay = by1 + mh - 1; // the ground point, in picture pixels
-  const nx1 = Math.round(ax + (bx1 - ax) * factor), nx2 = Math.round(ax + (bx2 + 1 - ax) * factor), ny1 = Math.round(ay + (by1 - ay) * factor), ny2 = Math.round(ay + 1);
-  if (nx1 < -W * 0.03 || nx2 > W * 1.03 || ny1 < -H * 0.03) throw new Error('the rescaled character would leave the frame'); // a repair that cuts a head off is worse than the fault
+  let nx1 = Math.round(ax + (bx1 - ax) * factor), nx2 = Math.round(ax + (bx2 + 1 - ax) * factor); const ny1 = Math.round(ay + (by1 - ay) * factor), ny2 = Math.round(ay + 1);
+  let dx = 0; if (nx1 < 0) dx = -nx1; else if (nx2 > W) dx = W - nx2; // a character that grows past the side of the frame is moved in, along the ground, not refused
+  if (nx2 - nx1 > W || Math.abs(dx) > W * 0.3 || ny1 < -H * 0.03) throw new Error('the rescaled character would leave the frame'); // a repair that cuts a head off is worse than the fault
+  nx1 += dx; nx2 += dx; const axd = ax + dx; // where the ground point lands
   // the margin M leaves room for a stretch of ground as big as the character, to borrow fine detail from
   const M = Math.max(mw, mh) + 16, R = { x0: Math.max(0, Math.min(bx1, nx1) - M), y0: Math.max(0, Math.min(by1, ny1) - M), x1: Math.min(W, Math.max(bx1 + mw, nx2) + M), y1: Math.min(H, Math.max(by1 + mh, ny2) + M) }, rw = R.x1 - R.x0, rh = R.y1 - R.y0;
   const old = new Uint8Array(rw * rh); for (let y = 0; y < mh; y++) for (let x = 0; x < mw; x++) if (m[y * mw + x]) { const X = bx1 + x - R.x0, Y = by1 + y - R.y0; if (X >= 0 && X < rw && Y >= 0 && Y < rh) old[Y * rw + X] = 1; }
@@ -106,7 +108,7 @@ export function rescaleOnPixels(img, hit, factor) {
   const nA = new Float32Array(rw * rh), nC = new Float32Array(rw * rh * 3), ss = factor < 1 ? Math.ceil(1 / factor) : 1;
   for (let Y = Math.max(R.y0, ny1); Y < Math.min(R.y1, ny2); Y++) for (let X = Math.max(R.x0, nx1); X < Math.min(R.x1, nx2); X++) {
     let a = 0, c0 = 0, c1 = 0, c2 = 0;
-    for (let j = 0; j < ss; j++) for (let i = 0; i < ss; i++) { const sx = ax + (X + (i + 0.5) / ss - ax) / factor - 0.5 - R.x0, sy = ay + (Y + (j + 0.5) / ss - ay) / factor - 0.5 - R.y0, [al] = sample(aSrc, 1, sx, sy), [r, g, b] = sample(rgb, 3, sx, sy); a += al; c0 += r; c1 += g; c2 += b; }
+    for (let j = 0; j < ss; j++) for (let i = 0; i < ss; i++) { const sx = ax + (X + (i + 0.5) / ss - axd) / factor - 0.5 - R.x0, sy = ay + (Y + (j + 0.5) / ss - ay) / factor - 0.5 - R.y0, [al] = sample(aSrc, 1, sx, sy), [r, g, b] = sample(rgb, 3, sx, sy); a += al; c0 += r; c1 += g; c2 += b; }
     const o = (Y - R.y0) * rw + X - R.x0; nA[o] = a / (ss * ss); if (a > 0) { nC[o * 3] = c0 / a; nC[o * 3 + 1] = c1 / a; nC[o * 3 + 2] = c2 / a; }
   }
   const alpha = blur(nA, rw, rh, 1);
@@ -115,7 +117,7 @@ export function rescaleOnPixels(img, hit, factor) {
   for (let i = 0; i < rw * rh; i++) { const s = ((R.y0 + Math.floor(i / rw)) * W + R.x0 + (i % rw)) * 4; for (let q = 0; q < 3; q++) pic[i * 3 + q] = data[s + q]; }
   const fill = textured(pushPull(pic, known, rw, rh), pic, hole, alpha, rw, rh), out = new Uint8ClampedArray(data);
   for (let i = 0; i < rw * rh; i++) { const s = ((R.y0 + Math.floor(i / rw)) * W + R.x0 + (i % rw)) * 4; for (let q = 0; q < 3; q++) { const base = hole[i] ? fill[i * 3 + q] : pic[i * 3 + q]; out[s + q] = base * (1 - alpha[i]) + nC[i * 3 + q] * alpha[i]; } }
-  return { w: W, h: H, data: out, anchor: [Math.round(ax), Math.round(ay)] };
+  return { w: W, h: H, data: out, anchor: [Math.round(axd), Math.round(ay)] };
 }
 
 // Repair one size fault of a stored picture: `fix` = { concept, factor } (the character, and how many times bigger it must become). Returns PNG bytes, or null when it cannot be done (never throws).
