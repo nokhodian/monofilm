@@ -45,6 +45,14 @@ export async function sam(env, { image, concept }, f) {
   return parseBoxes(outputText(r)); // no match is an empty list, not an error
 }
 
+// The same request, with the pixel mask of every match: each box is followed by <|mask;x=;y=;c=;data=H,W,PAYLOAD|>, the mask of that box (H rows, W columns, from the box's top left corner).
+// "one_bit" is the small encoding that src/rescale.js decodes (the default "lossless" one is a much heavier coder, and a mask only needs to be on or off).
+const MASK = /<\|box;x1=(\d+);y1=(\d+);x2=(\d+);y2=(\d+);w=(\d+);h=(\d+)(?:;c=([\d.]+))?\|><\|mask;[^|]*?data=(\d+),(\d+),([^|]*)\|>/g;
+export async function samMasks(env, { image, concept }, f) {
+  const r = await call(env, '/responses', json({ model: modelOf(env, 'sam'), input: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: concept }, { type: 'input_image', image_url: image }] }], metadata: { include_confidence: 'true', mask_encoding: 'one_bit' } }), f);
+  return [...outputText(r).matchAll(MASK)].map((m) => ({ box: [+m[1] / +m[5], +m[2] / +m[6], +m[3] / +m[5], +m[4] / +m[6]], px: [+m[1], +m[2], +m[3], +m[4]], conf: m[7] ? +m[7] : null, mask: { h: +m[8], w: +m[9], payload: m[10] } }));
+}
+
 // ---- Muse Voice Transcribe: a WAV file in, text out ----
 export async function transcribe(env, wav, { language } = {}, f) {
   const form = new FormData();

@@ -22,7 +22,21 @@ for key, rec in state.items():
     keep = seconds - hold + 0.3 if hold >= 1 else seconds
     if r.get("good_until") is not None:
         keep = min(keep, r["good_until"])
-    plan["clips"].append({"file": os.path.basename(take["file"].replace("\\", "/")), "hold": hold, "keep": round(keep, 2), "continues": key.endswith(":2") or not key.endswith(":1"), **({"push": rec["push"]} if rec.get("push") else {})})
+    plan["clips"].append({"file": os.path.basename(take["file"].replace("\\", "/")), "hold": hold, "keep": round(keep, 2), "continues": key.endswith(":2") or not key.endswith(":1"), "_push": rec.get("push") or 0, "_at": rec.get("push_at")})
     print(f"{key}: take {take['attempt']}  keep {keep:.1f}s of {seconds}s" + (f"  (size fault from {r['good_until'] + 0.2:.1f} s)" if r.get("good_until") is not None else ""))
+# a scene chain (a clip and the clips that continue it) pushes in once: state.json push is its total, and each clip gets the share of its length (push_from to push)
+chains = []
+for c in plan["clips"]:
+    if c["continues"] and chains: chains[-1].append(c)
+    else: chains.append([c])
+for chain in chains:
+    total, seconds, done = max(c["_push"] for c in chain), sum(c["keep"] for c in chain) or 1, 0.0
+    at = next((c["_at"] for c in chain if c["_at"]), None)
+    for c in chain:
+        if total:
+            c["push_from"], c["push"] = round(total * done / seconds, 4), round(total * (done + c["keep"]) / seconds, 4)
+            if at: c["push_at"] = at
+        done += c["keep"]
+for c in plan["clips"]: c.pop("_push"), c.pop("_at")
 json.dump(plan, open(os.path.join(folder, "plan.json"), "w"), indent=1)
 print("wrote", os.path.join(folder, "plan.json"))

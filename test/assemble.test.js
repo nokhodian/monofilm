@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cutOf, filterOf, assemble, frameDiff, bestJoin } from '../scripts/assemble-film.mjs';
+import { cutOf, filterOf, zoomOf, zoomAt, assemble, frameDiff, bestJoin } from '../scripts/assemble-film.mjs';
 
 const has = (b) => { try { execFileSync(b, ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } };
 
@@ -22,7 +22,13 @@ test('every clip is brought to one size, rate and audio format, with a short fad
   assert.match(f.v, /scale=640:360/); assert.match(f.v, /fps=24/); assert.match(f.v, /format=yuv420p/); assert.match(f.a, /aresample=48000/); assert.match(f.a, /afade=t=in:st=0:d=0\.08/); assert.match(f.a, /afade=t=out:st=3\.920:d=0\.08/);
   assert.match(filterOf({}, 1, 0.4).a, /d=0\.1\b/, 'the fade is never longer than a quarter of a short clip');
   assert.doesNotMatch(filterOf({ size: '640x360' }, 0.08, 4).v, /crop/, 'no push, no crop');
-  const pushed = filterOf({ size: '640x360', fps: 24 }, 0.08, 4, 0.08).v; assert.match(pushed, /scale=w='trunc\(iw\*\(1\+0\.08\*t\/4\.000\)\/2\)\*2'.*eval=frame,crop=640:360,format=yuv420p$/, 'a push-in is a crop that grows over the clip, so everything scales together');
+  const pushed = filterOf({ size: '640x360', fps: 24 }, 0.08, 4, zoomOf({ push: 0.08, push_at: [0.4, 0.5] }, 4)).v;
+  assert.ok(pushed.includes("scale=1280:720:flags=lanczos,scale=w='trunc(640*2*(1+(0.00000+0.020000*t))/2)*2'") && pushed.includes("eval=frame") && pushed.includes("crop=1280:720:'1280*(0.00000+0.020000*t)*0.4':'720*(0.00000+0.020000*t)*0.5',scale=640:360:flags=lanczos,format=yuv420p"), 'a push-in is a crop of a 2x copy that grows over the clip (crop position from the zoom, not iw), so everything scales together');
+});
+test('a chain of clips pushes in once: each clip starts at the zoom the one before ended on, along one straight line', () => {
+  const a = zoomOf({ push_from: 0, push: 0.04 }, 4), b = zoomOf({ push_from: 0.04, push: 0.08 }, 4, zoomAt(a, 3.5));
+  assert.equal(zoomAt(a, 0), 0); assert.ok(Math.abs(zoomAt(a, 4) - 0.04) < 1e-9); assert.ok(Math.abs(b.from - 0.035) < 1e-9, 'the next clip carries the zoom where the join was cut, not 0 and not 0.04');
+  assert.equal(zoomOf({}, 4).slope, 0); assert.deepEqual(zoomOf({}, 4).at, [0.5, 0.5]); assert.equal(zoomAt({ from: 0, slope: -1 }, 2), 0, 'never below no zoom');
 });
 test('two clips of different size and rate, one without sound, come out as one film of the right length', { skip: !has('ffmpeg') || !has('ffprobe') }, () => {
   const dir = mkdtempSync(join(tmpdir(), 'asm-')), mk = (name, src, extra) => { execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', src, ...extra, join(dir, name)]); return join(dir, name); };
@@ -43,4 +49,13 @@ test('a join is made where the two clips match: the same picture is cut, a diffe
   assert.equal(toRed.soft, false); assert.ok(toRed.end <= 2.5 + 0.11 || toRed.end >= 2.0, `the clip is cut at a frame that matches red: ${toRed.end}`);
   const out = join(dir, 'same.mp4'), r = assemble({ size: '320x180', fps: 24, clips: [{ file: red1 }, { file: red2, continues: true }] }, out), info = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'json', out], { encoding: 'utf8' }));
   assert.equal(r.dissolved, 0); assert.ok(Math.abs(Number(info.format.duration) - (4 + 3.917)) < 0.3, `duration ${info.format.duration}`);
+});
+
+test('a pushed two-clip chain joins without a jump and the scale of a landmark rises smoothly', { skip: !has('ffmpeg') || !has('ffprobe') }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'asmp-')), src = 'color=c=black:s=640x360:r=24:d=4,drawbox=x=300:y=160:w=40:h=40:c=white:t=fill', mk = (n) => { execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', src, '-f', 'lavfi', '-i', 'sine=f=300:d=4', '-shortest', join(dir, n)]); return join(dir, n); };
+  const out = join(dir, 'f.mp4'), r = assemble({ size: '640x360', fps: 24, loudness: false, clips: [{ file: mk('a.mp4'), push: 0.1, push_from: 0 }, { file: mk('b.mp4'), continues: true, push_from: 0.1, push: 0.2 }] }, out);
+  assert.equal(r.dissolved, 0, 'the join is cut, not dissolved: both sides are zoomed the same');
+  const width = (t) => { const g = execFileSync('ffmpeg', ['-v', 'error', '-ss', String(t), '-i', out, '-frames:v', '1', '-vf', 'crop=160:100:240:130,format=gray', '-f', 'rawvideo', '-'], { maxBuffer: 1 << 20 }); let n = 0; for (const v of g) if (v > 128) n++; return Math.sqrt(n); };
+  const w = [0.2, 1, 2, 3, 3.5, 4.5, 5.5, 6.5, 7.5].map(width), steps = w.slice(1).map((x, i) => x - w[i]);
+  assert.ok(w[w.length - 1] > w[0] * 1.15, `the landmark grew ${w.map((x) => x.toFixed(1))}`); assert.ok(steps.every((x) => x > -0.6), `never shrinks ${steps}`); assert.ok(Math.max(...steps) < 3, `no step ${steps}`);
 });

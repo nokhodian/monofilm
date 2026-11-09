@@ -5,6 +5,7 @@ import * as S from './store.js';
 import { spark, outputText, metaConfigured } from './meta.js';
 import { AGENT } from './agent.js';
 import { checkPicture } from './picturecheck.js';
+import { repairSized } from './rescale.js';
 import { registerTool, callTool } from './tools.js';
 import { REFS, R, slug, keyOf, mediumOf, beingOf, beastOf, shortLook, expandNames, plainDesc, clipStates, sizesLine, sizesOf, cameraNote, GENERATORS, clipPlan, clipBeats, clipSpans, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP, sceneBounds, clampScene } from '../public/js/wizard-model.js';
 
@@ -214,7 +215,9 @@ async function drawChecked(env, db, actor, pid, ref, input, expect, f, kinds = [
   const refs = (input.anchors || []).filter((a) => a.name).map((a) => ({ name: a.name, uri: a.uri }));
   let r = await paint(env, db, actor, pid, ref, input, f), check = await checkPicture(env, r.asset.uri, expect, f, refs, kinds, sizes), redrew = false;
   for (let i = 0; i < 2 && !check.ok && !check.skipped; i++) { redrew = true; const again = await paint(env, db, actor, pid, ref, { ...input, prompt: `${input.prompt} Correction: ${check.problem || 'it was not what was asked for'}. It must show: ${expect}` }, f).catch(() => null); if (!again) break; r = again; check = await checkPicture(env, r.asset.uri, expect, f, refs, kinds, sizes); } // up to two more tries, each told what was wrong
-  return { r, check: { ok: check.ok, major: !!check.major, beings: check.beings || [], ...(check.sizeReport ? { sizeReport: check.sizeReport } : {}), kinds: kinds.map((k) => k.kind), ...(check.beingsError ? { beingsError: check.beingsError } : {}), seen: check.seen || '', problem: check.problem || '', redrew, skipped: !!check.skipped } };
+  // a size the image model would not correct is repaired on the picture itself: the character is cut out, rescaled about its feet and the gap filled (src/rescale.js)
+  let rescaled = 0; for (let i = 0; i < 2 && !check.ok && !check.skipped && check.kind === 'size' && check.sizeFix; i++) { const fixed = await repairSized(env, db, actor, pid, ref, r.asset.uri, check, (u) => checkPicture(env, u, expect, f, refs, kinds, sizes), f); if (!fixed) break; r = { ...r, asset: fixed.asset }; check = fixed.check; rescaled++; }
+  return { r, check: { rescaled, ok: check.ok, major: !!check.major, beings: check.beings || [], ...(check.sizeReport ? { sizeReport: check.sizeReport } : {}), kinds: kinds.map((k) => k.kind), ...(check.beingsError ? { beingsError: check.beingsError } : {}), seen: check.seen || '', problem: check.problem || '', redrew, skipped: !!check.skipped } };
 }
 async function paint(env, db, actor, pid, ref, input, f) {
   if (!metaConfigured(env)) throw new HttpError(503, 'MODEL_API_KEY is not set, so Muse Image is off.');

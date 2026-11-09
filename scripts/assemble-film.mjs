@@ -4,7 +4,7 @@
 // at the frame (in its last 2 seconds) that looks most like the next clip's first frame, and a join that still differs is dissolved over 0.4 s instead of jumping.
 //   node scripts/assemble-film.mjs plan.json film.mp4
 //   plan.json: { "size": "1280x720", "fps": 24, "fade": 0.08, "loudness": true,
-//                "clips": [ { "file": "a.mp4", "hold": 1.4, "continues": false, "push": 0.08 }, { "file": "b.mp4", "continues": true, "trim_start_frames": 2 } ] }
+//                "clips": [ { "file": "a.mp4", "hold": 1.4, "continues": false, "push": 0.04 }, { "file": "b.mp4", "continues": true, "trim_start_frames": 2, "push_from": 0.04, "push": 0.08, "push_at": [0.4, 0.5] } ] }
 // hold = seconds the clip stands still at its end (npm run measure -- clip.mp4 prints it); keep = seconds to keep, instead of hold.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -19,36 +19,45 @@ export function cutOf(clip, seconds, fps = 24) {
   return { start: Math.round(start * 1000) / 1000, length: Math.max(0.2, Math.round((end - start) * 1000) / 1000) };
 }
 
-// push = a slow push-in made here as a crop (0.08 = the picture ends 8% closer). Everything in the frame scales together, so no one object resizes, which is what a generator that
-// cannot take camera moves cannot give (cin-p-031). Use it on the last clip of a scene: it does not end on the frame the next clip starts with.
-export function filterOf({ size = '1280x720', fps = 24 }, fade, length, push = 0) {
-  const [w, h] = size.split('x'), f = Math.min(fade, length / 4), zoom = push > 0 ? `,scale=w='trunc(iw*(1+${push}*t/${length.toFixed(3)})/2)*2':h='trunc(ih*(1+${push}*t/${length.toFixed(3)})/2)*2':eval=frame,crop=${w}:${h}` : '';
-  return { v: `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps}${zoom},format=yuv420p`, a: `aresample=48000,aformat=channel_layouts=stereo,afade=t=in:st=0:d=${f},afade=t=out:st=${Math.max(0, length - f).toFixed(3)}:d=${f}` };
+// push = a slow push-in made here as a crop, so everything in the frame scales together and no one object resizes, which a generator that cannot take camera moves cannot give (cin-p-031).
+// A clip has push (zoom fraction at its end, 0.08 = 8% closer), push_from (at its start, default 0) and push_at ([x,y] 0..1, the point the crop moves toward, default the centre).
+// A clip that continues the one before starts at the zoom the one before ended on (never at 1.0), so a scene chain pushes in once, smoothly: film-plan.py gives each clip its share of the chain total.
+// The zoom is a line in time. zoomOf fixes it for a clip (its slope uses the length before the join trimmed it), zoomAt reads it at s seconds into the clip.
+export const zoomOf = (clip, length, from) => { const f0 = clip.push_from ?? 0; return { from: from ?? f0, slope: clip.push > 0 ? (clip.push - f0) / length : 0, at: clip.push_at || [0.5, 0.5] }; };
+export const zoomAt = (z, s) => Math.max(0, z.from + z.slope * s);
+// (crop's iw is the size of the first frame only, so its x and y are written out from the zoom, not from iw-ow.) The zoom is drawn from a 2x lanczos copy and scaled down again, so the 2-pixel steps of the scaler are half pixels in the picture and a 720p source is not softened by a second resampling.
+export function filterOf({ size = '1280x720', fps = 24 }, fade, length, zoom = null) {
+  const [w, h] = size.split('x'), f = Math.min(fade, length / 4), moves = zoom && (zoom.from > 0 || zoom.slope > 0), [fx, fy] = zoom?.at || [0.5, 0.5];
+  const z = moves ? `(${zoom.from.toFixed(5)}+${zoom.slope.toFixed(6)}*t)` : '', k = `(1+${z})`, big = (n) => `trunc(${n}*2*${k}/2)*2`;
+  const push = moves ? `,scale=${w * 2}:${h * 2}:flags=lanczos,scale=w='${big(w)}':h='${big(h)}':eval=frame:flags=bicubic,crop=${w * 2}:${h * 2}:'${w * 2}*${z}*${fx}':'${h * 2}*${z}*${fy}',scale=${w}:${h}:flags=lanczos` : '';
+  return { v: `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps}${push},format=yuv420p`, a: `aresample=48000,aformat=channel_layouts=stereo,afade=t=in:st=0:d=${f},afade=t=out:st=${Math.max(0, length - f).toFixed(3)}:d=${f}` };
 }
 
 const probe = (file) => { const out = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type', '-of', 'json', file], { encoding: 'utf8' })); return { seconds: Number(out.format.duration), audio: (out.streams || []).some((s) => s.codec_type === 'audio') }; };
 
 // How different two pictures are, 0 (the same) to 255, on a 32 x 32 grey copy of each.
-const grey = (file, t) => execFileSync('ffmpeg', ['-v', 'error', '-ss', String(Math.max(0, t)), '-i', file, '-frames:v', '1', '-vf', 'scale=32:32,format=gray', '-f', 'rawvideo', '-'], { maxBuffer: 1 << 20 });
+const grey = (file, t, zoom = 0, [fx, fy] = [0.5, 0.5]) => execFileSync('ffmpeg', ['-v', 'error', '-ss', String(Math.max(0, t)), '-i', file, '-frames:v', '1', '-vf', `${zoom > 0 ? `crop=iw/${1 + zoom}:ih/${1 + zoom}:(iw-ow)*${fx}:(ih-oh)*${fy},` : ''}scale=32:32,format=gray`, '-f', 'rawvideo', '-'], { maxBuffer: 1 << 20 });
 export const frameDiff = (a, b) => { let sum = 0; const n = Math.min(a.length, b.length); for (let i = 0; i < n; i++) sum += Math.abs(a[i] - b[i]); return n ? sum / n : 255; };
-// Where clip A should end so that it joins clip B's first frame best: the last 2 seconds of A are searched, a little later is preferred, and a join that is still different is dissolved.
-export function bestJoin(fileA, startA, endA, fileB, startB, { window = 2, step = 0.1, ok = 12, perSecond = 2 } = {}) {
-  const first = grey(fileB, startB); let best = { t: endA, diff: frameDiff(grey(fileA, Math.max(startA, endA - 0.04)), first), score: 0 }; best.score = best.diff;
-  for (let t = endA - step; t >= Math.max(startA + 1, endA - window); t -= step) { const diff = frameDiff(grey(fileA, t), first), score = diff + perSecond * (endA - t); if (score < best.score) best = { t: Math.round(t * 100) / 100, diff, score }; }
+// Where clip A should end so that it joins clip B's first frame best, both compared as they will be shown (zoomA(s) = A's zoom s seconds in; B starts at the zoom A has where it ends, so B's first frame is zoomed the same): the last 2 seconds of A are searched, a little later is preferred, and a join that is still different is dissolved.
+export function bestJoin(fileA, startA, endA, fileB, startB, { window = 2, step = 0.1, ok = 12, perSecond = 2, zoomA = () => 0, atA, atB } = {}) {
+  const gA = (t) => grey(fileA, t, zoomA(t - startA), atA), gB = (t) => grey(fileB, startB, zoomA(t - startA), atB); let best = { t: endA, diff: frameDiff(gA(Math.max(startA, endA - 0.04)), gB(endA)), score: 0 }; best.score = best.diff;
+  for (let t = endA - step; t >= Math.max(startA + 1, endA - window); t -= step) { const diff = frameDiff(gA(t), gB(t)), score = diff + perSecond * (endA - t); if (score < best.score) best = { t: Math.round(t * 100) / 100, diff, score }; }
   return { end: best.t, diff: Math.round(best.diff * 10) / 10, soft: best.diff > ok };
 }
 
 export function assemble(plan, outFile) {
   const dir = mkdtempSync(join(tmpdir(), 'assemble-')), fps = plan.fps || 24, fade = plan.fade ?? 0.08, dissolve = plan.dissolve ?? 0.4, norm = [];
   const cuts = plan.clips.map((clip) => { const p = probe(clip.file); return { ...cutOf(clip, p.seconds, fps), p, clip }; }), joins = [];
-  for (let i = 0; i + 1 < cuts.length; i++) {
-    const a = cuts[i], b = cuts[i + 1], endA = a.start + a.length;
-    if (plan.joins === false || b.clip.continues === false) { joins.push({ soft: false }); continue; }
-    const j = bestJoin(a.clip.file, a.start, endA, b.clip.file, b.start); a.length = Math.max(0.2, j.end - a.start); joins.push(j); // the clip ends where it matches the next one best
+  let carry; // the zoom the clip before ended on, for a clip that continues it
+  for (let i = 0; i < cuts.length; i++) {
+    const a = cuts[i], b = cuts[i + 1], endA = a.start + a.length; a.zoom = zoomOf(a.clip, a.length, carry); carry = undefined;
+    if (!b) break;
+    if (plan.joins === false || b.clip.continues === false) { if (b.clip.continues !== false) carry = zoomAt(a.zoom, a.length); joins.push({ soft: false }); continue; }
+    const j = bestJoin(a.clip.file, a.start, endA, b.clip.file, b.start, { zoomA: (s) => zoomAt(a.zoom, s), atA: a.zoom.at, atB: b.clip.push_at || a.zoom.at }); carry = zoomAt(a.zoom, j.end - a.start); a.length = Math.max(0.2, j.end - a.start); joins.push(j); // the clip ends where it matches the next one best
   }
   const length = (i) => Math.max(0.2, cuts[i].length);
   cuts.forEach((c, i) => {
-    const f = filterOf(plan, fade, length(i), c.clip.push || 0), out = join(dir, `part-${String(i).padStart(3, '0')}.mp4`);
+    const f = filterOf(plan, fade, length(i), c.zoom), out = join(dir, `part-${String(i).padStart(3, '0')}.mp4`);
     const input = ['-ss', String(c.start), '-t', String(length(i)), '-i', c.clip.file, ...(c.p.audio ? [] : ['-f', 'lavfi', '-t', String(length(i)), '-i', 'anullsrc=r=48000:cl=stereo']), '-map', '0:v', '-map', c.p.audio ? '0:a' : '1:a'];
     execFileSync('ffmpeg', ['-v', 'error', '-y', ...input, '-vf', f.v, '-af', f.a, '-c:v', 'libx264', '-crf', '18', '-preset', 'medium', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-shortest', out]); norm.push(out);
   });
