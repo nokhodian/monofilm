@@ -173,4 +173,6 @@ test('a character that climbs or walks toward or away may change size; one that 
   const d = { seconds: 6, clips: [{ seconds: 6 }], notes: { happens: 'x' }, moves: ['Pip scurries up the path on six legs. Moss glides a short way along its foot.'] };
   assert.deepEqual(depthMovers(d, 1, [{ name: 'Pip', kind: 'beetle' }, { name: 'Moss', kind: 'snail' }]), { Pip: true, Moss: false });
   assert.deepEqual(depthMovers({ seconds: 6, notes: { happens: 'Moss runs toward the camera.' } }, 1, [{ name: 'Moss', kind: 'snail' }]), { Moss: true });
+  const mixed = { seconds: 12, clips: [{ seconds: 6 }, { seconds: 6 }], notes: { happens: 'x' }, moves: ['Pip lifts a leg.', 'Pip scurries up the path while Moss glides slowly forward, shell sliding behind. Pip starts up the path with Moss behind.'] };
+  assert.deepEqual(depthMovers(mixed, 2, [{ name: 'Pip', kind: 'beetle' }, { name: 'Moss', kind: 'snail' }]), { Pip: true, Moss: false }, 'Moss is named in a clause about Pip and does not become a climber');
 });

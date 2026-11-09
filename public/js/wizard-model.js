@@ -295,7 +295,8 @@ export function cameraNote(cam, which) {
 
 // Which characters really travel nearer to or further from the camera in a clip (so their size may change): their move sentence says they climb, run, walk toward or away.
 export function depthMovers(d, k, cast = []) {
-  const text = `${movesOf(d)[k - 1] || ''} ${clipBeats(d)[k - 1] || ''}`, out = {};
-  for (const c of cast) { if (!c.name) continue; const sentence = text.split(/(?<=[.!?])\s+/).filter((x) => new RegExp(`\\b${c.name}\\b`, 'i').test(x) || (c.kind && new RegExp(`\\b${c.kind}\\b`, 'i').test(x))).join(' '); out[c.name] = /\b(climb\w*|scurr\w*|scamper\w*|runs?|running|walks?|toward\w*|away|up the|down the|higher|further|nearer|descend\w*|approach\w*|goes|moves? (up|down|forward|back))\b/i.test(sentence); }
+  const text = `${movesOf(d)[k - 1] || ''} ${clipBeats(d)[k - 1] || ''}`, clauses = text.split(/(?<=[.!?;])\s+|\s+(?:while|and|as|then)\s+/i), out = {};
+  for (const c of cast) { if (!c.name) continue; const subject = new RegExp(`^\\s*(?:the\\s+)?(?:${c.name}${c.kind ? `|${c.kind}` : ''})\\b`, 'i'); // only a clause that starts with the character is about the character
+    out[c.name] = clauses.filter((x) => subject.test(x)).some((x) => /\b(climb\w*|scurr\w*|scamper\w*|runs?|running|walks?|toward\w*|away|up the|down the|higher|further|nearer|descend\w*|approach\w*|moves? (up|down|back))\b/i.test(x)); }
   return out;
 }
