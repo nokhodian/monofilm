@@ -21,6 +21,8 @@ test('every clip is brought to one size, rate and audio format, with a short fad
   const f = filterOf({ size: '640x360', fps: 24 }, 0.08, 4);
   assert.match(f.v, /scale=640:360/); assert.match(f.v, /fps=24/); assert.match(f.v, /format=yuv420p/); assert.match(f.a, /aresample=48000/); assert.match(f.a, /afade=t=in:st=0:d=0\.08/); assert.match(f.a, /afade=t=out:st=3\.920:d=0\.08/);
   assert.match(filterOf({}, 1, 0.4).a, /d=0\.1\b/, 'the fade is never longer than a quarter of a short clip');
+  assert.doesNotMatch(filterOf({ size: '640x360' }, 0.08, 4).v, /crop/, 'no push, no crop');
+  const pushed = filterOf({ size: '640x360', fps: 24 }, 0.08, 4, 0.08).v; assert.match(pushed, /scale=w='trunc\(iw\*\(1\+0\.08\*t\/4\.000\)\/2\)\*2'.*eval=frame,crop=640:360,format=yuv420p$/, 'a push-in is a crop that grows over the clip, so everything scales together');
 });
 test('two clips of different size and rate, one without sound, come out as one film of the right length', { skip: !has('ffmpeg') || !has('ffprobe') }, () => {
   const dir = mkdtempSync(join(tmpdir(), 'asm-')), mk = (name, src, extra) => { execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', src, ...extra, join(dir, name)]); return join(dir, name); };

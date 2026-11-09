@@ -4,7 +4,7 @@
 // at the frame (in its last 2 seconds) that looks most like the next clip's first frame, and a join that still differs is dissolved over 0.4 s instead of jumping.
 //   node scripts/assemble-film.mjs plan.json film.mp4
 //   plan.json: { "size": "1280x720", "fps": 24, "fade": 0.08, "loudness": true,
-//                "clips": [ { "file": "a.mp4", "hold": 1.4, "continues": false }, { "file": "b.mp4", "continues": true, "trim_start_frames": 2 } ] }
+//                "clips": [ { "file": "a.mp4", "hold": 1.4, "continues": false, "push": 0.08 }, { "file": "b.mp4", "continues": true, "trim_start_frames": 2 } ] }
 // hold = seconds the clip stands still at its end (npm run measure -- clip.mp4 prints it); keep = seconds to keep, instead of hold.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -19,9 +19,11 @@ export function cutOf(clip, seconds, fps = 24) {
   return { start: Math.round(start * 1000) / 1000, length: Math.max(0.2, Math.round((end - start) * 1000) / 1000) };
 }
 
-export function filterOf({ size = '1280x720', fps = 24 }, fade, length) {
-  const [w, h] = size.split('x'), f = Math.min(fade, length / 4);
-  return { v: `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p`, a: `aresample=48000,aformat=channel_layouts=stereo,afade=t=in:st=0:d=${f},afade=t=out:st=${Math.max(0, length - f).toFixed(3)}:d=${f}` };
+// push = a slow push-in made here as a crop (0.08 = the picture ends 8% closer). Everything in the frame scales together, so no one object resizes, which is what a generator that
+// cannot take camera moves cannot give (cin-p-031). Use it on the last clip of a scene: it does not end on the frame the next clip starts with.
+export function filterOf({ size = '1280x720', fps = 24 }, fade, length, push = 0) {
+  const [w, h] = size.split('x'), f = Math.min(fade, length / 4), zoom = push > 0 ? `,scale=w='trunc(iw*(1+${push}*t/${length.toFixed(3)})/2)*2':h='trunc(ih*(1+${push}*t/${length.toFixed(3)})/2)*2':eval=frame,crop=${w}:${h}` : '';
+  return { v: `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps}${zoom},format=yuv420p`, a: `aresample=48000,aformat=channel_layouts=stereo,afade=t=in:st=0:d=${f},afade=t=out:st=${Math.max(0, length - f).toFixed(3)}:d=${f}` };
 }
 
 const probe = (file) => { const out = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type', '-of', 'json', file], { encoding: 'utf8' })); return { seconds: Number(out.format.duration), audio: (out.streams || []).some((s) => s.codec_type === 'audio') }; };
@@ -46,7 +48,7 @@ export function assemble(plan, outFile) {
   }
   const length = (i) => Math.max(0.2, cuts[i].length);
   cuts.forEach((c, i) => {
-    const f = filterOf(plan, fade, length(i)), out = join(dir, `part-${String(i).padStart(3, '0')}.mp4`);
+    const f = filterOf(plan, fade, length(i), c.clip.push || 0), out = join(dir, `part-${String(i).padStart(3, '0')}.mp4`);
     const input = ['-ss', String(c.start), '-t', String(length(i)), '-i', c.clip.file, ...(c.p.audio ? [] : ['-f', 'lavfi', '-t', String(length(i)), '-i', 'anullsrc=r=48000:cl=stereo']), '-map', '0:v', '-map', c.p.audio ? '0:a' : '1:a'];
     execFileSync('ffmpeg', ['-v', 'error', '-y', ...input, '-vf', f.v, '-af', f.a, '-c:v', 'libx264', '-crf', '18', '-preset', 'medium', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-shortest', out]); norm.push(out);
   });

@@ -32,15 +32,15 @@ export async function sizeProblem(env, uri, sizes, f, out = {}) {
         const concept = c.concept || c.look, [a, b] = await Promise.all([sam(env, { image: before, concept }, f), sam(env, { image: now, concept }, f)]); sa.push(sizeOf(a)); sb.push(sizeOf(b));
         (out.report = out.report || []).push({ look: concept, against: r.what, before: Math.round(sa[sa.length - 1] * 100) / 100, now: Math.round(sb[sb.length - 1] * 100) / 100 });
       }
-      looks.forEach((c, i) => { if (sa[i] > 0.02 && sb[i] > 0.02) { const ratio = sb[i] / sa[i]; if (ratio < lo || ratio > hi) bad.push(`the ${c.look} is ${Math.round(ratio * 100)}% of the size it was in ${r.what}`); } });
-      if (!sizes.push && looks.length > 1 && sa[0] > 0.02 && sb[0] > 0.02) for (let i = 1; i < looks.length; i++) if (sa[i] > 0.02 && sb[i] > 0.02) { const q = (sb[0] / sb[i]) / (sa[0] / sa[i]); if (q < 0.8 || q > 1.25) bad.push(`the ${looks[0].look} compared with the ${looks[i].look} is ${Math.round(q * 100)}% of what it was in ${r.what}`); }
+      looks.forEach((c, i) => { if (sa[i] > 0.02 && sb[i] > 0.02) { const ratio = sb[i] / sa[i]; if (ratio < lo || ratio > hi) bad.push(`the ${c.look} is ${Math.round(ratio * 100)}% of the size it was in ${r.what}: redraw it about ${(Math.round((ratio < 1 ? 1 / ratio : ratio) * 10) / 10).toFixed(1)} times ${ratio < 1 ? 'bigger' : 'smaller'}`); } });
+      if (!sizes.push && looks.length > 1 && sa[0] > 0.02 && sb[0] > 0.02) for (let i = 1; i < looks.length; i++) if (sa[i] > 0.02 && sb[i] > 0.02) { const q = (sb[0] / sb[i]) / (sa[0] / sa[i]); if (q < 0.8 || q > 1.25) bad.push(`the ${looks[0].look} compared with the ${looks[i].look} is ${Math.round(q * 100)}% of what it was in ${r.what}: scale the ${looks[0].look} by ${(Math.round((1 / q) * 100) / 100).toFixed(2)}`); }
       if (bad.length) break;
     }
     return bad.length ? `${bad.join('; ')}; every character must keep the same size, and the same size next to the others (it may look bigger or smaller only by really walking nearer or further)` : '';
   } catch (e) { return ''; }
 }
 export async function checkPicture(env, uri, expect, f, refs = [], kinds = [], sizes = null) {
-  const sizeOut = {}; if (sizes && sizes.baseUri && (sizes.looks || []).length) { const why = await sizeProblem(env, uri, sizes, f, sizeOut); if (why) return { ok: false, kind: 'size', major: true, seen: '', beings: [], sizeReport: sizeOut.report, problem: why.slice(0, 260) }; }
+  const sizeOut = {}; if (sizes && sizes.baseUri && (sizes.looks || []).length) { const why = await sizeProblem(env, uri, sizes, f, sizeOut); if (why) return { ok: false, kind: 'size', major: true, seen: '', beings: [], sizeReport: sizeOut.report, problem: why.slice(0, 380) }; }
   let beings = [], beingsError = ''; if (kinds.length) { const b = await blindKinds(env, uri, kinds, f); beings = b.seen; beingsError = b.error || ''; if (b.why) return { ok: false, kind: 'being', major: true, seen: '', beings, problem: b.why.slice(0, 220) }; }
   const first = await checkOnce(env, uri, expect, f, refs, kinds);
   if (first.ok || first.skipped) return { ...first, beings, beingsError, sizeReport: sizeOut.report };

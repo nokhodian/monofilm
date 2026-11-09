@@ -6,7 +6,7 @@ import { spark, outputText, metaConfigured } from './meta.js';
 import { AGENT } from './agent.js';
 import { checkPicture } from './picturecheck.js';
 import { registerTool, callTool } from './tools.js';
-import { REFS, R, slug, keyOf, mediumOf, beingOf, beastOf, shortLook, expandNames, plainDesc, clipStates, sizesLine, cameraNote, GENERATORS, clipPlan, clipBeats, clipSpans, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP, sceneBounds, clampScene } from '../public/js/wizard-model.js';
+import { REFS, R, slug, keyOf, mediumOf, beingOf, beastOf, shortLook, expandNames, plainDesc, clipStates, sizesLine, sizesOf, cameraNote, GENERATORS, clipPlan, clipBeats, clipSpans, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP, sceneBounds, clampScene } from '../public/js/wizard-model.js';
 
 const row = (db, pid, ref) => db.prepare('SELECT * FROM artifacts WHERE production=? AND ref=?').bind(pid, ref).first();
 const dataOf = (r) => (r ? parseJson(r.data) : null);
@@ -93,7 +93,7 @@ function sceneFrom(o, i, people, places, fmt) {
   const seconds = clampScene(o.seconds || 10, fmt);
   return { n: i + 1, name: text(o.name, 60) || `Scene ${i + 1}`, tag: text(o.tag, 20), seconds, place: pl ? pl.ref : null, time: text(o.time, 20), who, overrides: {},
     transcript: (o.transcript || []).slice(0, 20).map((l, k) => ({ id: `l${k + 1}`, who: text(l.who, 40).toUpperCase(), text: text(l.text, 400), en: text(l.en, 400), sec: Number(l.sec) || 0 })),
-    notes: Object.fromEntries(NOTE_KEYS.map(([k]) => [k, text((o.notes || {})[k], 700)])), start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(seconds), moves: ((m, n) => (Array.isArray(m) && m.length === n && m.every((x) => String(x || '').trim()) ? m.map((x) => text(x, 300)) : []))(o.moves, clipPlan(seconds).length), sizes: (Array.isArray(o.sizes) ? o.sizes : []).slice(0, 6).map((x) => ({ name: text(x && x.name, 40), size: text(x && x.size, 80) })).filter((x) => x.name && x.size), states: ((b, n) => (Array.isArray(b) && b.length === n + 1 && b.every((x) => String(x || '').trim()) ? b.map((x) => text(x, 500)) : []))(o.states, clipPlan(seconds).length), props: (Array.isArray(o.props) ? o.props : []).slice(0, 8).map((p) => ({ name: text(p && p.name, 40), look: text(p && p.look, 200), ...(Number.isInteger(p && p.count) && p.count > 0 && p.count < 100 ? { count: p.count } : {}) })).filter((p) => p.name && p.look), beats: ((b, n) => (Array.isArray(b) && b.length === n && b.every((x) => String(x || '').trim()) ? b.map((x) => text(x, 400)) : []))(o.beats, clipPlan(seconds).length) }; // one line per clip, or none (the page then shares the scene's action out itself)
+    notes: { ...Object.fromEntries(NOTE_KEYS.map(([k]) => [k, text((o.notes || {})[k], 700)])), ...((o.notes || {}).post === 'push-in' ? { post: 'push-in' } : {}) }, start: { mode: 'stage' }, end: { mode: 'stage' }, clips: clipPlan(seconds), moves: ((m, n) => (Array.isArray(m) && m.length === n && m.every((x) => String(x || '').trim()) ? m.map((x) => text(x, 300)) : []))(o.moves, clipPlan(seconds).length), sizes: (Array.isArray(o.sizes) ? o.sizes : []).slice(0, 6).map((x) => ({ name: text(x && x.name, 40), size: text(x && x.size, 80) })).filter((x) => x.name && x.size), states: ((b, n) => (Array.isArray(b) && b.length === n + 1 && b.every((x) => String(x || '').trim()) ? b.map((x) => text(x, 500)) : []))(o.states, clipPlan(seconds).length), props: (Array.isArray(o.props) ? o.props : []).slice(0, 8).map((p) => ({ name: text(p && p.name, 40), look: text(p && p.look, 200), ...(Number.isInteger(p && p.count) && p.count > 0 && p.count < 100 ? { count: p.count } : {}) })).filter((p) => p.name && p.look), beats: ((b, n) => (Array.isArray(b) && b.length === n && b.every((x) => String(x || '').trim()) ? b.map((x) => text(x, 400)) : []))(o.beats, clipPlan(seconds).length) }; // one line per clip, or none (the page then shares the scene's action out itself)
 }
 // A second look at the whole scene list with fresh eyes, as a director would before shooting: does every thing exist before it is used, does it grow through its stages in order,
 // does it keep one size and colour, does each scene start where the one before ended, and does each clip hold ONE event? The model returns corrected states for the scenes that fail.
@@ -120,7 +120,7 @@ export async function draftScenes(env, db, actor, pid, f) {
   const prompt = `Story:\n${text(sd.text, 8000)}\n\nBeats: ${(bd.beats || []).map((b) => b.text).join(' | ')}\nPeople: ${people.map((p) => `${p.data.name} (${p.data.role})`).join('; ')}\nPlaces: ${places.map((p) => p.data.name).join('; ')}\nFilm length: ${fmt.seconds} seconds. Every scene is between ${sceneBounds(fmt)[0]} and ${sceneBounds(fmt)[1]} seconds long. Spoken language: ${fmt.speech}. Each scene ends up as clips of at most ${MAX_CLIP} seconds.${(GENERATORS[fmt.generator] || {}).static_camera ? ' The video generator cannot take camera moves: every scene\'s cam must be static.' : ''}`;
   const o = metaConfigured(env) ? await askJson(env, SCENES_SYSTEM, prompt, f) : { scenes: localScenes(bd, fmt) };
   const list = (o.scenes || []).slice(0, 12); if (!list.length) throw new HttpError(502, 'the AI made no scenes. Try again.');
-  if ((GENERATORS[fmt.generator] || {}).static_camera) for (const s of list) { const c = String((s.notes || {}).cam || ''); if (!/\b(static|still|locked|fixed)\b/i.test(c)) s.notes = { ...(s.notes || {}), cam: `static ${(c.match(/\b(wide|medium-wide|medium|close)\b/i) || ['wide'])[0].toLowerCase()}` }; } // a generator that reshapes the scene on a camera move gets a still camera in every scene, so the pictures and the clips agree
+  if ((GENERATORS[fmt.generator] || {}).static_camera) for (const s of list) { const c = String((s.notes || {}).cam || ''); if (!/\b(static|still|locked|fixed)\b/i.test(c)) s.notes = { ...(s.notes || {}), cam: `static ${(c.match(/\b(wide|medium-wide|medium|close)\b/i) || ['wide'])[0].toLowerCase()}`, ...(/\b(push|zoom in|closer|dolly in)/i.test(c) ? { post: 'push-in' } : {}) }; } // a generator that reshapes the scene on a camera move gets a still camera in every scene, so the pictures and the clips agree
   const drafted = list.map((s, i) => sceneFrom(s, i, people, places, fmt)), review = await reviewContinuity(env, drafted, f), made = [], used = new Set();
   for (const [i, s] of list.entries()) {
     let id = slug(s.name) || `scene-${i + 1}`; while (used.has(id)) id += '-2'; used.add(id);
@@ -269,6 +269,23 @@ export async function makePlate(env, db, actor, pid, { id, instruction = '' }, f
   await merge(db, pid, cur.ref, (fresh) => ({ ...fresh, source: fresh.source === 'photo' ? 'photo' : 'made', plates: [...(fresh.plates || []), { id: r.asset.id, check }] }), 'Made a place plate.');
   return { asset: r.asset, check };
 }
+// A scale sheet for a scene: all its characters standing side by side at their true relative sizes. Words do not carry size to an image model (a user asked for 1.4x and got 1.1x), a picture does (chr-p-024).
+const lineupOf = async (db, pid, scene) => (await db.prepare('SELECT uri FROM assets WHERE production=? AND ref=? ORDER BY ts DESC, rowid DESC LIMIT 1').bind(pid, R.scene(scene)).first()) || null;
+export async function makeLineup(env, db, actor, pid, { scene }, f) {
+  human(actor);
+  const sd = dataOf(await row(db, pid, R.scene(scene))), refs = [], chars = [], kinds = [], looks = [];
+  for (const w of sd.who || []) {
+    const p = dataOf(await row(db, pid, w)); if (!p || !p.desc) continue;
+    chars.push(plainDesc(p.desc, p.name)); looks.push({ name: p.name, look: shortLook(p.desc, p.name), concept: beastOf(p.desc) || shortLook(p.desc, p.name) }); if (beastOf(p.desc)) kinds.push({ name: p.name, kind: beastOf(p.desc) });
+    const bv = (p.views || []).find((v) => v.kind === 'body'), cand = (p.candidates || []).find((x) => x.id === p.anchor), id = (bv && bv.id) || (cand && cand.id), a = id && await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, id).first(); if (a) refs.push({ id: keyOf(w), name: p.name, uri: a.uri });
+  }
+  if (chars.length < 2 || !sizesOf(sd).length) return null; // one character has nothing to be compared with
+  const medium = mediumOf(dataOf(await row(db, pid, REFS.look)) || {});
+  const prompt = [`A scale reference sheet in ${medium} style: these ${chars.length} characters standing side by side on one ground line, each whole body in view, plain neutral background, no text, drawn at their true relative sizes.`, expandNames(sizesLine(sd), looks), `Exactly as in their reference pictures: ${chars.join(' ')}`, await lookText(db, pid)].filter(Boolean).join(' ');
+  const expect = `Medium: ${medium}. ${chars.length} characters side by side, each whole body visible, nobody else: ${chars.join(' ')}`;
+  const { r, check } = await drawChecked(env, db, actor, pid, R.scene(scene), { prompt, aspect: [16, 9], tag: 'lineup', medium, anchors: refs }, expect, f, kinds);
+  return { asset: r.asset, check };
+}
 // A start or end picture. Built from the stage layout when the scene has one with a camera for this clip, and always from the film's anchor faces.
 export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, instruction = '' }, f) {
   human(actor);
@@ -289,6 +306,10 @@ export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, i
   }
   let originUri = ''; // the scene's own first picture: every later picture of the scene keeps its sizes
   if (which === 'end' && clip > 1) { const kf0 = dataOf(await row(db, pid, R.frame(scene, 1, 'start'))), a0 = kf0 && kf0.chosen && await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, kf0.chosen).first(); if (a0) originUri = a0.uri; }
+  if (chars.length > 1 && sizesOf(sd).length) { // the scene's scale sheet: made once, then every picture of the scene is drawn with it
+    let lu = await lineupOf(db, pid, scene); if (!lu) { try { const made = await makeLineup(env, db, actor, pid, { scene }, f); if (made && made.asset) lu = { uri: made.asset.uri }; } catch (e) { /* a scale sheet that cannot be made never blocks a picture */ } }
+    if (lu) anchors.push({ id: 'scale-sheet', role: 'scale', uri: lu.uri });
+  }
   const sts = clipStates(sd), state = sts ? expandNames(which === 'start' ? sts[clip - 1] : sts[clip], looks) : '', prompt = [`${which === 'start' ? 'The first frame' : 'The last frame'} of a ${c.seconds} second film clip.`, state || c.prompt.split('\n')[0], expandNames(sizesLine(sd), looks), cameraNote((sd.notes || {}).cam, which), chars.length && `Only these appear, exactly as in their reference pictures: ${chars.join(' ')}`, mediumOf(lookRow) === 'illustration' && 'Drawn in the film\'s own style, not a photograph, and no people unless listed.', place && place.desc && `Place: ${place.name}. ${place.desc}`, await lookText(db, pid), prevNote, instruction].filter(Boolean).join(' ');
   const shape = String(((dataOf(await row(db, pid, REFS.look)) || {}).aspect) || '9:16').split(':').map(Number), aspect = shape.length === 2 && shape.every((n) => n > 0 && n < 100) ? shape : [9, 16]; // the pictures follow the film's shape, not always portrait
   const expect = `${state ? `This exact moment: ${state} ` : ''}${which === 'end' ? `Compared with the previous picture: every character is the same size relative to the frame (unless its description says it walked nearer or further), and the place, the background and the framing are unchanged${/\b(push|closer|zoom in)/i.test((sd.notes || {}).cam || '') ? ' except that the camera is a little closer' : ''}. ` : ''}${kinds.length ? `The characters are ${kinds.map((k) => `${k.name} the ${k.kind}`).join(' and ')}, never any other animal. ` : ''}Medium: ${mediumOf(lookRow)}. ${chars.length ? `Only these characters appear, and each is exactly the kind of being described: ${chars.join(' ')} Nobody else appears.` : 'No people or characters.'}${place && place.desc ? ` Place: ${place.desc}` : ''}`;

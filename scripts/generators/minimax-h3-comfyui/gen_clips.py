@@ -122,5 +122,6 @@ for c in clips:
     # after the final take, record what the studio now says
     d = mcp("get_clip", {"production": PROD, "scene": sc, "clip": n, "generator": "minimax-h3"})
     rec["final_retry"] = d["retry"]; rec["seconds"] = d["seconds"]
+    if d.get("post_push"): rec["push"] = d["post_push"]
     json.dump(state, open(STATE, "w"), indent=1)
 print("ALL_DONE", flush=True)

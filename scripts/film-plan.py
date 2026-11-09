@@ -22,7 +22,7 @@ for key, rec in state.items():
     keep = seconds - hold + 0.3 if hold >= 1 else seconds
     if r.get("good_until") is not None:
         keep = min(keep, r["good_until"])
-    plan["clips"].append({"file": os.path.basename(take["file"].replace("\\", "/")), "hold": hold, "keep": round(keep, 2), "continues": key.endswith(":2") or not key.endswith(":1")})
+    plan["clips"].append({"file": os.path.basename(take["file"].replace("\\", "/")), "hold": hold, "keep": round(keep, 2), "continues": key.endswith(":2") or not key.endswith(":1"), **({"push": rec["push"]} if rec.get("push") else {})})
     print(f"{key}: take {take['attempt']}  keep {keep:.1f}s of {seconds}s" + (f"  (size fault from {r['good_until'] + 0.2:.1f} s)" if r.get("good_until") is not None else ""))
 json.dump(plan, open(os.path.join(folder, "plan.json"), "w"), indent=1)
 print("wrote", os.path.join(folder, "plan.json"))

@@ -308,7 +308,21 @@ test('a generator that cannot take camera moves gets a static camera in every sc
   const f = async (url, init) => { if (url.endsWith('/responses')) { const b = JSON.parse(init.body); seen.push(String(b.input)); if (/turn a story into scenes/i.test(b.instructions)) return reply(msg({ scenes: [{ name: 'The beam', seconds: 12, place: 'Cathedral scaffold', time: 'dusk', who: ['Ines'], notes: { happens: 'x', cam: 'slow push-in' } }, { name: 'The fall', seconds: 8, notes: { happens: 'y', cam: 'handheld medium' } }, { name: 'Calm', seconds: 8, notes: { happens: 'z', cam: 'static close' } }] })); } return stand()(url, init); };
   await W.readStory(t.env, t.db, human, t.id, f); await ok(t, REFS.reading); await W.draftScenes(t.env, t.db, human, t.id, f);
   const cams = []; for (const id of ['the-beam', 'the-fall', 'calm']) cams.push((await S.getArtifact(t.db, t.id, R.scene(id))).data.notes.cam);
-  assert.deepEqual(cams, ['static wide', 'static medium', 'static close']); assert.ok(seen.some((x) => /cannot take camera moves: every scene's cam must be static/.test(x)));
+  assert.deepEqual(cams, ['static wide', 'static medium', 'static close']); assert.equal((await S.getArtifact(t.db, t.id, R.scene('the-beam'))).data.notes.post, 'push-in', 'a push-in the generator cannot make is kept for the assembly'); assert.ok(seen.some((x) => /cannot take camera moves: every scene's cam must be static/.test(x)));
+});
+
+test('a scene with two characters gets a scale sheet once, and every picture of the scene is drawn with it', async () => {
+  const t = await setup(); await W.readStory(t.env, t.db, human, t.id, stand()); await ok(t, REFS.reading); await ok(t, R.cast('ines')); await ok(t, R.place('cathedral-scaffold'));
+  await W.draftScenes(t.env, t.db, human, t.id, stand()); await ok(t, REFS.look); await ok(t, 'scene:the-beam');
+  const face = await W.makeFace(t.env, t.db, human, t.id, { id: 'ines' }, stand()), cur = await S.getArtifact(t.db, t.id, R.cast('ines'));
+  await S.propose(t.db, human, t.id, { ref: R.cast('ines'), data: { ...cur.data, anchor: face.asset.id }, parent: cur.parent || undefined, auto_approve: true, base_version: cur.version });
+  const sc = await S.getArtifact(t.db, t.id, 'scene:the-beam'); await S.propose(t.db, human, t.id, { ref: sc.ref, data: { ...sc.data, who: [R.cast('ines'), R.cast('ines')], sizes: [{ name: 'Ines', size: 'a third of the frame height' }, { name: 'Ines', size: 'half as tall' }] }, parent: sc.parent || undefined, auto_approve: true, base_version: sc.version });
+  const prompts = [], base = stand(); const g = async (url, init) => { const b = init && init.body ? JSON.parse(init.body) : {}; if (url.includes('/images/')) prompts.push(b.prompt); return base(url, init); };
+  await W.makeFrame(t.env, t.db, human, t.id, { scene: 'the-beam', clip: 1, which: 'start' }, g);
+  assert.ok(prompts.some((p) => /scale reference sheet/.test(p)), 'the sheet is drawn'); assert.match(prompts[prompts.length - 1], /Image \d is a scale sheet/, 'and the picture is drawn with it');
+  const n = prompts.length; await W.makeFrame(t.env, t.db, human, t.id, { scene: 'the-beam', clip: 1, which: 'end' }, g);
+  assert.equal(prompts.slice(n).filter((p) => /scale reference sheet/.test(p)).length, 0, 'it is made once');
+  assert.match(prompts[prompts.length - 1], /is a scale sheet/);
 });
 
 test('a character that changed size between two pictures is caught by measuring it, not by judging', async () => {
@@ -317,7 +331,7 @@ test('a character that changed size between two pictures is caught by measuring 
   const box = (side) => `<|box;x1=100;y1=100;x2=${100 + side};y2=${100 + side};w=1000;h=1000;c=0.9|>`;
   const sam = (before, now) => { let n = 0; return async (url, init) => { assert.equal(JSON.parse(init.body).model, 'sam-3.1'); return reply({ output_text: n++ % 2 === 0 ? box(before) : box(now) }); }; };
   const sizes = (push) => ({ baseUri: 'media/p/a.png', looks: [{ name: 'Pip', look: 'tiny orange clay beetle' }], push });
-  assert.match(await sizeProblem(env, 'media/p/b.png', sizes(false), sam(400, 200)), /the tiny orange clay beetle is 50% of the size it was in the previous picture; every character must keep the same size/);
+  assert.match(await sizeProblem(env, 'media/p/b.png', sizes(false), sam(400, 200)), /the tiny orange clay beetle is 50% of the size it was in the previous picture: redraw it about 2.0 times bigger; every character must keep the same size/);
   assert.equal(await sizeProblem(env, 'media/p/b.png', sizes(false), sam(400, 380)), '', 'a small change is fine');
   assert.match(await sizeProblem(env, 'media/p/b.png', sizes(false), sam(200, 310)), /155%/); assert.equal(await sizeProblem(env, 'media/p/b.png', sizes(true), sam(200, 310)), '', 'a planned camera push allows a bigger character');
   assert.match(await sizeProblem(env, 'media/p/b.png', sizes(true), sam(400, 300)), /75%/, 'but not a smaller one');

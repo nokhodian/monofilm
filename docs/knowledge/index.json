@@ -364,11 +364,6 @@
    "idea": "Let the shot list place a mid-clip keyframe picture."
   },
   {
-   "id": "res-p-024",
-   "title": "Repair a wrong size by a local rescale, not by redrawing the whole picture",
-   "idea": "Add a repair step that uses the SAM boxes already measured to rescale the character and then re-check."
-  },
-  {
    "id": "res-p-025",
    "title": "Use box, depth or layout conditioning where the image model accepts it",
    "idea": "Optional path for the local generator: ControlNet depth from the anchor."
@@ -3830,9 +3825,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "wizard sizes line per character and sizeProblem check (words plus measurement after the fact)",
-    "idea": "Add a lineup 'scale sheet' picture with all characters of a scene at their relative sizes as the first reference, and use it as the scene's anchor."
+    "status": "done",
+    "where": "makeLineup in src/wizard.js: a scale sheet of the scene's characters is drawn once per scene and goes into every picture of the scene as a reference (role scale in src/tools.js)",
+    "idea": ""
    },
    "contributor": "claude-research",
    "date": "2026-11-09",
@@ -5254,9 +5249,9 @@
     "cin-p-026"
    ],
    "monofilm": {
-    "status": "partial",
-    "where": "normalizeCamera says 'the camera holds still' for a static shot",
-    "idea": "Add invariants (size constant, background fixed) to the static clause."
+    "status": "done",
+    "where": "forGenerator in public/js/wizard-model.js: \"static, locked-off, the camera holds still... every character keeps the same size and the background stays fixed\"",
+    "idea": ""
    },
    "contributor": "claude-research",
    "date": "2026-11-09",
@@ -5322,9 +5317,9 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "static_camera per generator in the film format (assumption (c) supported); no post-production push-in",
-    "idea": "Add an optional crop push-in to assembly for scenes that asked for one."
+    "status": "done",
+    "where": "a push-in the generator cannot make is kept as notes.post and cropped in by scripts/assemble-film.mjs (push), on the last clip of the scene",
+    "idea": ""
    },
    "contributor": "claude-research",
    "date": "2026-11-09",
@@ -10139,9 +10134,9 @@
    "strength": "measured",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "a failing picture is redrawn with the problem text (picturecheck sizeProblem); no local repair",
-    "idea": "Add a repair step that uses the SAM boxes already measured to rescale the character and then re-check."
+    "status": "partial",
+    "where": "a failing size makes the redraw instruction say the factor (\"redraw it about 1.3 times bigger\", \"scale the snail by 1.25\"), src/picturecheck.js; no cut-out and re-insert (a Worker has no image tools)",
+    "idea": "Do the cut-out, rescale and re-insert on the PC or with an image service."
    },
    "contributor": "claude-research",
    "date": "2026-11-09",
