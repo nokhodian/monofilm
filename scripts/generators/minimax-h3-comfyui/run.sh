@@ -1,6 +1,7 @@
 #!/bin/bash
 # Generates every clip of a production on a Windows PC that runs ComfyUI, then copies the clips and the state back and puts the PC to sleep.
 #   WIN_HOST=win-gpu MONOFILM_KEY=... PROD=abc123 NAME=my-film ./run.sh
+# No motion control: the H3 graph has no motion-amplitude or CFG input (BasicGuider, 8-step turbo). MiniMaxH3SigmaShift (flow shift 12 -> 20, 32) was measured on slow-climb 1: same motion, same frozen tail, so it is not wired in. Steer motion by prompt and by the cut/hold measures.
 # The PC needs: ComfyUI on 127.0.0.1:8188 with the MiniMax H3 files, Python with the ComfyUI helper lib (see gen_clips.py), node and the repo's scripts/measure-take.mjs (copied by this script).
 set -e
 HOST=${WIN_HOST:-win-gpu}; : "${MONOFILM_KEY:?set MONOFILM_KEY}"; : "${PROD:?set PROD}"; NAME=${NAME:-$PROD}; HERE=$(cd "$(dirname "$0")" && pwd); OUT=${OUT:-$HOME/Videos/monofilm/$NAME}; mkdir -p "$OUT"

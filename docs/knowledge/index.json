@@ -5318,7 +5318,7 @@
    "conflicts": [],
    "monofilm": {
     "status": "done",
-    "where": "a push-in the generator cannot make is kept as notes.post and cropped in by scripts/assemble-film.mjs (push), on the last clip of the scene",
+    "where": "a push-in the generator cannot make is kept as notes.post and cropped in by scripts/assemble-film.mjs, carried through a chain of clips without a jump",
     "idea": ""
    },
    "contributor": "claude-research",
@@ -10134,9 +10134,9 @@
    "strength": "measured",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "a failing size makes the redraw instruction say the factor (\"redraw it about 1.3 times bigger\", \"scale the snail by 1.25\"), src/picturecheck.js; no cut-out and re-insert (a Worker has no image tools)",
-    "idea": "Do the cut-out, rescale and re-insert on the PC or with an image service."
+    "status": "done",
+    "where": "src/rescale.js: SAM mask cut-out, rescale about the ground point, fill, composite; run by drawChecked when a size fault survives the redraws",
+    "idea": ""
    },
    "contributor": "claude-research",
    "date": "2026-11-09",

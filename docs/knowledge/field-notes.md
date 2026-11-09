@@ -24,6 +24,7 @@ What we learned by running Monofilm ourselves (2026-11-05 to 2026-11-09), with t
 | 18 | A snail was drawn rearing up in the first picture and lying flat in the later ones | The first state did not name a posture | Every state names each character's posture |
 | 19 | An empty place picture came out with little clay animals on it | A handmade clay look invites figurines | The place prompt asks for nothing living or figure-like |
 | 20 | A snail shrank by 10–30% from one picture of a scene to the next and against the beetle; scale differed across scene cuts | Each picture was only compared with the one before it (small steps add up), and the first picture of a scene was held to the previous scene only loosely (65%) | Every picture is held to the previous one and to the scene's first picture (78–130%), and the size of one character relative to another is held too (80–125%); the static camera clause also says every character keeps its size and the background stays fixed (`sizeProblem`, `originUri` in `makeFrame`) |
+| 21 | A character was still the wrong size after two redraws | An image model redraws the whole picture and ignores a size correction | A local repair: SAM mask, cut out, rescale about the ground point, fill, composite; measured 80% to 99% (enlarge) and 119% to 99% (shrink) on real pictures (`src/rescale.js`). Shrinking leaves faint traces in the ground |
 
 ## MiniMax H3 (local, 8-step turbo): what we saw
 
@@ -31,6 +32,7 @@ What we learned by running Monofilm ourselves (2026-11-05 to 2026-11-09), with t
 - Cuts and framing jumps appear when a prompt lists several shots; a "slow push-in" sometimes pushes in then jumps back wide.
 - The clip often reaches its end picture early and then stands still for 1 to 4 seconds. The assembly script trims it.
 - A clip of 6 to 8 seconds is the useful length; a second take is needed for about half the clips; walking is weak, gliding and turning are fine.
+- No motion-strength control exists in our ComfyUI graph (`MiniMaxH3ImageToVideo` takes only prompt, size, length and the two pictures). The sigma shift is the only nearby setting: shifts of 12, 20 and 32 gave the same motion (mean frame difference 0.88, 0.84, 0.82; hold 1.2 s each, same seed). Steer motion with the prompt and trim the frozen tail.
 - Voices do not persist between clips; a silent clip still sometimes gets speech unless the prompt describes quiet room tone and closed mouths.
 
 ## Results, in order
