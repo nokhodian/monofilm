@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cutOf, filterOf, zoomOf, zoomAt, assemble, frameDiff, bestJoin } from '../scripts/assemble-film.mjs';
+import { audioGraph, cutOf, filterOf, zoomOf, zoomAt, assemble, frameDiff, bestJoin } from '../scripts/assemble-film.mjs';
 
 const has = (b) => { try { execFileSync(b, ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } };
 
@@ -68,4 +68,18 @@ test('a new scene is joined by a dissolve, or a dip through black when the light
   const dip = assemble({ size: '320x180', fps: 24, loudness: false, clips: [{ file: grey1 }, { file: black, continues: false }] }, join(dir, 'd.mp4')); assert.deepEqual([dip.joins[0].transition, dip.joins[0].d], ['fadeblack', 1.2]);
   const hard = assemble({ size: '320x180', fps: 24, loudness: false, sceneTransitions: false, clips: [{ file: grey1 }, { file: grey2, continues: false }] }, join(dir, 'h.mp4')); assert.equal(hard.joins[0], null, 'it can be switched off: a hard cut');
   const first = execFileSync('ffmpeg', ['-v', 'error', '-i', out, '-frames:v', '1', '-vf', 'scale=1:1,format=gray', '-f', 'rawvideo', '-'], { maxBuffer: 1 << 20 })[0]; assert.ok(first < 20, `the first frame is black (${first})`);
+});
+
+test('the sound is mixed on its own timeline: placed where each picture starts, crossfaded, with a room tone and an optional music bed that ducks', () => {
+  const g = audioGraph({ clips: [{ file: 'a.mp4', start: 0, dur: 3.5, audio: true, at: 0, fadeOut: 1.4 }, { file: 'b.mp4', start: 0.08, dur: 3, audio: true, at: 2.1, fadeIn: 0.9 }, { file: 'c.mp4', start: 0, dur: 2, audio: false, at: 5 }], total: 6 });
+  assert.deepEqual(g.inputs.filter((x) => x === '-i').length, 2, 'a clip with no sound adds no input'); assert.match(g.graph, /adelay=2100\|2100/); assert.match(g.graph, /afade=t=out:st=2\.100:d=1\.400:curve=qsin/); assert.match(g.graph, /anoisesrc=c=brown/); assert.doesNotMatch(g.graph, /sidechaincompress/);
+  const m = audioGraph({ clips: [{ file: 'a.mp4', start: 0, dur: 3, audio: true, at: 0 }], total: 4, music: 'bed.mp3', musicDb: -18, clipDb: -6 }); assert.deepEqual(m.inputs.slice(-4), ['-stream_loop', '-1', '-i', 'bed.mp3']); assert.match(m.graph, /sidechaincompress/); assert.match(m.graph, /volume=-18dB/);
+});
+
+test('a film with a music bed and a scene change plays sound all the way through, with no silent gap at the join', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mix-')), mk = (name, color, hz) => { const f = join(dir, name); execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=${color}:s=320x180:r=24:d=4`, '-f', 'lavfi', '-i', `sine=frequency=${hz}:duration=4`, '-shortest', '-pix_fmt', 'yuv420p', f]); return f; };
+  const bed = join(dir, 'bed.wav'); execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=110:duration=2', bed]);
+  const out = join(dir, 'f.mp4'); assemble({ size: '320x180', fps: 24, music: bed, clips: [{ file: mk('a.mp4', '0x808080', 300), keep: 3 }, { file: mk('b.mp4', '0x909090', 500), continues: false, keep: 3 }] }, out);
+  const probeA = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', out], { encoding: 'utf8' }); assert.match(probeA, /audio/);
+  const sil = execFileSync('ffmpeg', ['-hide_banner', '-i', out, '-af', 'silencedetect=n=-60dB:d=0.3', '-f', 'null', '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).toString(); assert.equal((sil.match(/silence_start/g) || []).length, 0, 'no silence of 0.3 s anywhere');
 });

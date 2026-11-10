@@ -372,16 +372,6 @@
    "idea": "Say distance and end state in the clip prompt; test a motion gain in the local generation script."
   },
   {
-   "id": "cin-p-037",
-   "title": "Let sound lead or trail the picture at a scene change",
-   "idea": "Offset the audio crossfade: the next clip's audio starts 0.3 to 0.6 s before its picture at scene changes."
-  },
-  {
-   "id": "cin-p-038",
-   "title": "Carry a music bed or ambience across a scene change",
-   "idea": "Put one music bed under the film and treat generated clip sound as ambience (wf-p-029)."
-  },
-  {
    "id": "cin-p-041",
    "title": "In a teaser, put the sound accent on the cut and leave room around it",
    "idea": "Optional: one short impact or whoosh at scene changes of a teaser, never on every cut."
@@ -5689,8 +5679,8 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "each clip's audio starts and ends exactly at its picture, 0.08 s fades",
+    "status": "done",
+    "where": "assemble-film.mjs audioGraph: at a new scene the sound of the scene before lingers 0.5 s under the new picture (an L-cut; the sound after the cut point of a clip exists). A J-cut needs sound before a clip starts, which a generated clip does not have",
     "idea": "Offset the audio crossfade: the next clip's audio starts 0.3 to 0.6 s before its picture at scene changes."
    },
    "contributor": "claude-research",
@@ -5755,8 +5745,8 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "each clip carries its own generated sound, so music restarts at every scene",
+    "status": "partial",
+    "where": "plan.music lays a bed under the film and ducks it under the clips (MUSIC=file scripts/film-plan.py); the studio does not make music itself, no music generator is connected",
     "idea": "Put one music bed under the film and treat generated clip sound as ambience (wf-p-029)."
    },
    "contributor": "claude-research",
@@ -5814,8 +5804,8 @@
    "strength": "multi-source",
    "conflicts": [],
    "monofilm": {
-    "status": "partial",
-    "where": "0.08 s fade at each clip's audio start and end",
+    "status": "done",
+    "where": "audioGraph: a brown-noise room tone at -46 dB under the whole film, so a join is never silent",
     "idea": "Loop a room-tone bed under all joins; make fades longer than 0.08 s where ambience differs."
    },
    "contributor": "claude-research",
@@ -14500,8 +14490,8 @@
    "strength": "anecdotal",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "each clip's audio is used as generated",
+    "status": "partial",
+    "where": "with a bed, the clips are lowered by 6 dB and the bed sits at -18 dB; no low-pass of the clips' own sound",
     "idea": "Add a single bed and low-pass or duck the clip sound."
    },
    "contributor": "claude-research",
@@ -14586,8 +14576,8 @@
    "strength": "single-source",
    "conflicts": [],
    "monofilm": {
-    "status": "none",
-    "where": "no music bed",
+    "status": "done",
+    "where": "audioGraph: sidechaincompress ratio 5, attack 20 ms, release 300 ms, the bed ducks under the clips",
     "idea": "Only needed once a bed exists (aud-p-019)."
    },
    "contributor": "claude-research",

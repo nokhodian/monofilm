@@ -9,6 +9,7 @@ size = sys.argv[2] if len(sys.argv) > 2 else "1280x720"
 state = json.load(open(os.path.join(folder, "state.json")))
 reviews = json.load(open(os.path.join(folder, "reviews.json"))) if os.path.exists(os.path.join(folder, "reviews.json")) else {}
 plan = {"size": size, "fps": 24, "clips": []}
+if os.environ.get("MUSIC"): plan["music"] = os.path.abspath(os.environ["MUSIC"])  # a music bed file: the assembly lays it under the film and ducks it under the clips' own sound
 for key, rec in state.items():
     rv = reviews.get(key, {})
     def rank(t):
