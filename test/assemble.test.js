@@ -53,9 +53,19 @@ test('a join is made where the two clips match: the same picture is cut, a diffe
 
 test('a pushed two-clip chain joins without a jump and the scale of a landmark rises smoothly', { skip: !has('ffmpeg') || !has('ffprobe') }, () => {
   const dir = mkdtempSync(join(tmpdir(), 'asmp-')), src = 'color=c=black:s=640x360:r=24:d=4,drawbox=x=300:y=160:w=40:h=40:c=white:t=fill', mk = (n) => { execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', src, '-f', 'lavfi', '-i', 'sine=f=300:d=4', '-shortest', join(dir, n)]); return join(dir, n); };
-  const out = join(dir, 'f.mp4'), r = assemble({ size: '640x360', fps: 24, loudness: false, clips: [{ file: mk('a.mp4'), push: 0.1, push_from: 0 }, { file: mk('b.mp4'), continues: true, push_from: 0.1, push: 0.2 }] }, out);
+  const out = join(dir, 'f.mp4'), r = assemble({ size: '640x360', fps: 24, loudness: false, fadeIn: 0, fadeOut: 0, clips: [{ file: mk('a.mp4'), push: 0.1, push_from: 0 }, { file: mk('b.mp4'), continues: true, push_from: 0.1, push: 0.2 }] }, out);
   assert.equal(r.dissolved, 0, 'the join is cut, not dissolved: both sides are zoomed the same');
   const width = (t) => { const g = execFileSync('ffmpeg', ['-v', 'error', '-ss', String(t), '-i', out, '-frames:v', '1', '-vf', 'crop=160:100:240:130,format=gray', '-f', 'rawvideo', '-'], { maxBuffer: 1 << 20 }); let n = 0; for (const v of g) if (v > 128) n++; return Math.sqrt(n); };
   const w = [0.2, 1, 2, 3, 3.5, 4.5, 5.5, 6.5, 7.5].map(width), steps = w.slice(1).map((x, i) => x - w[i]);
   assert.ok(w[w.length - 1] > w[0] * 1.15, `the landmark grew ${w.map((x) => x.toFixed(1))}`); assert.ok(steps.every((x) => x > -0.6), `never shrinks ${steps}`); assert.ok(Math.max(...steps) < 3, `no step ${steps}`);
+});
+
+test('a new scene is joined by a dissolve, or a dip through black when the light changes a lot, and the film fades in and out', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'scene-')), mk = (name, color) => { const f = join(dir, name); execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=${color}:s=320x180:r=24:d=3`, '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3', '-shortest', '-pix_fmt', 'yuv420p', f]); return f; };
+  const grey1 = mk('g1.mp4', '0x808080'), grey2 = mk('g2.mp4', '0x909090'), black = mk('k.mp4', '0x101010'), out = join(dir, 'f.mp4');
+  const like = assemble({ size: '320x180', fps: 24, loudness: false, clips: [{ file: grey1 }, { file: grey2, continues: false }] }, out), dur = (f) => Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f], { encoding: 'utf8' }));
+  assert.deepEqual([like.joins[0].scene, like.joins[0].transition, like.joins[0].d], [true, 'dissolve', 0.9]); assert.ok(Math.abs(dur(out) - (6 - 0.9)) < 0.2, `the two scenes overlap by 0.9 s (${dur(out)})`);
+  const dip = assemble({ size: '320x180', fps: 24, loudness: false, clips: [{ file: grey1 }, { file: black, continues: false }] }, join(dir, 'd.mp4')); assert.deepEqual([dip.joins[0].transition, dip.joins[0].d], ['fadeblack', 1.2]);
+  const hard = assemble({ size: '320x180', fps: 24, loudness: false, sceneTransitions: false, clips: [{ file: grey1 }, { file: grey2, continues: false }] }, join(dir, 'h.mp4')); assert.equal(hard.joins[0], null, 'it can be switched off: a hard cut');
+  const first = execFileSync('ffmpeg', ['-v', 'error', '-i', out, '-frames:v', '1', '-vf', 'scale=1:1,format=gray', '-f', 'rawvideo', '-'], { maxBuffer: 1 << 20 })[0]; assert.ok(first < 20, `the first frame is black (${first})`);
 });

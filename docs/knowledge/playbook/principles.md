@@ -67,3 +67,10 @@ Distilled from the practices in this knowledge base. Every line points at practi
 - The only measured tolerance found is about plus or minus 20% for plausible relative size; our tighter bands are our own choice. [qa-p-025] Measure with a short-noun-phrase segmenter per frame and distrust a single propagated mask. [qa-p-026]
 - Lock the camera with a positive phrase plus invariants; where a generator reshapes on camera moves, keep it static and move the camera in post. [cin-p-030] [cin-p-031] Use a provider's fixed-camera flag too. [pm-p-025]
 - Image-to-video under-moves; write a change with a target and distance. [cin-p-032] Seed joins from before the final slowdown. [wf-p-025]
+
+## Joins between scenes: research round of 2026-11-10
+
+- A cut is the default; a dissolve, fade or wipe must say that time, place or mood changed. [cin-p-033] Dissolve 0.3 to 0.5 s to soften a mismatch, 1 to 2 s for a scene change, longer only for a time jump. [cin-p-034] Fade through black only for a major break and at the film's ends. [cin-p-035]
+- Make the two pictures agree before dissolving, or hide the change in motion or a matched shape. [cin-p-036] [cin-p-042] Measure and match brightness and colour at a join. [wf-p-026] [wf-p-027]
+- Sound crosses the seam first: lead the next scene's sound by a few tenths of a second, carry one music bed and ambience across, never leave the track dead. [cin-p-037] [cin-p-038] [cin-p-039] Treat each clip's generated sound as ambience under one bed. [wf-p-029]
+- xfade for picture, acrossfade for sound, equal formats, handles kept. [wf-p-028] [wf-p-032] [cin-p-040] Normalise loudness once, at the end. [wf-p-030]

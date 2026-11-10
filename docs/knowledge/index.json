@@ -1,8 +1,8 @@
 {
- "generated": "2026-11-09",
+ "generated": "2026-11-10",
  "counts": {
-  "sources": 451,
-  "practices": 280
+  "sources": 490,
+  "practices": 298
  },
  "stages": {
   "prompt": [
@@ -117,7 +117,8 @@
    "wf-p-010",
    "wf-p-012",
    "wf-p-020",
-   "wf-p-024"
+   "wf-p-024",
+   "wf-p-033"
   ],
   "assembly": [
    "ani-p-007",
@@ -129,6 +130,9 @@
    "cin-p-021",
    "cin-p-022",
    "cin-p-031",
+   "cin-p-033",
+   "cin-p-034",
+   "cin-p-035",
    "qa-p-023",
    "phy-p-018",
    "phy-p-023",
@@ -139,7 +143,11 @@
    "scn-p-025",
    "sty-p-014",
    "wf-p-019",
-   "wf-p-025"
+   "wf-p-025",
+   "wf-p-026",
+   "wf-p-027",
+   "wf-p-028",
+   "wf-p-032"
   ],
   "picture": [
    "ani-p-009",
@@ -153,6 +161,7 @@
    "chr-p-025",
    "cin-p-015",
    "cin-p-023",
+   "cin-p-036",
    "pm-p-012",
    "res-p-006",
    "res-p-008",
@@ -228,6 +237,7 @@
    "cin-p-020",
    "cin-p-024",
    "cin-p-028",
+   "cin-p-042",
    "qa-p-014",
    "qa-p-015",
    "phy-p-001",
@@ -297,9 +307,17 @@
    "aud-p-016",
    "aud-p-018",
    "aud-p-021",
+   "cin-p-037",
+   "cin-p-038",
+   "cin-p-039",
+   "cin-p-040",
+   "cin-p-041",
    "pm-p-009",
    "sty-p-018",
-   "wf-p-021"
+   "wf-p-021",
+   "wf-p-029",
+   "wf-p-030",
+   "wf-p-031"
   ]
  },
  "todo": [
@@ -352,6 +370,26 @@
    "id": "cin-p-032",
    "title": "Expect image-to-video to under-move; write a change with a target, not a mood",
    "idea": "Say distance and end state in the clip prompt; test a motion gain in the local generation script."
+  },
+  {
+   "id": "cin-p-037",
+   "title": "Let sound lead or trail the picture at a scene change",
+   "idea": "Offset the audio crossfade: the next clip's audio starts 0.3 to 0.6 s before its picture at scene changes."
+  },
+  {
+   "id": "cin-p-038",
+   "title": "Carry a music bed or ambience across a scene change",
+   "idea": "Put one music bed under the film and treat generated clip sound as ambience (wf-p-029)."
+  },
+  {
+   "id": "cin-p-041",
+   "title": "In a teaser, put the sound accent on the cut and leave room around it",
+   "idea": "Optional: one short impact or whoosh at scene changes of a teaser, never on every cut."
+  },
+  {
+   "id": "cin-p-042",
+   "title": "Hide a scene change in motion or in a matched shape",
+   "idea": "Prompt a motion exit and a motion entry for scene changes."
   },
   {
    "id": "res-p-015",
@@ -5421,6 +5459,557 @@
      "url": "https://arxiv.org/abs/2412.05848",
      "title": "MotionStone: Decoupled Motion Intensity Modulation with Diffusion Transformer for Image-to-Video Generation",
      "quality": "primary"
+    }
+   ]
+  },
+  {
+   "id": "cin-p-033",
+   "cluster": "cinematography",
+   "title": "A cut is the default; any other transition must carry a meaning",
+   "rule": "Join shots with a hard cut when the next shot is a continuation; use a dissolve, fade or wipe only to say time, place or mood changed, and then make it long enough to be read as chosen.",
+   "why": "An unmotivated hard cut at a scene change reads as a smash cut: an abrupt, jarring break, which is a device for comedy or shock, not a neutral change of place.",
+   "how": "Test: strip all transitions, add back only those with a purpose; if a transition draws more attention than the moment, use a sound-led cut instead.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "assembly",
+   "evidence": [
+    "cin-047",
+    "cin-050",
+    "cin-048",
+    "cin-058"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "done",
+    "where": "scripts/assemble-film.mjs sceneJoin: continuing clips keep the best-frame join; a new scene always gets a dissolve or a dip",
+    "idea": "Scene changes get a dissolve or fade (see cin-p-034); clips continuing in one scene stay hard cuts."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "cin-047",
+     "url": "https://cursa.app/en/page/transitions-and-continuity-when-to-cut-when-to-transition",
+     "title": "Transitions and continuity: when to cut, when to transition",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-050",
+     "url": "https://www.studiobinder.com/blog/what-is-a-smash-cut/",
+     "title": "What is a smash cut",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-048",
+     "url": "https://nofilmschool.com/2018/01/5-cuts-you-should-always-have-your-editing-arsenal",
+     "title": "5 cuts you should always have in your editing arsenal",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-058",
+     "url": "https://www.premiumbeat.com/blog/cutting-on-the-blink-editing-tips-from-walter-murch",
+     "title": "Cutting on the blink: editing tips from Walter Murch",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
+   "id": "cin-p-034",
+   "cluster": "cinematography",
+   "title": "Size a dissolve by the time or place it covers",
+   "rule": "Use about 0.3 to 0.5 s (8 to 12 frames) to soften a cut between similar pictures, 1 to 2 s (24 to 48 frames) for a scene change in place or time, and longer only for a large time jump or a slow mood.",
+   "why": "Sources agree on the 24 to 48 frame traditional range and on 6 to 12 frames as a cut softener; below that it reads as a cut, far above it as dreamlike or as an error.",
+   "how": "At 24 fps: 10 frames for same-scene mismatch, 24 to 36 frames for a new scene, 48 frames for a time jump. Centre it on the cut so each clip needs half the length as handle.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "assembly",
+   "evidence": [
+    "cin-042",
+    "cin-053",
+    "cin-047",
+    "cin-044",
+    "cin-059"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "done",
+    "where": "sceneJoin: dissolve 0.9 s, dip 1.2 s (plan.sceneDissolve, plan.sceneDip); the research range is 1.0 to 1.5 s, tune by ear",
+    "idea": "Use 1.0 to 1.5 s dissolves (xfade=dissolve or fade) at scene changes."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "cin-042",
+     "url": "https://www.adobe.com/creativecloud/video/post-production/transitions/dissolve",
+     "title": "Cross dissolve transition",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-053",
+     "url": "https://en.wikipedia.org/wiki/Dissolve_(filmmaking)",
+     "title": "Dissolve (filmmaking)",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-047",
+     "url": "https://cursa.app/en/page/transitions-and-continuity-when-to-cut-when-to-transition",
+     "title": "Transitions and continuity: when to cut, when to transition",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-044",
+     "url": "https://www.premiumbeat.com/blog/wp-json/wp/v2/posts/69830",
+     "title": "The hidden meaning behind popular video transitions",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-059",
+     "url": "https://www.dvinfo.net/forum/adobe-creative-suite/489949-cross-dissolve-tips-print.html",
+     "title": "Cross dissolve tips (forum thread)",
+     "quality": "anecdotal"
+    }
+   ]
+  },
+  {
+   "id": "cin-p-035",
+   "cluster": "cinematography",
+   "title": "Fade through black or white only for a major break",
+   "rule": "Reserve a fade out and in (dip to black) for the end of a film, a chapter or a large time jump, and a dip to white for hope or disorientation; do not use it inside a continuous scene.",
+   "why": "A fade goes to a blank image instead of another shot, so it reads as an ending; used often it makes each scene feel finished.",
+   "how": "xfade=fadeblack or fadewhite at 0.8 to 1.5 s; first clip fade in from black 0.5 to 1 s; last clip fade out 1 to 2 s.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "assembly",
+   "evidence": [
+    "cin-044",
+    "cin-047",
+    "cin-053"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "done",
+    "where": "sceneJoin picks xfade fadeblack when the mean brightness differs by more than 30 of 255 or the pictures differ by more than 70; the film fades in over 0.6 s and out over 1.2 s (sound a little longer)",
+    "idea": "Fade in the first clip and out the last (picture and sound)."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "cin-044",
+     "url": "https://www.premiumbeat.com/blog/wp-json/wp/v2/posts/69830",
+     "title": "The hidden meaning behind popular video transitions",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-047",
+     "url": "https://cursa.app/en/page/transitions-and-continuity-when-to-cut-when-to-transition",
+     "title": "Transitions and continuity: when to cut, when to transition",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-053",
+     "url": "https://en.wikipedia.org/wiki/Dissolve_(filmmaking)",
+     "title": "Dissolve (filmmaking)",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
+   "id": "cin-p-036",
+   "cluster": "cinematography",
+   "title": "Make the two pictures agree before dissolving across them",
+   "rule": "Before a dissolve check that subject position, framing and brightness of the last and first frames are close; if they are not, change the pictures, not the transition length.",
+   "why": "A dissolve between pictures with the subject in different places shows two ghost subjects; the dissolve calls attention to the edit. A graphic or match cut works because shape, colour or position line up.",
+   "how": "Prefer an end picture and next start picture that share screen position (a match dissolve, as in Citizen Kane's window), or a dip through black when they cannot.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "picture",
+   "evidence": [
+    "cin-042",
+    "cin-051",
+    "cin-059"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "partial",
+    "where": "join matching by best frame inside one scene",
+    "idea": "Between scenes, choose the next scene's first picture to share the previous end picture's main shape and brightness, or dip through black."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "cin-042",
+     "url": "https://www.adobe.com/creativecloud/video/post-production/transitions/dissolve",
+     "title": "Cross dissolve transition",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-051",
+     "url": "https://en.wikipedia.org/wiki/Match_cut",
+     "title": "Match cut",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-059",
+     "url": "https://www.dvinfo.net/forum/adobe-creative-suite/489949-cross-dissolve-tips-print.html",
+     "title": "Cross dissolve tips (forum thread)",
+     "quality": "anecdotal"
+    }
+   ]
+  },
+  {
+   "id": "cin-p-037",
+   "cluster": "cinematography",
+   "title": "Let sound lead or trail the picture at a scene change",
+   "rule": "At a scene change start the next scene's sound before its picture (J-cut, pre-lap) or let the old scene's sound run on past it (L-cut); lead 6 to 15 frames (0.25 to 0.6 s) for a smooth join, up to about 2 s into a big sequence.",
+   "why": "A split edit hides the seam because the ear already knows where the story goes when the eye gets there. Sources give 0.5 s for dialogue and about 2 s for a major sequence; the 6 to 15 frame figure is one editor's rule.",
+   "how": "Cut the picture where it is; slide the audio of the incoming clip earlier by 0.3 to 0.6 s under a short crossfade. For a trailer-like film, 1 to 2 s lead into the first clip of a new scene.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "audio",
+   "evidence": [
+    "cin-043",
+    "cin-047",
+    "cin-052",
+    "cin-064",
+    "cin-063",
+    "cin-045"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "none",
+    "where": "each clip's audio starts and ends exactly at its picture, 0.08 s fades",
+    "idea": "Offset the audio crossfade: the next clip's audio starts 0.3 to 0.6 s before its picture at scene changes."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "cin-043",
+     "url": "https://filmdaft.com/the-l-cut-and-j-cut-how-film-editors-use-audio-to-control-time/",
+     "title": "L-Cut and J-Cut: how film editors use audio to control time",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-047",
+     "url": "https://cursa.app/en/page/transitions-and-continuity-when-to-cut-when-to-transition",
+     "title": "Transitions and continuity: when to cut, when to transition",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-052",
+     "url": "https://en.wikipedia.org/wiki/Split_edit",
+     "title": "Split edit (J cut and L cut)",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-064",
+     "url": "https://spotlightfx.com/blog/what-are-j-cuts-and-l-cuts-professional-dialogue-editing-explained",
+     "title": "What are J-cuts and L-cuts",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-063",
+     "url": "https://www.owc.com/ca/blog/how-to-make-sound-bridges-in-premiere-pro",
+     "title": "How to make sound bridges in Premiere Pro",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-045",
+     "url": "https://www.epidemicsound.com/blog/j-cuts-and-l-cuts/",
+     "title": "J-cuts and L-cuts",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
+   "id": "cin-p-038",
+   "cluster": "cinematography",
+   "title": "Carry a music bed or ambience across a scene change",
+   "rule": "Start a music cue before the cut, or let the old cue run into the new scene, and bring the new place's ambience in early; do not restart music at the cut.",
+   "why": "A bridge keeps mood and continuity through a location or time change; ambience heard through a whole scene makes separate shots read as one place. Music that restarts exactly at the cut announces the cut.",
+   "how": "One continuous bed under the whole film, or an overlap of 1 to 2 s between cues under a crossfade; new ambience fades in under the last second of the old shot.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "audio",
+   "evidence": [
+    "cin-060",
+    "cin-062",
+    "cin-061",
+    "cin-046",
+    "cin-064"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "none",
+    "where": "each clip carries its own generated sound, so music restarts at every scene",
+    "idea": "Put one music bed under the film and treat generated clip sound as ambience (wf-p-029)."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "cin-060",
+     "url": "https://filmdaft.com/what-is-a-sound-bridge-in-film-definition-and-transition-guide/",
+     "title": "What is a sound bridge in film",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-062",
+     "url": "https://www.filmeditingpro.com/smooth-your-scene-transitions-with-a-sound-bridge/",
+     "title": "Smooth your scene transitions with a sound bridge",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-061",
+     "url": "https://nofilmschool.com/pre-lap-screenwriting-and-editing",
+     "title": "How to create cinema's invisible transition, the pre-lap",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-046",
+     "url": "https://en.wikiversity.org/wiki/Film_Scoring/Theory_of_Film_Scoring/Creating_continuity",
+     "title": "Film scoring: creating continuity",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-064",
+     "url": "https://spotlightfx.com/blog/what-are-j-cuts-and-l-cuts-professional-dialogue-editing-explained",
+     "title": "What are J-cuts and L-cuts",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
+   "id": "cin-p-039",
+   "cluster": "cinematography",
+   "title": "Never leave the soundtrack dead under a cut",
+   "rule": "Keep ambience or room tone under every edit and use a short crossfade at each audio join, so the join has neither a click nor a drop to digital silence.",
+   "why": "A track that goes dead sounds like a failure; presence intercut under edits hides sound seams.",
+   "how": "Fill gaps with the clip's own quiet tone or a looped ambience bed; crossfade 0.1 to 0.5 s for continuing clips, longer at scene changes.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "audio",
+   "evidence": [
+    "cin-055",
+    "cin-047",
+    "cin-045",
+    "cin-056"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "partial",
+    "where": "0.08 s fade at each clip's audio start and end",
+    "idea": "Loop a room-tone bed under all joins; make fades longer than 0.08 s where ambience differs."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "cin-055",
+     "url": "https://en.wikipedia.org/wiki/Room_tone",
+     "title": "Room tone (presence)",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-047",
+     "url": "https://cursa.app/en/page/transitions-and-continuity-when-to-cut-when-to-transition",
+     "title": "Transitions and continuity: when to cut, when to transition",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-045",
+     "url": "https://www.epidemicsound.com/blog/j-cuts-and-l-cuts/",
+     "title": "J-cuts and L-cuts",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-056",
+     "url": "https://en.wikipedia.org/wiki/Crossfade_(audio_engineering)",
+     "title": "Crossfade (audio engineering)",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
+   "id": "cin-p-040",
+   "cluster": "cinematography",
+   "title": "Choose an equal-power audio crossfade for unrelated sounds",
+   "rule": "Cross two unrelated sounds with an equal-power (constant power) curve; a linear crossfade dips by about 3 dB at the middle.",
+   "why": "Equal power keeps both signals near 0.707 at the midpoint so loudness stays steady; Premiere's default audio crossfade is constant power, 1 s. Linear is safer for the same sound recorded twice.",
+   "how": "ffmpeg: acrossfade=d=0.5:c1=qsin:c2=qsin (quarter-sine curves; the pairing as equal-power is our inference, to be listened to).",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "audio",
+   "evidence": [
+    "cin-056",
+    "cin-063",
+    "wf-040",
+    "aud-016"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "done",
+    "where": "acrossfade with c1=qsin c2=qsin at every soft join",
+    "idea": "Use acrossfade with qsin curves for scene joins."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "cin-056",
+     "url": "https://en.wikipedia.org/wiki/Crossfade_(audio_engineering)",
+     "title": "Crossfade (audio engineering)",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-063",
+     "url": "https://www.owc.com/ca/blog/how-to-make-sound-bridges-in-premiere-pro",
+     "title": "How to make sound bridges in Premiere Pro",
+     "quality": "secondary"
+    },
+    {
+     "id": "wf-040",
+     "url": "https://www.adobe.com/ar/learn/premiere-pro/web/premiere-pro-add-transitions-cc",
+     "title": "Add transitions in Premiere Pro",
+     "quality": "primary"
+    },
+    {
+     "id": "aud-016",
+     "url": "https://ffmpeg.org/ffmpeg-filters.html",
+     "title": "FFmpeg filters documentation (acrossfade, loudnorm, sidechaincompress, adelay)",
+     "quality": "primary"
+    }
+   ]
+  },
+  {
+   "id": "cin-p-041",
+   "cluster": "cinematography",
+   "title": "In a teaser, put the sound accent on the cut and leave room around it",
+   "rule": "Mark each scene change on the timeline, put the hit or whoosh on it, land a riser's peak on the hit, drop out briefly before the biggest one, and duck the bed under each hit.",
+   "why": "Trailers use impacts and silence to make a seam look intended; a hit on every cut loses its effect.",
+   "how": "Hit 0 to 2 frames before the picture change; riser 1 to 3 s; 0.25 to 1 s of near silence before the final hit; duck bed with sidechaincompress.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "audio",
+   "evidence": [
+    "cin-049",
+    "cin-057",
+    "cin-065",
+    "cin-066"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "none",
+    "where": "no sound design layer",
+    "idea": "Optional: one short impact or whoosh at scene changes of a teaser, never on every cut."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "cin-049",
+     "url": "https://violetrecording.com/sound-design-for-trailers/",
+     "title": "Sound design for trailers",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-057",
+     "url": "https://www.ableton.com/en/blog/learn-how-to-make-high-impact-sounds-for-movies-and-trailers/",
+     "title": "Learn how to make high-impact sounds for movies and trailers",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-065",
+     "url": "https://www.filmeditingpro.com/?p=11766",
+     "title": "The Art of Trailer Editing (course page)",
+     "quality": "anecdotal"
+    },
+    {
+     "id": "cin-066",
+     "url": "https://jonnyelwyn.co.uk/film-and-video-editing/how-to-edit-a-film-trailer/",
+     "title": "How to edit a film trailer",
+     "quality": "anecdotal"
+    }
+   ]
+  },
+  {
+   "id": "cin-p-042",
+   "cluster": "cinematography",
+   "title": "Hide a scene change in motion or in a matched shape",
+   "rule": "Cut at peak motion (whip pan, push, object crossing the frame) or between two pictures that share a shape, colour or screen position; when in doubt serve emotion and story before spatial continuity.",
+   "why": "Motion blur and a matched shape give the eye a reason to move; Murch ranks emotion 51%, story 23%, rhythm 10% above eye-trace and space.",
+   "how": "Generate the last clip of a scene ending in a camera move or a foreground passing the lens, and the next scene opening on a move in the same direction; then cut or dissolve 6 to 12 frames.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "plan",
+   "evidence": [
+    "cin-047",
+    "cin-054",
+    "cin-051",
+    "cin-058",
+    "cin-048"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "none",
+    "where": "scene changes are plain cuts between unrelated pictures",
+    "idea": "Prompt a motion exit and a motion entry for scene changes."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "cin-047",
+     "url": "https://cursa.app/en/page/transitions-and-continuity-when-to-cut-when-to-transition",
+     "title": "Transitions and continuity: when to cut, when to transition",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-054",
+     "url": "https://en.wikipedia.org/wiki/Whip_pan",
+     "title": "Whip pan",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-051",
+     "url": "https://en.wikipedia.org/wiki/Match_cut",
+     "title": "Match cut",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-058",
+     "url": "https://www.premiumbeat.com/blog/cutting-on-the-blink-editing-tips-from-walter-murch",
+     "title": "Cutting on the blink: editing tips from Walter Murch",
+     "quality": "secondary"
+    },
+    {
+     "id": "cin-048",
+     "url": "https://nofilmschool.com/2018/01/5-cuts-you-should-always-have-your-editing-arsenal",
+     "title": "5 cuts you should always have in your editing arsenal",
+     "quality": "secondary"
     }
    ]
   },
@@ -13734,6 +14323,367 @@
      "quality": "secondary"
     }
    ]
+  },
+  {
+   "id": "wf-p-026",
+   "cluster": "workflows",
+   "title": "Measure and correct brightness and colour drift of generated clips",
+   "rule": "Measure per-clip luminance and colour at the first and last frames and correct drift inside a clip and the difference across a join; do not trust the generator to hold light.",
+   "why": "Reports say generators drift in colour over a clip and join nodes shift brightness; the fixes are measured per clip.",
+   "how": "signalstats gives YAVG, UAVG, VAVG per frame; deflicker=size=10:mode=am against slow drift; eq/colorbalance for the join.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "assembly",
+   "evidence": [
+    "scn-033",
+    "wf-038",
+    "wf-049",
+    "aud-016"
+   ],
+   "strength": "anecdotal",
+   "conflicts": [],
+   "monofilm": {
+    "status": "none",
+    "where": "none; loudnorm only on audio",
+    "idea": "Add a luminance and colour measurement of boundary frames in the assembly script."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "scn-033",
+     "url": "https://dev.to/renderio/kling-ai-video-post-processing-with-ffmpeg-naf",
+     "title": "Kling AI video post-processing with FFmpeg",
+     "quality": "anecdotal"
+    },
+    {
+     "id": "wf-038",
+     "url": "https://www.runcomfy.com/comfyui-nodes/ComfyUI-Wan-VACE-Prep",
+     "title": "ComfyUI Wan VACE Prep (VACE Join)",
+     "quality": "secondary"
+    },
+    {
+     "id": "wf-049",
+     "url": "https://ayosec.github.io/ffmpeg-filters-docs/7.0/Filters/Video/signalstats.html",
+     "title": "FFmpeg 7.0 filter signalstats",
+     "quality": "primary"
+    },
+    {
+     "id": "aud-016",
+     "url": "https://ffmpeg.org/ffmpeg-filters.html",
+     "title": "FFmpeg filters documentation (acrossfade, loudnorm, sidechaincompress, adelay)",
+     "quality": "primary"
+    }
+   ]
+  },
+  {
+   "id": "wf-p-027",
+   "cluster": "workflows",
+   "title": "Match a clip's colour to its neighbour with measured gains, not by eye",
+   "rule": "At a join, shift the incoming clip toward the outgoing clip's last frame (mean Y, U, V) with eq and colorbalance, fading the correction out over the clip, or use a histogram or Reinhard transfer for larger differences.",
+   "why": "Cheap filters can match mean brightness and tint; statistical transfer (Reinhard, MKL, histogram matching) handles larger differences but is not in ffmpeg and was not tested by us.",
+   "how": "brightness ~ (YAVG_prev - YAVG_next)/255 in eq; ramp with eval=frame over 1 to 2 s; a sharp scene change in time of day should not be matched but dissolved.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "assembly",
+   "evidence": [
+    "wf-049",
+    "wf-048",
+    "aud-016",
+    "wf-052",
+    "wf-038"
+   ],
+   "strength": "single-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "none",
+    "where": "none",
+    "idea": "Measure boundary-frame mean YUV with signalstats; apply eq to the incoming clip, ramped over 1 to 2 s."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "wf-049",
+     "url": "https://ayosec.github.io/ffmpeg-filters-docs/7.0/Filters/Video/signalstats.html",
+     "title": "FFmpeg 7.0 filter signalstats",
+     "quality": "primary"
+    },
+    {
+     "id": "wf-048",
+     "url": "https://ayosec.github.io/ffmpeg-filters-docs/7.0/Filters/Video/eq.html",
+     "title": "FFmpeg 7.0 filter eq",
+     "quality": "primary"
+    },
+    {
+     "id": "aud-016",
+     "url": "https://ffmpeg.org/ffmpeg-filters.html",
+     "title": "FFmpeg filters documentation (acrossfade, loudnorm, sidechaincompress, adelay)",
+     "quality": "primary"
+    },
+    {
+     "id": "wf-052",
+     "url": "https://pypi.org/project/color-matcher/",
+     "title": "color-matcher (PyPI)",
+     "quality": "secondary"
+    },
+    {
+     "id": "wf-038",
+     "url": "https://www.runcomfy.com/comfyui-nodes/ComfyUI-Wan-VACE-Prep",
+     "title": "ComfyUI Wan VACE Prep (VACE Join)",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
+   "id": "wf-p-028",
+   "cluster": "workflows",
+   "title": "Use xfade for the picture and acrossfade for the sound, and keep the formats equal",
+   "rule": "For a timed transition between two clips use xfade with the offset set to the first clip's remaining length minus the duration, pair it with an acrossfade of the same length, and give both inputs the same size, fps, pixel format and timebase.",
+   "why": "xfade does not touch audio; mismatched inputs make it fail; chained offsets are measured on the shortened combined timeline.",
+   "how": "xfade=transition=dissolve:duration=1.0:offset=T; names to use: dissolve or fade for a soft join, fadeblack and fadewhite for dips, fadegrays; avoid slides, wipes and circles for realism.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "assembly",
+   "evidence": [
+    "wf-045",
+    "wf-044",
+    "aud-016"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "done",
+    "where": "xfade for the picture and acrossfade for the sound, same duration, same formats (assemble-film.mjs)",
+    "idea": "Use the same call at scene changes with longer durations and an acrossfade."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "wf-045",
+     "url": "https://ayosec.github.io/ffmpeg-filters-docs/7.0/Filters/Video/xfade.html",
+     "title": "FFmpeg 7.0 filter xfade",
+     "quality": "primary"
+    },
+    {
+     "id": "wf-044",
+     "url": "https://ottverse.com/crossfade-between-videos-ffmpeg-xfade-filter/",
+     "title": "Crossfade between videos with FFmpeg xfade",
+     "quality": "secondary"
+    },
+    {
+     "id": "aud-016",
+     "url": "https://ffmpeg.org/ffmpeg-filters.html",
+     "title": "FFmpeg filters documentation (acrossfade, loudnorm, sidechaincompress, adelay)",
+     "quality": "primary"
+    }
+   ]
+  },
+  {
+   "id": "wf-p-029",
+   "cluster": "workflows",
+   "title": "Treat each generated clip's sound as ambience and lay one bed under the film",
+   "rule": "Do not let each clip's generated music play; keep its ambience and effects, low-pass or mute its music, and put one continuous music bed under the film.",
+   "why": "Native audio is made per clip and mixed automatically; music is limited and cannot be balanced, so every clip restarts a different cue; the sources say nothing about consistency across clips.",
+   "how": "Options in order of safety: mute the clip audio and use one bed plus a looped room tone; or keep clip audio at -12 to -18 dB below the bed with lowpass=f=4000 as an unproven starting point and a 0.3 to 0.6 s crossfade.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "audio",
+   "evidence": [
+    "wf-039"
+   ],
+   "strength": "anecdotal",
+   "conflicts": [],
+   "monofilm": {
+    "status": "none",
+    "where": "each clip's audio is used as generated",
+    "idea": "Add a single bed and low-pass or duck the clip sound."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "wf-039",
+     "url": "https://www.atlascloud.ai/blog/ai-video-models-native-audio-compared",
+     "title": "AI video models with native audio compared: Veo 3.1, Kling 3.0, Vidu Q3",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
+   "id": "wf-p-030",
+   "cluster": "workflows",
+   "title": "Normalise loudness once for the whole film, to the platform's target",
+   "rule": "Measure the finished mix and set it to -23 LUFS integrated with a true peak of -1 dBTP for broadcast-style delivery; short-term loudness should not exceed -18 LUFS; set the sample rate explicitly after loudnorm.",
+   "why": "EBU R 128 and its short-form supplement (up to about 2 minutes) fix these numbers and drop loudness range for short pieces; streaming platforms use other targets (one source gives -14 LUFS, TP -2 for TikTok).",
+   "how": "Two-pass loudnorm: measure, then I=-23:TP=-1:LRA=7:measured_*:linear=true, then -ar 48000. Do not equalise each clip separately; set levels per clip by ear so a join has no jump, then normalise once.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "audio",
+   "evidence": [
+    "wf-041",
+    "wf-042",
+    "wf-046",
+    "scn-033"
+   ],
+   "strength": "multi-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "done",
+    "where": "one loudnorm at the end of assemble-film.mjs",
+    "idea": "Check the target (-23 vs -14 LUFS), the true peak and the output sample rate."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "wf-041",
+     "url": "https://tech.ebu.ch/docs/r/r128.pdf",
+     "title": "EBU R 128: loudness normalisation and permitted maximum level (2023)",
+     "quality": "primary"
+    },
+    {
+     "id": "wf-042",
+     "url": "https://tech.ebu.ch/docs/r/r128s1.pdf",
+     "title": "EBU R 128 s1: loudness parameters for short-form content",
+     "quality": "primary"
+    },
+    {
+     "id": "wf-046",
+     "url": "https://ayosec.github.io/ffmpeg-filters-docs/7.0/Filters/Audio/loudnorm.html",
+     "title": "FFmpeg 7.0 filter loudnorm",
+     "quality": "primary"
+    },
+    {
+     "id": "scn-033",
+     "url": "https://dev.to/renderio/kling-ai-video-post-processing-with-ffmpeg-naf",
+     "title": "Kling AI video post-processing with FFmpeg",
+     "quality": "anecdotal"
+    }
+   ]
+  },
+  {
+   "id": "wf-p-031",
+   "cluster": "workflows",
+   "title": "Duck the bed under hits and speech with a sidechain",
+   "rule": "Lower the music bed under dialogue, titles and hits with sidechaincompress and a short attack and a release of a few hundred ms.",
+   "why": "Ducking keeps the voice or accent clear; ffmpeg defaults are ratio 2, attack 20 ms, release 250 ms, and need tuning by ear.",
+   "how": "[bed][voice]sidechaincompress=threshold=0.05:ratio=6:attack=20:release=300",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "audio",
+   "evidence": [
+    "wf-047",
+    "cin-049"
+   ],
+   "strength": "single-source",
+   "conflicts": [],
+   "monofilm": {
+    "status": "none",
+    "where": "no music bed",
+    "idea": "Only needed once a bed exists (aud-p-019)."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "wf-047",
+     "url": "https://ayosec.github.io/ffmpeg-filters-docs/7.0/Filters/Audio/sidechaincompress.html",
+     "title": "FFmpeg 7.0 filter sidechaincompress",
+     "quality": "primary"
+    },
+    {
+     "id": "cin-049",
+     "url": "https://violetrecording.com/sound-design-for-trailers/",
+     "title": "Sound design for trailers",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
+   "id": "wf-p-032",
+   "cluster": "workflows",
+   "title": "Keep trimmed head and tail frames as handles for a dissolve",
+   "rule": "Keep at least half the dissolve length of spare frames before and after the cut point of each clip, or the dissolve freezes a frame.",
+   "why": "A transition needs frames past the cut point on both clips; an editor without them repeats frames, which looks wrong on moving footage.",
+   "how": "A 1 s centred dissolve needs 0.5 s of real motion after the end point of clip A and before the start point of clip B; do not trim the frozen tail below that, or generate 0.5 s more.",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "assembly",
+   "evidence": [
+    "wf-040",
+    "cin-064"
+   ],
+   "strength": "vendor",
+   "conflicts": [],
+   "monofilm": {
+    "status": "partial",
+    "where": "a dissolve takes its duration from the real frames at the end of one clip and the start of the next (dj, one third of a clip at most); clips are not generated with extra handles",
+    "idea": "Keep 0.5 s of handle at scene changes."
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "wf-040",
+     "url": "https://www.adobe.com/ar/learn/premiere-pro/web/premiere-pro-add-transitions-cc",
+     "title": "Add transitions in Premiere Pro",
+     "quality": "primary"
+    },
+    {
+     "id": "cin-064",
+     "url": "https://spotlightfx.com/blog/what-are-j-cuts-and-l-cuts-professional-dialogue-editing-explained",
+     "title": "What are J-cuts and L-cuts",
+     "quality": "secondary"
+    }
+   ]
+  },
+  {
+   "id": "wf-p-033",
+   "cluster": "workflows",
+   "title": "Chain within one model and keep its fields the same across clips",
+   "rule": "Use the generator's own start-frame, end-frame or extend fields for clips of one scene, with the same model, aspect ratio and camera wording, and cut or dissolve between scenes.",
+   "why": "Luma chains by passing a finished generation as frame0; field names differ per tool; switching tool mid-scene breaks continuity.",
+   "how": "Seed from a frame before the slowdown at a clip's end (wf-p-025).",
+   "applies_to": [
+    "all"
+   ],
+   "stage": "generation",
+   "evidence": [
+    "pm-002",
+    "scn-020"
+   ],
+   "strength": "vendor",
+   "conflicts": [],
+   "monofilm": {
+    "status": "done",
+    "where": "next clip starts from the previous end picture",
+    "idea": ""
+   },
+   "contributor": "claude-research",
+   "date": "2026-11-10",
+   "evidenceSources": [
+    {
+     "id": "pm-002",
+     "url": "https://docs.lumalabs.ai/docs/video-generation",
+     "title": "Luma Dream Machine API: video generation",
+     "quality": "primary"
+    },
+    {
+     "id": "scn-020",
+     "url": "https://hackernoon.com/how-to-chain-ai-video-clips-into-one-shot-without-the-hidden-stutter-at-every-cut",
+     "title": "How to chain AI video clips into one shot without the hidden stutter",
+     "quality": "anecdotal"
+    }
+   ]
   }
  ],
  "sources": [
@@ -17917,6 +18867,572 @@
    "access": "full",
    "retrieved": "2026-11-09",
    "notes": ""
+  },
+  {
+   "id": "cin-042",
+   "url": "https://www.adobe.com/creativecloud/video/post-production/transitions/dissolve",
+   "title": "Cross dissolve transition",
+   "publisher": "Adobe",
+   "published": "",
+   "type": "tutorial",
+   "tags": [
+    "transition",
+    "dissolve",
+    "frames"
+   ],
+   "models": [],
+   "claims": [
+    "A traditional cross dissolve lasts 24 to 48 frames; shorter ones read like hard cuts, longer ones feel dreamlike.",
+    "Before dissolving, check composition, lighting and grain so the two shots blend well; a dissolve is set against the jarring plain cut."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "No seconds given, only frames."
+  },
+  {
+   "id": "cin-043",
+   "url": "https://filmdaft.com/the-l-cut-and-j-cut-how-film-editors-use-audio-to-control-time/",
+   "title": "L-Cut and J-Cut: how film editors use audio to control time",
+   "publisher": "FilmDaft",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "j-cut",
+    "l-cut",
+    "audio",
+    "sound-bridge"
+   ],
+   "models": [],
+   "claims": [
+    "Start a dialogue split edit with about half a second of overlap; a J-cut of about two seconds into a major sequence builds anticipation.",
+    "A J-cut on the incoming scene's sound pulls the viewer forward; an L-cut carries earlier audio into a new time period (memory, montage, time jump).",
+    "Five film examples (Apocalypse Now, M, The Godfather, Inception, The Dark Knight) where sound runs across the picture change."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "Only two durations in the whole page."
+  },
+  {
+   "id": "cin-044",
+   "url": "https://www.premiumbeat.com/blog/wp-json/wp/v2/posts/69830",
+   "title": "The hidden meaning behind popular video transitions",
+   "publisher": "PremiumBeat (Caleb Ward)",
+   "published": "2016",
+   "type": "blog",
+   "tags": [
+    "transition",
+    "fade",
+    "dissolve",
+    "wipe"
+   ],
+   "models": [],
+   "claims": [
+    "Fade to black suggests completion and a passage of time; fade to white suggests the journey is not over (hope, ambiguity).",
+    "A dissolve links scenes or ideas, often a time passing or exterior to interior; its length should match the implied time gap.",
+    "A one-second dissolve for a long time jump is rare; a wipe implies unresolved, continuing action and suits parallel storylines."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "The URL is the site's JSON endpoint for the post; the text read is the article."
+  },
+  {
+   "id": "cin-045",
+   "url": "https://www.epidemicsound.com/blog/j-cuts-and-l-cuts/",
+   "title": "J-cuts and L-cuts",
+   "publisher": "Epidemic Sound",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "j-cut",
+    "l-cut",
+    "ambience",
+    "music"
+   ],
+   "models": [],
+   "claims": [
+    "Split edits change audio and picture at different times; they smooth rough scene changes and keep a scene from feeling static.",
+    "Unlink the audio, then use fades and crossfades to clean up stray background noise at the overlap; music can be added to emphasise a cut."
+   ],
+   "quality": "secondary",
+   "access": "partial",
+   "retrieved": "2026-11-10",
+   "notes": "Gives no lengths."
+  },
+  {
+   "id": "cin-046",
+   "url": "https://en.wikiversity.org/wiki/Film_Scoring/Theory_of_Film_Scoring/Creating_continuity",
+   "title": "Film scoring: creating continuity",
+   "publisher": "Wikiversity",
+   "published": "",
+   "type": "tutorial",
+   "tags": [
+    "continuity",
+    "music",
+    "ambience"
+   ],
+   "models": [],
+   "claims": [
+    "Ambient sound heard through a whole scene (its example: crickets) makes separate shots read as one place.",
+    "Music creates continuity only if its style stays consistent across the film."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "Thin page; the section on continuity of ideas is empty."
+  },
+  {
+   "id": "cin-047",
+   "url": "https://cursa.app/en/page/transitions-and-continuity-when-to-cut-when-to-transition",
+   "title": "Transitions and continuity: when to cut, when to transition",
+   "publisher": "Cursa",
+   "published": "",
+   "type": "tutorial",
+   "tags": [
+    "transition",
+    "cut",
+    "dissolve",
+    "j-cut",
+    "frames"
+   ],
+   "models": [],
+   "claims": [
+    "A straight cut is the default; spend any other transition only where it carries a meaning. Remove all transitions first, add back only those with a purpose.",
+    "Dissolve: start around 8 to 12 frames at 24 fps (0.3 to 0.5 s) and lengthen only to stretch the sense of time; fade to black/white marks a major break or big time jump.",
+    "J-cut: bring the next shot's audio in roughly 6 to 15 frames early; add short audio crossfades to avoid clicks and ambience jumps.",
+    "Whip pan or push: cut at peak motion blur where both shots move in similar direction and speed."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "Practitioner opinion with concrete frame counts; no measurement."
+  },
+  {
+   "id": "cin-048",
+   "url": "https://nofilmschool.com/2018/01/5-cuts-you-should-always-have-your-editing-arsenal",
+   "title": "5 cuts you should always have in your editing arsenal",
+   "publisher": "No Film School",
+   "published": "2018-01",
+   "type": "blog",
+   "tags": [
+    "cut",
+    "jump-cut",
+    "cut-to-beat"
+   ],
+   "models": [],
+   "claims": [
+    "Lists standard cut, cut to B-roll, jump cut, cut to the beat and cut between perspectives; says most projects need little beyond the standard cut.",
+    "Cutting between different angles when opening a new scene gives viewers clues about time and place."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "Does not cover match cuts or J/L cuts."
+  },
+  {
+   "id": "cin-049",
+   "url": "https://violetrecording.com/sound-design-for-trailers/",
+   "title": "Sound design for trailers",
+   "publisher": "Violet Recording",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "trailer",
+    "hits",
+    "risers",
+    "silence",
+    "ducking"
+   ],
+   "models": [],
+   "claims": [
+    "Trailers build in waves: quiet opening, risers and braams in the middle, the biggest layered impacts at the climax; mark each editorial accent on a timeline and put hits and whooshes there.",
+    "A riser builds a few seconds then lands on a hit on the downbeat; time the riser peak to the impact to the frame.",
+    "Dropping everything out for a beat before the final hit makes it larger; filling every second removes the contrast.",
+    "Sidechain-duck the tension bed for a fraction of a second under each hit, and duck design elements under voice and titles."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "No dB or LUFS values given."
+  },
+  {
+   "id": "cin-050",
+   "url": "https://www.studiobinder.com/blog/what-is-a-smash-cut/",
+   "title": "What is a smash cut",
+   "publisher": "StudioBinder",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "smash-cut",
+    "cut",
+    "contrast"
+   ],
+   "models": [],
+   "claims": [
+    "A smash cut is an abrupt, jarring edit from one scene to another without pause or warning, used mainly for comedy, also horror and drama.",
+    "Its effect comes from contrast with what came before (setup then punchline); it is a deliberate device, not a neutral scene change."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": ""
+  },
+  {
+   "id": "cin-051",
+   "url": "https://en.wikipedia.org/wiki/Match_cut",
+   "title": "Match cut",
+   "publisher": "Wikipedia",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "match-cut",
+    "graphic-match",
+    "transition"
+   ],
+   "models": [],
+   "claims": [
+    "A match cut links two shots by action, subject or composition; a graphic match lines up shape, colour or movement and often bridges a scene change.",
+    "Citizen Kane's match dissolves keep a lit window in the same part of the frame while the camera moves, joining two places smoothly."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "Encyclopedic summary; no rules or numbers."
+  },
+  {
+   "id": "cin-052",
+   "url": "https://en.wikipedia.org/wiki/Split_edit",
+   "title": "Split edit (J cut and L cut)",
+   "publisher": "Wikipedia",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "j-cut",
+    "l-cut",
+    "sound-bridge"
+   ],
+   "models": [],
+   "claims": [
+    "In an L cut the preceding scene's audio overlaps the following picture; in a J cut the following scene's audio overlaps the preceding picture.",
+    "Split edits hide transitions between scenes; 'sound bridge' is an alternate name for the technique.",
+    "Barry Salt's study of 33 American films (1936 to 2014) found J-edits had risen to about the share of L-edits, from a small sample."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "No durations given."
+  },
+  {
+   "id": "cin-053",
+   "url": "https://en.wikipedia.org/wiki/Dissolve_(filmmaking)",
+   "title": "Dissolve (filmmaking)",
+   "publisher": "Wikipedia",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "dissolve",
+    "fade",
+    "duration"
+   ],
+   "models": [],
+   "claims": [
+    "Dissolves usually signal passage of time or change of location; fades and dissolves typically last 1 to 2 seconds (24 to 48 frames).",
+    "Short dissolves of 6 to 12 frames can soften a hard cut or jump cut.",
+    "Length sets mood: slow dissolves in Citizen Kane's opening feel morbid, short ones in its newsreel sequence feel lively."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": ""
+  },
+  {
+   "id": "cin-054",
+   "url": "https://en.wikipedia.org/wiki/Whip_pan",
+   "title": "Whip pan",
+   "publisher": "Wikipedia",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "whip-pan",
+    "transition",
+    "motion-blur"
+   ],
+   "models": [],
+   "claims": [
+    "A whip pan is a fast pan that blurs the picture into streaks; used as a transition it can suggest time passing or frantic action and acts like a natural wipe."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "Does not state that it hides a cut."
+  },
+  {
+   "id": "cin-055",
+   "url": "https://en.wikipedia.org/wiki/Room_tone",
+   "title": "Room tone (presence)",
+   "publisher": "Wikipedia",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "room-tone",
+    "presence",
+    "audio"
+   ],
+   "models": [],
+   "claims": [
+    "Presence is intercut with dialogue to smooth sound edit points; a track that goes dead sounds like a system failure, not like silence.",
+    "It sits on the same track as the dialogue it covers and is recorded in mono at the original microphone position so it matches the location."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "No length guidance."
+  },
+  {
+   "id": "cin-056",
+   "url": "https://en.wikipedia.org/wiki/Crossfade_(audio_engineering)",
+   "title": "Crossfade (audio engineering)",
+   "publisher": "Wikipedia",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "crossfade",
+    "audio",
+    "equal-power"
+   ],
+   "models": [],
+   "claims": [
+    "A linear crossfade dips perceptibly at the midpoint (both sounds under half perceived loudness), especially when short.",
+    "Equal-power curves keep each signal near 0.707 at the midpoint so perceived loudness stays roughly constant.",
+    "Crossfading two similar sounds can cause phase cancellation, more likely with longer crossfades."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": ""
+  },
+  {
+   "id": "cin-057",
+   "url": "https://www.ableton.com/en/blog/learn-how-to-make-high-impact-sounds-for-movies-and-trailers/",
+   "title": "Learn how to make high-impact sounds for movies and trailers",
+   "publisher": "Ableton",
+   "published": "",
+   "type": "tutorial",
+   "tags": [
+    "trailer",
+    "braam",
+    "riser",
+    "hit"
+   ],
+   "models": [],
+   "claims": [
+    "Braams often accent the transitions between shots in a trailer; hits end in a long reverb tail.",
+    "A riser is usually followed by a hit or a short silence that holds suspense; build impacts from layers EQ'd separately so they do not clash."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "No timing relative to the cut."
+  },
+  {
+   "id": "cin-058",
+   "url": "https://www.premiumbeat.com/blog/cutting-on-the-blink-editing-tips-from-walter-murch",
+   "title": "Cutting on the blink: editing tips from Walter Murch",
+   "publisher": "PremiumBeat",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "murch",
+    "rule-of-six",
+    "cut"
+   ],
+   "models": [],
+   "claims": [
+    "Murch ranks reasons for a cut: emotion 51%, story 23%, rhythm 10%, eye-trace 7%, screen plane 5%, 3D space 4%; the order matters more than the figures.",
+    "When a cut is in doubt, give up the lower items (continuity of space) before the higher (emotion, story, rhythm)."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "Secondary retelling of Murch; the percentages are from his book as quoted."
+  },
+  {
+   "id": "cin-059",
+   "url": "https://www.dvinfo.net/forum/adobe-creative-suite/489949-cross-dissolve-tips-print.html",
+   "title": "Cross dissolve tips (forum thread)",
+   "publisher": "DV Info Net",
+   "published": "",
+   "type": "forum",
+   "tags": [
+    "dissolve",
+    "frames",
+    "editor-practice"
+   ],
+   "models": [],
+   "claims": [
+    "One editor defaults to 30 frames and stretches to 60 or 90 for music or emotional moments; another uses 24 frames for film, 30 or 60 for video, in multiples of 2 so the dissolve splits evenly across the cut.",
+    "Dissolves in talking-head footage look odd because the subject shifts slightly between shots; use a cutaway, or a flash or dip, instead."
+   ],
+   "quality": "anecdotal",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "Several editors' habits, not a test."
+  },
+  {
+   "id": "cin-060",
+   "url": "https://filmdaft.com/what-is-a-sound-bridge-in-film-definition-and-transition-guide/",
+   "title": "What is a sound bridge in film",
+   "publisher": "FilmDaft",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "sound-bridge",
+    "music",
+    "ambience"
+   ],
+   "models": [],
+   "claims": [
+    "Four kinds of sound bridge: music (a cue runs across the cut or starts early), dialogue, effects and ambience (the new place's sound enters early), and sound-match.",
+    "Short overlaps feel subtle, longer ones stylised; do not hold a bridge so long that it feels forced."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "No seconds given."
+  },
+  {
+   "id": "cin-061",
+   "url": "https://nofilmschool.com/pre-lap-screenwriting-and-editing",
+   "title": "How to create cinema's invisible transition, the pre-lap",
+   "publisher": "No Film School",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "pre-lap",
+    "sound-bridge"
+   ],
+   "models": [],
+   "claims": [
+    "A pre-lap lets the audience hear the next scene's sound before its picture; it signals the next scene follows in time and space, builds anticipation and can stress a sound or music cue.",
+    "Examples cited: Citizen Kane, Lawrence of Arabia, Forrest Gump (whistle), The Matrix (alarm clock), Arrival."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "No duration given."
+  },
+  {
+   "id": "cin-062",
+   "url": "https://www.filmeditingpro.com/smooth-your-scene-transitions-with-a-sound-bridge/",
+   "title": "Smooth your scene transitions with a sound bridge",
+   "publisher": "Film Editing Pro",
+   "published": "",
+   "type": "tutorial",
+   "tags": [
+    "sound-bridge",
+    "music",
+    "j-cut"
+   ],
+   "models": [],
+   "claims": [
+    "A sound bridge starts the next scene's audio while the last scene's picture is still on screen; for music, start the cue before the cut instead of at it.",
+    "How far the audio leads sets the effect: a small lead is a smooth link, a larger lead foreshadows more of the next scene."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "No ambience or fade lengths."
+  },
+  {
+   "id": "cin-063",
+   "url": "https://www.owc.com/ca/blog/how-to-make-sound-bridges-in-premiere-pro",
+   "title": "How to make sound bridges in Premiere Pro",
+   "publisher": "OWC",
+   "published": "",
+   "type": "tutorial",
+   "tags": [
+    "crossfade",
+    "j-cut",
+    "l-cut",
+    "premiere"
+   ],
+   "models": [],
+   "claims": [
+    "Put a constant-power crossfade where two audio clips meet so the blend does not click; apply one at J and L cut overlaps too.",
+    "L cut: the preceding shot's audio continues under the next picture; J cut is the reverse."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "No lengths."
+  },
+  {
+   "id": "cin-064",
+   "url": "https://spotlightfx.com/blog/what-are-j-cuts-and-l-cuts-professional-dialogue-editing-explained",
+   "title": "What are J-cuts and L-cuts",
+   "publisher": "Spotlight FX",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "j-cut",
+    "l-cut",
+    "ambience",
+    "handles"
+   ],
+   "models": [],
+   "claims": [
+    "Keep split edits relatively short, a few frames to a second or two, unless a noticeable effect is wanted.",
+    "Ambient sound can lead into a new location (rain before the exterior shot); J-cuts can bring music in early; keep extra footage at shot ends (handles) for overlaps."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "No fade lengths or music timings."
+  },
+  {
+   "id": "cin-065",
+   "url": "https://www.filmeditingpro.com/?p=11766",
+   "title": "The Art of Trailer Editing (course page)",
+   "publisher": "Film Editing Pro",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "trailer",
+    "music",
+    "sound-design"
+   ],
+   "models": [],
+   "claims": [
+    "Course outline: cut the audio bed first, then build picture on it; use hits and whooshes to mark key moments; a music stop is taught as a scene-change tool.",
+    "Lesson on silence in suspense trailers; no technique details are on the page."
+   ],
+   "quality": "anecdotal",
+   "access": "partial",
+   "retrieved": "2026-11-10",
+   "notes": "Sales page; only lesson titles."
+  },
+  {
+   "id": "cin-066",
+   "url": "https://jonnyelwyn.co.uk/film-and-video-editing/how-to-edit-a-film-trailer/",
+   "title": "How to edit a film trailer",
+   "publisher": "Jonny Elwyn",
+   "published": "",
+   "type": "blog",
+   "tags": [
+    "trailer",
+    "hit-grid",
+    "music"
+   ],
+   "models": [],
+   "claims": [
+    "A hit grid, with edits timed to the hits in the music track, plus extra sound-design layers on those hits raises the intensity of a trailer."
+   ],
+   "quality": "anecdotal",
+   "access": "partial",
+   "retrieved": "2026-11-10",
+   "notes": "Write-up of a course sample; thin."
   },
   {
    "id": "qa-001",
@@ -24449,6 +25965,330 @@
    "access": "full",
    "retrieved": "2026-11-08",
    "notes": ""
+  },
+  {
+   "id": "wf-038",
+   "url": "https://www.runcomfy.com/comfyui-nodes/ComfyUI-Wan-VACE-Prep",
+   "title": "ComfyUI Wan VACE Prep (VACE Join)",
+   "publisher": "RunComfy",
+   "published": "",
+   "type": "repo",
+   "tags": [
+    "comfyui",
+    "wan",
+    "vace",
+    "clip-join",
+    "colour-shift"
+   ],
+   "models": [
+    "wan-2.2"
+   ],
+   "claims": [
+    "The join node takes context frames from the edges of two clips and regenerates frames at the join, giving a blend zone.",
+    "The page warns that the VACE model itself can shift brightness or colour and suggests a colour-match node or frame interpolation after it.",
+    "Wan is tuned for 16 fps and sizes divisible by 16."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "Node-pack documentation; no measurement."
+  },
+  {
+   "id": "wf-039",
+   "url": "https://www.atlascloud.ai/blog/ai-video-models-native-audio-compared",
+   "title": "AI video models with native audio compared: Veo 3.1, Kling 3.0, Vidu Q3",
+   "publisher": "Atlas Cloud",
+   "published": "2026",
+   "type": "blog",
+   "tags": [
+    "native-audio",
+    "music",
+    "ambience",
+    "veo",
+    "kling"
+   ],
+   "models": [
+    "veo-3.1",
+    "kling-3.0"
+   ],
+   "claims": [
+    "Audio is generated with the video per clip; there is no volume control for dialogue, ambience and effects, and the mix is automatic.",
+    "Music generation is limited on all three models: simple ambient music works, full scores are not expected.",
+    "Audio consistency across separate generations is not tested; strip the track with an editor or FFmpeg if you want silence."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "A vendor blog that sells API access."
+  },
+  {
+   "id": "wf-040",
+   "url": "https://www.adobe.com/ar/learn/premiere-pro/web/premiere-pro-add-transitions-cc",
+   "title": "Add transitions in Premiere Pro",
+   "publisher": "Adobe",
+   "published": "",
+   "type": "official-doc",
+   "tags": [
+    "premiere",
+    "transition",
+    "handles",
+    "default"
+   ],
+   "models": [],
+   "claims": [
+    "Default video transition is a 30-frame cross dissolve; default audio transition is a one-second crossfade.",
+    "A transition needs extra frames (handles) beyond each clip's edit point; without them Premiere repeats frames, which looks unnatural on moving footage.",
+    "Generative Extend can add up to two seconds at a clip's head or tail when a clip is too short."
+   ],
+   "quality": "primary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": ""
+  },
+  {
+   "id": "wf-041",
+   "url": "https://tech.ebu.ch/docs/r/r128.pdf",
+   "title": "EBU R 128: loudness normalisation and permitted maximum level (2023)",
+   "publisher": "EBU",
+   "published": "2023-11",
+   "type": "spec",
+   "tags": [
+    "loudness",
+    "lufs",
+    "true-peak"
+   ],
+   "models": [],
+   "claims": [
+    "Programme loudness target is -23.0 LUFS; tolerance +/-0.5 LU for production (+/-1.0 LU where unachievable, e.g. live), +/-0.2 LU for QC measurement.",
+    "True peak must not exceed -1 dBTP; measure the whole programme, not just speech or music.",
+    "Loudness range is not recommended under one minute; short-form content follows R 128 s1."
+   ],
+   "quality": "primary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": ""
+  },
+  {
+   "id": "wf-042",
+   "url": "https://tech.ebu.ch/docs/r/r128s1.pdf",
+   "title": "EBU R 128 s1: loudness parameters for short-form content",
+   "publisher": "EBU",
+   "published": "2020-08",
+   "type": "spec",
+   "tags": [
+    "loudness",
+    "short-form",
+    "lufs"
+   ],
+   "models": [],
+   "claims": [
+    "Short-form (up to about 2 minutes, typically under 30 s): programme loudness -23.0 LUFS, maximum short-term loudness -18.0 LUFS (+5 LU), true peak -1 dBTP.",
+    "Loudness range is not specified for short-form content because 3 s windows give too few data points.",
+    "Short-term loudness cap is to avoid overly dynamic short programmes that draw complaints."
+   ],
+   "quality": "primary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": ""
+  },
+  {
+   "id": "wf-044",
+   "url": "https://ottverse.com/crossfade-between-videos-ffmpeg-xfade-filter/",
+   "title": "Crossfade between videos with FFmpeg xfade",
+   "publisher": "OTTVerse",
+   "published": "",
+   "type": "tutorial",
+   "tags": [
+    "ffmpeg",
+    "xfade",
+    "offset"
+   ],
+   "models": [],
+   "claims": [
+    "xfade offset is where the transition starts, counted from the start of the first video; for two clips it is the first clip's length minus the duration.",
+    "The article's commands handle video only; a commenter reports the second clip's sound plays from its start when the first had none.",
+    "Chaining needs each later offset measured on the already-shortened combined timeline."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "Offset formula for two clips is the reader's inference in the article summary."
+  },
+  {
+   "id": "wf-045",
+   "url": "https://ayosec.github.io/ffmpeg-filters-docs/7.0/Filters/Video/xfade.html",
+   "title": "FFmpeg 7.0 filter xfade",
+   "publisher": "ayosec (FFmpeg docs mirror)",
+   "published": "",
+   "type": "official-doc",
+   "tags": [
+    "ffmpeg",
+    "xfade"
+   ],
+   "models": [],
+   "claims": [
+    "Both inputs need constant frame rate and the same size, pixel format, frame rate and timebase.",
+    "duration 0 to 60 s (default 1), offset seconds relative to the first input, transition default fade, custom via expr.",
+    "Transition families include fade, fadeblack, fadewhite, fadegrays, dissolve, wipes, slides, circle and rect crops, squeezes."
+   ],
+   "quality": "primary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "A mirror of the FFmpeg docs; the local ffmpeg -h filter=xfade lists the same names (fade ... dissolve, zoomin, fadefast, fadeslow)."
+  },
+  {
+   "id": "wf-046",
+   "url": "https://ayosec.github.io/ffmpeg-filters-docs/7.0/Filters/Audio/loudnorm.html",
+   "title": "FFmpeg 7.0 filter loudnorm",
+   "publisher": "ayosec (FFmpeg docs mirror)",
+   "published": "",
+   "type": "official-doc",
+   "tags": [
+    "ffmpeg",
+    "loudnorm",
+    "lufs"
+   ],
+   "models": [],
+   "claims": [
+    "Defaults I=-24 LUFS, LRA=7, TP=-2; ranges I -70 to -5, TP -9 to 0.",
+    "Linear mode needs the measured_* values from a first pass; otherwise the filter falls back to dynamic mode.",
+    "In dynamic mode it upsamples to 192 kHz internally, so set the output rate explicitly with -ar or aresample."
+   ],
+   "quality": "primary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": ""
+  },
+  {
+   "id": "wf-047",
+   "url": "https://ayosec.github.io/ffmpeg-filters-docs/7.0/Filters/Audio/sidechaincompress.html",
+   "title": "FFmpeg 7.0 filter sidechaincompress",
+   "publisher": "ayosec (FFmpeg docs mirror)",
+   "published": "",
+   "type": "official-doc",
+   "tags": [
+    "ffmpeg",
+    "ducking",
+    "sidechain"
+   ],
+   "models": [],
+   "claims": [
+    "Compresses the first input by the level of the second; defaults threshold 0.125, ratio 2, attack 20 ms, release 250 ms, makeup 1, detection rms.",
+    "The page gives no ducking recipe; values must be tuned by ear."
+   ],
+   "quality": "primary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": ""
+  },
+  {
+   "id": "wf-048",
+   "url": "https://ayosec.github.io/ffmpeg-filters-docs/7.0/Filters/Video/eq.html",
+   "title": "FFmpeg 7.0 filter eq",
+   "publisher": "ayosec (FFmpeg docs mirror)",
+   "published": "",
+   "type": "official-doc",
+   "tags": [
+    "ffmpeg",
+    "eq",
+    "brightness"
+   ],
+   "models": [],
+   "claims": [
+    "eq sets contrast (default 1), brightness (-1 to 1, default 0), saturation (0 to 3), gamma and per-channel gamma_r/g/b (0.1 to 10).",
+    "Options accept expressions of time t and frame number n, and eval=frame re-evaluates per frame (so a correction can ramp over a clip)."
+   ],
+   "quality": "primary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": ""
+  },
+  {
+   "id": "wf-049",
+   "url": "https://ayosec.github.io/ffmpeg-filters-docs/7.0/Filters/Video/signalstats.html",
+   "title": "FFmpeg 7.0 filter signalstats",
+   "publisher": "ayosec (FFmpeg docs mirror)",
+   "published": "",
+   "type": "official-doc",
+   "tags": [
+    "ffmpeg",
+    "signalstats",
+    "measurement"
+   ],
+   "models": [],
+   "claims": [
+    "Reports per frame YMIN, YLOW (10th percentile), YAVG, YHIGH (90th), YMAX plus U/V averages, saturation and hue, each 0-255 (hue 0-360).",
+    "Values are exposed as lavfi.signalstats.* metadata, readable with ffprobe -show_entries frame_tags=..."
+   ],
+   "quality": "primary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": ""
+  },
+  {
+   "id": "wf-050",
+   "url": "https://ayosec.github.io/ffmpeg-filters-docs/7.0/Filters/Audio/afade.html",
+   "title": "FFmpeg 7.0 filter afade",
+   "publisher": "ayosec (FFmpeg docs mirror)",
+   "published": "",
+   "type": "official-doc",
+   "tags": [
+    "ffmpeg",
+    "afade",
+    "curve"
+   ],
+   "models": [],
+   "claims": [
+    "afade takes type in or out, start_time and duration; default curve tri is linear; others include qsin, hsin, esin, log, exp, par, cub, nofade.",
+    "silence and unity set the start and end gain of a fade, so a fade need not reach zero."
+   ],
+   "quality": "primary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": ""
+  },
+  {
+   "id": "wf-051",
+   "url": "https://ayosec.github.io/ffmpeg-filters-docs/7.0/Filters/Audio/lowpass.html",
+   "title": "FFmpeg 7.0 filter lowpass",
+   "publisher": "ayosec (FFmpeg docs mirror)",
+   "published": "",
+   "type": "official-doc",
+   "tags": [
+    "ffmpeg",
+    "lowpass",
+    "filter"
+   ],
+   "models": [],
+   "claims": [
+    "lowpass cuts frequencies above a 3 dB point (default 500 Hz) with 6 dB per pole per octave; default 2 poles."
+   ],
+   "quality": "primary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": ""
+  },
+  {
+   "id": "wf-052",
+   "url": "https://pypi.org/project/color-matcher/",
+   "title": "color-matcher (PyPI)",
+   "publisher": "hahnec / PyPI",
+   "published": "",
+   "type": "repo",
+   "tags": [
+    "colour-matching",
+    "reinhard",
+    "histogram"
+   ],
+   "models": [],
+   "claims": [
+    "Python package for colour transfer between images with Reinhard, MKL, histogram matching, MVGD and a compound hm-mvgd-hm method.",
+    "Its page names film sequences and stop-motion corrections as uses but shows no API or video example."
+   ],
+   "quality": "secondary",
+   "access": "full",
+   "retrieved": "2026-11-10",
+   "notes": "Not tested by us."
   }
  ]
 }
