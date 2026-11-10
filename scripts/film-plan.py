@@ -23,7 +23,9 @@ for key, rec in state.items():
     keep = seconds - hold + 0.3 if hold >= 1 else seconds
     if r.get("good_until") is not None:
         keep = min(keep, r["good_until"])
-    plan["clips"].append({"file": os.path.basename(take["file"].replace("\\", "/")), "hold": hold, "keep": round(keep, 2), "continues": key.endswith(":2") or not key.endswith(":1"), "_push": rec.get("push") or 0, "_at": rec.get("push_at")})
+    settle = r.get("settle") or 0  # the generator draws the first half second at another size than the rest: that part is cut away
+    trim = max(2 if (key.endswith(":2") or not key.endswith(":1")) else 0, round(max(0, settle - 0.2) * 24))
+    plan["clips"].append({"file": os.path.basename(take["file"].replace("\\", "/")), "hold": hold, "keep": round(keep, 2), "trim_start_frames": trim, "continues": key.endswith(":2") or not key.endswith(":1"), "_push": rec.get("push") or 0, "_at": rec.get("push_at")})
     print(f"{key}: take {take['attempt']}  keep {keep:.1f}s of {seconds}s" + (f"  (size fault from {r['good_until'] + 0.2:.1f} s)" if r.get("good_until") is not None else ""))
 # a scene chain (a clip and the clips that continue it) pushes in once: state.json push is its total, and each clip gets the share of its length (push_from to push)
 chains = []
@@ -43,9 +45,9 @@ for c in plan["clips"]: c.pop("_push"), c.pop("_at")
 MIN_KEEP = float(os.environ.get("MIN_KEEP", "2.5"))
 retake = []
 for key, c in zip(state.keys(), plan["clips"]):
-    if c["keep"] < MIN_KEEP:
+    if c["keep"] - c["trim_start_frames"] / 24 < MIN_KEEP:
         rec = state[key]; r = reviews.get(key, {}).get(str(next(t["attempt"] for t in rec["takes"] if os.path.basename(t["file"].replace("\\", "/")) == c["file"])), {})
-        retake.append({"clip": key, "kept": c["keep"], "why": (r.get("size_faults") or [{}])[0].get("kind") or ((r.get("issues") or [{}])[0].get("problem", "") or "cut early")[:80]})
+        retake.append({"clip": key, "kept": round(c["keep"] - c["trim_start_frames"] / 24, 1), "why": (r.get("size_faults") or [{}])[0].get("kind") or ((r.get("issues") or [{}])[0].get("problem", "") or "cut early")[:80]})
 # the size of the first character at the end of one clip and the start of the next (the 12 measured frames of each take): a scene change between two sizes shows as a character that shrinks or grows
 sizes_at = []
 def series(key, c):
@@ -55,7 +57,7 @@ keys = list(state.keys())
 for i in range(len(keys) - 1):
     (a, sa, na), (b, sb, nb) = series(keys[i], plan["clips"][i]), series(keys[i + 1], plan["clips"][i + 1])
     if a and b and na == nb:
-        end = a[min(len(a) - 1, max(0, int(plan["clips"][i]["keep"] / sa * len(a))))]; start = b[0]
+        end = a[min(len(a) - 1, max(0, int(plan["clips"][i]["keep"] / sa * len(a))))]; start = b[min(len(b) - 1, int(plan["clips"][i + 1]["trim_start_frames"] / 24 / (sb / len(b))))]  # the first frame that is shown, after the settling is cut away
         if end > 0.02 and start > 0.02:
             q = start / end; sizes_at.append({"join": keys[i] + " -> " + keys[i + 1], "name": na, "ratio": round(q, 2)})
             if q < 0.85 or q > 1.18: print("  size change at the join %s -> %s: %s is %d%% of its size" % (keys[i], keys[i + 1], na, round(q * 100)))

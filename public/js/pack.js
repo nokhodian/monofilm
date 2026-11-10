@@ -161,15 +161,21 @@ export function publishChecklist(film = {}, scenes = []) {
 // measuring noise and narrow enough to catch a snail that shrinks to 60% or a pair whose proportion changes.
 const med = (a) => { const s = a.filter((x) => x > 0.02).sort((p, q) => p - q); return s.length ? s[Math.floor(s.length / 2)] : 0; };
 // The reference is the clip's own first frames (the start picture sets the scale). A frame is off when it and the next one are both outside the tolerance (one bad box is noise).
+// A generator draws the first half second of a clip at another size than the rest (the character is 15 to 20% larger in the picture it was given and settles within 0.5 to 0.7 s, in 6 of 8 takes we
+// measured), so the size a clip keeps is read from the frames after that: the median of the frames 3 to 5 of 12. `settleOf` says how many leading frames are not yet at that size.
+export const settledRef = (values) => med(values.slice(2, 5).filter((v) => v > 0.02)) || med(values.filter((v) => v > 0.02));
+const leading = (series) => { const names = Object.keys(series), n = names.length ? series[names[0]].length : 0; if (n < 6) return 0; const v = series[names[0]], ref = settledRef(v); if (!ref) return 0; let k = 0; while (k < 4 && v[k] > 0.02 && Math.abs(v[k] / ref - 1) > 0.07) k++; return k; }; // leading frames more than 7% off the settled size
+export function settleOf(series, seconds = 6.6) { const names = Object.keys(series), n = names.length ? series[names[0]].length : 0, k = leading(series); return k ? Math.min(1.2, Math.round(((k + 0.5) * seconds) / n * 10) / 10) : 0; }
 const stepsOff = (values, ref, lo, hi) => { const off = values.map((v) => v > 0.02 && (v / ref < lo || v / ref > hi)); return off.map((x, i) => x && (off[i + 1] || off[i - 1])); };
 export function sizeFaults(series, { seconds = 6.6, depth = {}, push = false } = {}) {
   const names = Object.keys(series), n = names.length ? series[names[0]].length : 0, at = (i) => Math.round(((i + 0.5) * seconds) / Math.max(1, n) * 10) / 10, out = [];
-  if (!push) for (const name of names) { const ref = med(series[name].slice(0, 3)) || med(series[name]); if (!ref) continue; const lo = depth[name] ? 0.5 : 0.88, hi = depth[name] ? 1.7 : 1.14;
-    stepsOff(series[name], ref, lo, hi).forEach((bad, i) => { if (bad) out.push({ kind: 'size', name, i, at: at(i), ratio: Math.round((series[name][i] / ref) * 100) / 100 }); }); }
+  const skip = leading(series); // the settling frames are the generator's, trimmed in the assembly, not faults of the clip
+  if (!push) for (const name of names) { const ref = settledRef(series[name]); if (!ref) continue; const lo = depth[name] ? 0.8 : 0.92, hi = depth[name] ? 1.25 : 1.08;
+    stepsOff(series[name], ref, lo, hi).forEach((bad, i) => { if (bad && i >= skip) out.push({ kind: 'size', name, i, at: at(i), ratio: Math.round((series[name][i] / ref) * 100) / 100 }); }); }
   for (let a = 0; a < names.length; a++) for (let b = a + 1; b < names.length; b++) {
-    const A = series[names[a]], B = series[names[b]], rs = A.map((v, i) => (v > 0.02 && B[i] > 0.02 ? v / B[i] : 0)), ref = med(rs.slice(0, 3)) || med(rs); if (!ref) continue;
-    const loose = depth[names[a]] || depth[names[b]], lo = loose ? 0.5 : 0.85, hi = loose ? 1.7 : 1.18;
-    stepsOff(rs, ref, lo, hi).forEach((bad, i) => { if (bad) out.push({ kind: 'ratio', name: `${names[a]} to ${names[b]}`, i, at: at(i), ratio: Math.round((rs[i] / ref) * 100) / 100 }); });
+    const A = series[names[a]], B = series[names[b]], rs = A.map((v, i) => (v > 0.02 && B[i] > 0.02 ? v / B[i] : 0)), ref = settledRef(rs); if (!ref) continue;
+    const loose = depth[names[a]] || depth[names[b]], lo = loose ? 0.75 : 0.9, hi = loose ? 1.33 : 1.12;
+    stepsOff(rs, ref, lo, hi).forEach((bad, i) => { if (bad && i >= skip) out.push({ kind: 'ratio', name: `${names[a]} to ${names[b]}`, i, at: at(i), ratio: Math.round((rs[i] / ref) * 100) / 100 }); });
   }
   return out.sort((x, y) => x.i - y.i);
 }

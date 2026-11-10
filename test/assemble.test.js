@@ -35,7 +35,7 @@ test('two clips of different size and rate, one without sound, come out as one f
   const a = mk('a.mp4', 'testsrc2=s=320x240:r=25:d=3', ['-f', 'lavfi', '-i', 'sine=f=440:d=3', '-shortest']), b = mk('b.mp4', 'color=c=white:s=640x480:r=30:d=4', []);
   const out = join(dir, 'film.mp4'), r = assemble({ size: '640x360', fps: 24, clips: [{ file: a, hold: 1.5 }, { file: b, continues: true }] }, out);
   const info = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height', '-of', 'json', out], { encoding: 'utf8' }));
-  assert.equal(r.parts, 2); assert.equal(r.dissolved, 1, 'two clips that look nothing alike are dissolved, not jumped'); assert.ok(Math.abs(Number(info.format.duration) - (1.8 + 3.917 - 0.4)) < 0.45, `duration ${info.format.duration}`);
+  assert.equal(r.parts, 2); assert.equal(r.joins[0].transition, 'fadeblack', 'two clips that look nothing alike go through black, not a jump and not a ghost'); assert.ok(Math.abs(Number(info.format.duration) - (1.8 + 3.917)) < 0.45, `a dip loses no picture: duration ${info.format.duration}`);
   assert.ok(info.streams.some((s) => s.codec_type === 'audio'), 'the silent clip got a silent track so the film has sound all through'); assert.ok(info.streams.some((s) => s.width === 640 && s.height === 360));
 });
 
@@ -87,5 +87,5 @@ test('a film with a music bed and a scene change plays sound all the way through
 test('a join inside a scene is a cut, a very short dissolve, a dissolve, or a dip, by how far apart the two frames are', async () => {
   const { joinKind } = await import('../scripts/assemble-film.mjs');
   assert.deepEqual(joinKind(0.8), { soft: false }); assert.deepEqual(joinKind(4), { soft: true, transition: 'dissolve', d: 0.17 }, 'a small step, a frame missing: smoothed');
-  assert.deepEqual(joinKind(15), { soft: true, transition: 'dissolve', d: 0.4 }); assert.deepEqual(joinKind(30), { soft: true, transition: 'fadeblack', d: 0.6 }, 'characters elsewhere: through black, not a ghost');
+  assert.deepEqual(joinKind(15), { soft: true, transition: 'dissolve', d: 0.4 }); assert.deepEqual(joinKind(30), { soft: false, dip: true, transition: 'fadeblack', d: 0.6 }, 'characters elsewhere: through black, not a ghost');
 });

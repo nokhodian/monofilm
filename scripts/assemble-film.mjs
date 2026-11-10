@@ -50,7 +50,7 @@ export function bestJoin(fileA, startA, endA, fileB, startB, { window = 2, step 
 // (the mean brightness of the two frames differs by more than 30 of 255, or the pictures differ by more than 70). The sound crosses over for as long as the picture does.
 export function sceneJoin(fileA, endA, fileB, startB, plan = {}) {
   const gA = grey(fileA, Math.max(0, endA - 0.12)), gB = grey(fileB, startB), mean = (g) => g.reduce((x, y) => x + y, 0) / (g.length || 1), dY = Math.abs(mean(gA) - mean(gB)), diff = frameDiff(gA, gB), big = gA.length > 0 && gB.length > 0 && (dY > 30 || diff > (plan.sceneDipAbove ?? 15)); // pictures that differ at all: through black (a dissolve of a character at one size into the same character at another looks like it shrinks)
-  return { soft: true, scene: true, transition: big ? 'fadeblack' : 'dissolve', d: big ? plan.sceneDip ?? 1.0 : plan.sceneDissolve ?? 0.9, diff: Math.round(diff * 10) / 10, dY: Math.round(dY * 10) / 10, end: endA };
+  return { soft: !big, dip: big, scene: true, transition: big ? 'fadeblack' : 'dissolve', d: big ? plan.sceneDip ?? 1.0 : plan.sceneDissolve ?? 0.9, diff: Math.round(diff * 10) / 10, dY: Math.round(dY * 10) / 10, end: endA };
 }
 
 // The sound of the film is mixed on its own timeline, apart from the pictures (cin-p-037 to 041, wf-p-029 to 031): every clip's sound is placed where its picture starts, fades in and out with an equal-power
@@ -74,7 +74,7 @@ export function audioGraph({ clips, total, fade = 0.08, tone = true, toneDb = -4
 // (a frame missing, a small step) is smoothed by a 0.17 s dissolve, a clear difference is dissolved over 0.4 s, and a large one (the clip was cut early, the characters are elsewhere) goes through black,
 // because a dissolve across two different arrangements shows both at once, a ghost.
 export function joinKind(diff, plan = {}) {
-  if (diff > (plan.dipAbove ?? 20)) return { soft: true, transition: 'fadeblack', d: plan.dipJoin ?? 0.6 };
+  if (diff > (plan.dipAbove ?? 20)) return { soft: false, dip: true, transition: 'fadeblack', d: plan.dipJoin ?? 0.6 };
   if (diff > (plan.dissolveAbove ?? 12)) return { soft: true, transition: 'dissolve', d: plan.dissolve ?? 0.4 };
   if (diff > (plan.microAbove ?? 1.5)) return { soft: true, transition: 'dissolve', d: plan.micro ?? 0.17 };
   return { soft: false };
@@ -98,10 +98,12 @@ export function assemble(plan, outFile) {
     execFileSync('ffmpeg', ['-v', 'error', '-y', ...input, '-vf', f.v, '-af', f.a, '-c:v', 'libx264', '-crf', '18', '-preset', 'medium', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-shortest', out]); norm.push(out);
   });
   const dj = joins.map((j, i) => (j.soft ? Math.min(j.d ?? dissolve, length(i) / 3, length(i + 1) / 3) : 0)); // each dissolve takes as much from the end of one clip as from the start of the next
+  const halves = joins.map((j, i) => (j.dip ? { prev: Math.min(j.d / 2, length(i) / 2.5), next: Math.min(j.d / 2, length(i + 1) / 2.5) } : null)); // how long each side of a dip takes
   const enc = ['-c:v', 'libx264', '-crf', '18', '-preset', 'medium', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ar', '48000', '-ac', '2'], parts = []; let soft = 0;
   norm.forEach((file, i) => {
     const softIn = i > 0 && joins[i - 1].soft, softOut = i + 1 < norm.length && joins[i].soft, ss = softIn ? dj[i - 1] : 0, t = length(i) - ss - (softOut ? dj[i] : 0), body = join(dir, `body-${i}.mp4`);
-    execFileSync('ffmpeg', ['-v', 'error', '-y', '-ss', String(ss), '-t', String(t), '-i', file, ...enc, body]); parts.push(body);
+    const hIn = i > 0 && joins[i - 1].dip ? halves[i - 1].next : 0, hOut = i + 1 < norm.length && joins[i].dip ? halves[i].prev : 0, fades = [hIn > 0 && `fade=t=in:st=0:d=${hIn.toFixed(3)}`, hOut > 0 && `fade=t=out:st=${Math.max(0, t - hOut).toFixed(3)}:d=${hOut.toFixed(3)}`].filter(Boolean).join(','); // a dip: the clip before fades to black and the clip after fades up from black, one after the other, so no picture is lost to an overlap
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-ss', String(ss), '-t', String(t), '-i', file, ...(fades ? ['-vf', fades] : []), ...enc, body]); parts.push(body);
     if (softOut) { // a dissolve over the tail of this clip and the head of the next, where the two pictures differ
       const dis = join(dir, `dissolve-${i}.mp4`), dd = dj[i];
       execFileSync('ffmpeg', ['-v', 'error', '-y', '-ss', String(length(i) - dd), '-t', String(dd), '-i', file, '-ss', '0', '-t', String(dd), '-i', norm[i + 1], '-filter_complex', `[0:v][1:v]xfade=transition=${joins[i].transition || 'fade'}:duration=${dd}:offset=0,format=yuv420p[v];[0:a][1:a]acrossfade=d=${dd}:c1=qsin:c2=qsin[a]`, '-map', '[v]', '-map', '[a]', ...enc, dis]); parts.push(dis); soft++;
@@ -109,12 +111,12 @@ export function assemble(plan, outFile) {
   });
   const list = join(dir, 'list.txt'); writeFileSync(list, parts.map((x) => `file '${x}'`).join('\n'));
   const joined = join(dir, 'joined.mp4'); execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', joined]);
-  const lead = plan.lead ?? 0.5; let at = 0; const timeline = cuts.map((c, i) => { const j = joins[i], k = joins[i - 1], t = at, avail = Math.max(0.2, c.p.seconds - c.start), extra = j && j.scene ? Math.min(lead, Math.max(0, avail - length(i))) : 0; at += length(i) - (dj[i] || 0); return { file: c.clip.file, start: c.start, dur: length(i) + extra, audio: c.p.audio, at: t, fadeIn: k && k.soft ? dj[i - 1] : undefined, fadeOut: j && j.soft ? dj[i] + extra : undefined }; });
+  const lead = plan.lead ?? 0.5; let at = 0; const timeline = cuts.map((c, i) => { const j = joins[i], k = joins[i - 1], t = at, avail = Math.max(0.2, c.p.seconds - c.start), extra = j && j.scene ? Math.min(lead, Math.max(0, avail - length(i))) : 0; at += length(i) - (dj[i] || 0); return { file: c.clip.file, start: c.start, dur: length(i) + extra, audio: c.p.audio, at: t, fadeIn: k && k.soft ? dj[i - 1] : k && k.dip ? halves[i - 1].next : undefined, fadeOut: j && j.soft ? dj[i] + extra : j && j.dip ? halves[i].prev + extra : undefined }; });
   const mixed = join(dir, 'mix.wav'), ag = audioGraph({ clips: timeline, total: probe(joined).seconds, fade, tone: plan.roomTone !== false, music: plan.music || null, musicDb: plan.musicDb ?? -18, clipDb: plan.clipDb ?? (plan.music ? -6 : 0) });
   execFileSync('ffmpeg', ['-v', 'error', '-y', ...ag.inputs, '-filter_complex', ag.graph, '-map', '[mix]', '-ar', '48000', '-ac', '2', mixed]);
   const total = probe(joined).seconds, fin = plan.fadeIn ?? 0.6, fout = plan.fadeOut ?? 1.2, af = [fin > 0 && `afade=t=in:st=0:d=${fin}`, fout > 0 && `afade=t=out:st=${Math.max(0, total - fout - 0.3).toFixed(3)}:d=${fout + 0.3}`, plan.loudness !== false && 'loudnorm=I=-16:TP=-1.5:LRA=11'].filter(Boolean).join(','), vf = [fin > 0 && `fade=t=in:st=0:d=${fin}`, fout > 0 && `fade=t=out:st=${Math.max(0, total - fout).toFixed(3)}:d=${fout}`].filter(Boolean).join(','); // the film fades in from black and out to black; the sound fades out a little longer than the picture
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', joined, '-i', mixed, '-map', '0:v', '-map', '1:a', ...(vf ? ['-vf', vf, '-c:v', 'libx264', '-crf', '18', '-preset', 'medium', '-pix_fmt', 'yuv420p'] : ['-c:v', 'copy']), ...(af ? ['-af', af, '-c:a', 'aac', '-ar', '48000'] : ['-c:a', 'aac', '-ar', '48000']), '-shortest', outFile]);
-  return { parts: norm.length, dissolved: soft, joins: joins.map((j) => (j.diff == null ? null : { end: j.end, diff: j.diff, soft: j.soft, ...(j.scene ? { scene: true, transition: j.transition, d: j.d, dY: j.dY } : {}) })), out: outFile };
+  return { parts: norm.length, dissolved: soft, joins: joins.map((j) => (j.diff == null ? null : { end: j.end, diff: j.diff, soft: j.soft, ...(j.scene ? { scene: true, dY: j.dY } : {}), ...(j.transition ? { transition: j.transition, d: j.d } : {}) })), out: outFile };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

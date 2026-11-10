@@ -64,10 +64,28 @@ def review(sc, n, mp4, secs):
     except Exception as e:
         print("  review failed:", str(e)[:200], flush=True); return None
 
+def cut_start(sc, n, d):
+    """A clip that continues the one before starts from the frame where that clip is cut (its review says it is good until t), not from the planned start picture: otherwise the film shows
+    the end of one clip and the start of the next at two different places (a character that jumps, shrinks or grows at the join). Returns (png, t) or None."""
+    if n < 2 or d.get("begins") != "continues" or os.environ.get("CHAIN_FROM_CUT") == "0": return None
+    rec = state.get(f"{sc}:{n-1}")
+    if not rec or not rec["takes"]: return None
+    def rank(t):
+        gu = (t.get("review") or {}).get("good_until")
+        return (1 if gu is not None else 0, -(gu if gu is not None else 99), 0 if t["attempt"] == rec.get("best") else 1)
+    t = sorted(rec["takes"], key=rank)[0]; gu = (t.get("review") or {}).get("good_until")
+    if gu is None or gu >= t["measure"]["seconds"] - 0.6: return None
+    png = os.path.join(PICS, f"{sc}_{n}_cut.png")
+    subprocess.run([FF, "-y", "-loglevel", "error", "-ss", f"{max(0.3, gu - 0.05):.2f}", "-i", os.path.join(HERE, t["file"]), "-frames:v", "1", png], check=True)
+    return png, gu
+
 def render(sc, n, d, attempt, prompt, seed, prev_file):
     dst = os.path.join(CLIPS, f"{sc}_{n}_a{attempt}.mp4")
     g = h3_graph(prompt, "x", W, H, d["seconds"], seed, prefix=f"{PROD}/{sc}_{n}_a{attempt}")
-    if d["start_picture"]:
+    cut = cut_start(sc, n, d)
+    if cut:
+        first = cut[0]; print(f"  starts from the frame of the clip before at {cut[1]} s (where it is cut)", flush=True)
+    elif d["start_picture"]:
         first = fetch(d["start_picture"], f"{sc}_{n}_start.png")
     else:
         first = last_frame(prev_file, os.path.join(PICS, f"{sc}_{n}_cont.png"))

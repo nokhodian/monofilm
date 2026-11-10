@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sceneEntries, filmEntries, srt, zip, crc32, buildZip, hashOf, similarity, sceneDir, tailHold, smoothness, seedFor, retryAdvice, voicePlan, publishChecklist, sizeFaults, sizeIssues, goodUntil } from '../public/js/pack.js';
+import { sceneEntries, filmEntries, srt, zip, crc32, buildZip, hashOf, similarity, sceneDir, tailHold, smoothness, seedFor, retryAdvice, voicePlan, publishChecklist, settleOf, sizeFaults, sizeIssues, goodUntil } from '../public/js/pack.js';
 import { clipPlan, emptyNotes, clipSpans, clipBeats, startOf, linesOfClip, cuesOfClip, composeClip, clipLineCheck } from '../public/js/wizard-model.js';
 
 const film = { name: 'Ines teaser', look: { look: 'Muted film', aspect: '9:16', fps: 24, forbidden: ['electric light'] }, speech: 'German', captions: ['English'], anchors: [{ id: 'ines', name: 'Ines', uri: 'media/p/a.png' }], plates: [{ id: 'scaffold', uri: 'media/p/pl.png' }] };
@@ -156,10 +156,13 @@ test('a character that shrinks, or a pair whose proportion changes, is found in 
   const steady = [0.2, 0.2, 0.21, 0.2, 0.19, 0.2, 0.2, 0.2], shrinks = [0.2, 0.2, 0.21, 0.2, 0.19, 0.11, 0.1, 0.1], other = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1];
   assert.deepEqual(sizeFaults({ snail: steady, beetle: other }, { seconds: 8 }), [], 'noise is not a fault');
   const f = sizeFaults({ snail: shrinks, beetle: other }, { seconds: 8 }); assert.ok(f.some((x) => x.kind === 'size' && x.name === 'snail' && x.i === 5 && x.at === 5.5)); assert.ok(f.some((x) => x.kind === 'ratio' && x.name === 'snail to beetle'));
-  const step = sizeFaults({ moss: [0.55, 0.55, 0.55, 0.55, 0.5, 0.46, 0.46, 0.46, 0.45, 0.46, 0.46, 0.46], pip: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1] }, { seconds: 6.6 }); assert.equal(step.find((x) => x.kind === 'size').i, 5, 'the real step of a snail from 0.55 to 0.46 is found where it starts'); assert.equal(sizeFaults({ moss: [0.28, 0.28, 0.28, 0.29, 0.28, 0.27, 0.28, 0.27, 0.27, 0.27, 0.27, 0.27] }, {}).length, 0, 'measuring noise is not a step');
+  const step = sizeFaults({ moss: [0.55, 0.55, 0.55, 0.55, 0.5, 0.46, 0.46, 0.46, 0.45, 0.46, 0.46, 0.46], pip: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1] }, { seconds: 6.6 }); assert.equal(step.find((x) => x.kind === 'size').i, 4, 'the step of a snail from 0.55 to 0.46 is found where it starts (the 0.5 before it is already 9% off)'); assert.equal(sizeFaults({ moss: [0.28, 0.28, 0.28, 0.29, 0.28, 0.27, 0.28, 0.27, 0.27, 0.27, 0.27, 0.27] }, {}).length, 0, 'measuring noise is not a step');
   assert.equal(sizeFaults({ a: [0.2, 0.2, 0.2, 0.2, 0.2, 0.1, 0.2, 0.2], b: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1] }, {}).length, 0, 'one bad box is noise');
   const issues = sizeIssues(f); assert.match(issues[0].problem, /The snail shrinks to 5\d% of its usual size from about 5\.5 s/); assert.equal(issues.length, 2); assert.equal(goodUntil(f), 5.3); assert.equal(goodUntil([]), null); assert.equal(goodUntil([{ at: 0.5 }]), 1.2, 'never less than 1.2 s');
-  assert.deepEqual(sizeFaults({ snail: shrinks, beetle: other }, { seconds: 8, depth: { snail: true } }).filter((x) => x.kind === 'size'), [], 'a character that really walks away may get smaller');
+  assert.deepEqual(sizeFaults({ snail: [0.2, 0.2, 0.21, 0.2, 0.19, 0.18, 0.17, 0.17], beetle: other }, { seconds: 8, depth: { snail: true } }).filter((x) => x.kind === 'size'), [], 'a character that really walks away may get a sixth smaller');
+  assert.ok(sizeFaults({ snail: shrinks, beetle: other }, { seconds: 8, depth: { snail: true } }).some((x) => x.kind === 'size'), 'but not half the size');
+  const settle = [0.59, 0.54, 0.5, 0.48, 0.48, 0.48, 0.48, 0.48, 0.49, 0.5, 0.49, 0.49]; assert.equal(settleOf({ moss: settle }, 6.6), 1.2, 'the first two frames are the generator settling: 0.59 and 0.54 against 0.48 settled');
+  assert.deepEqual(sizeFaults({ moss: settle, pip: [0.27, 0.27, 0.26, 0.26, 0.26, 0.23, 0.21, 0.21, 0.21, 0.21, 0.21, 0.21] }, { seconds: 6.6 }).filter((x) => x.kind === 'size' && x.name === 'moss'), [], 'the settling is not a fault of the clip');
   const push = sizeFaults({ snail: [0.2, 0.22, 0.25, 0.28, 0.3, 0.33, 0.36, 0.4], beetle: [0.1, 0.11, 0.125, 0.14, 0.15, 0.165, 0.18, 0.2] }, { seconds: 8, push: true }); assert.deepEqual(push, [], 'a camera push scales everything together');
   assert.ok(sizeFaults({ snail: [0.2, 0.22, 0.25, 0.28, 0.3, 0.33, 0.36, 0.4], beetle: other }, { seconds: 8, push: true }).some((x) => x.kind === 'ratio'), 'but one object growing alone is a fault');
   assert.deepEqual(sizeFaults({ a: [0, 0, 0] }, {}), [], 'a character that was not found is ignored');
