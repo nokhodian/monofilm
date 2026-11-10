@@ -62,10 +62,10 @@ test('a pushed two-clip chain joins without a jump and the scale of a landmark r
 
 test('a new scene is joined by a dissolve, or a dip through black when the light changes a lot, and the film fades in and out', () => {
   const dir = mkdtempSync(join(tmpdir(), 'scene-')), mk = (name, color) => { const f = join(dir, name); execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=${color}:s=320x180:r=24:d=3`, '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3', '-shortest', '-pix_fmt', 'yuv420p', f]); return f; };
-  const grey1 = mk('g1.mp4', '0x808080'), grey2 = mk('g2.mp4', '0x909090'), black = mk('k.mp4', '0x101010'), out = join(dir, 'f.mp4');
+  const grey1 = mk('g1.mp4', '0x808080'), grey2 = mk('g2.mp4', '0x838383'), black = mk('k.mp4', '0x101010'), out = join(dir, 'f.mp4');
   const like = assemble({ size: '320x180', fps: 24, loudness: false, clips: [{ file: grey1 }, { file: grey2, continues: false }] }, out), dur = (f) => Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f], { encoding: 'utf8' }));
   assert.deepEqual([like.joins[0].scene, like.joins[0].transition, like.joins[0].d], [true, 'dissolve', 0.9]); assert.ok(Math.abs(dur(out) - (6 - 0.9)) < 0.2, `the two scenes overlap by 0.9 s (${dur(out)})`);
-  const dip = assemble({ size: '320x180', fps: 24, loudness: false, clips: [{ file: grey1 }, { file: black, continues: false }] }, join(dir, 'd.mp4')); assert.deepEqual([dip.joins[0].transition, dip.joins[0].d], ['fadeblack', 1.2]);
+  const dip = assemble({ size: '320x180', fps: 24, loudness: false, clips: [{ file: grey1 }, { file: black, continues: false }] }, join(dir, 'd.mp4')); assert.deepEqual([dip.joins[0].transition, dip.joins[0].d], ['fadeblack', 1]);
   const hard = assemble({ size: '320x180', fps: 24, loudness: false, sceneTransitions: false, clips: [{ file: grey1 }, { file: grey2, continues: false }] }, join(dir, 'h.mp4')); assert.equal(hard.joins[0], null, 'it can be switched off: a hard cut');
   const first = execFileSync('ffmpeg', ['-v', 'error', '-i', out, '-frames:v', '1', '-vf', 'scale=1:1,format=gray', '-f', 'rawvideo', '-'], { maxBuffer: 1 << 20 })[0]; assert.ok(first < 20, `the first frame is black (${first})`);
 });
@@ -82,4 +82,10 @@ test('a film with a music bed and a scene change plays sound all the way through
   const out = join(dir, 'f.mp4'); assemble({ size: '320x180', fps: 24, music: bed, clips: [{ file: mk('a.mp4', '0x808080', 300), keep: 3 }, { file: mk('b.mp4', '0x909090', 500), continues: false, keep: 3 }] }, out);
   const probeA = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', out], { encoding: 'utf8' }); assert.match(probeA, /audio/);
   const sil = execFileSync('ffmpeg', ['-hide_banner', '-i', out, '-af', 'silencedetect=n=-60dB:d=0.3', '-f', 'null', '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).toString(); assert.equal((sil.match(/silence_start/g) || []).length, 0, 'no silence of 0.3 s anywhere');
+});
+
+test('a join inside a scene is a cut, a very short dissolve, a dissolve, or a dip, by how far apart the two frames are', async () => {
+  const { joinKind } = await import('../scripts/assemble-film.mjs');
+  assert.deepEqual(joinKind(0.8), { soft: false }); assert.deepEqual(joinKind(4), { soft: true, transition: 'dissolve', d: 0.17 }, 'a small step, a frame missing: smoothed');
+  assert.deepEqual(joinKind(15), { soft: true, transition: 'dissolve', d: 0.4 }); assert.deepEqual(joinKind(30), { soft: true, transition: 'fadeblack', d: 0.6 }, 'characters elsewhere: through black, not a ghost');
 });

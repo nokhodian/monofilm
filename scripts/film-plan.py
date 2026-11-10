@@ -39,5 +39,30 @@ for chain in chains:
             if at: c["push_at"] = at
         done += c["keep"]
 for c in plan["clips"]: c.pop("_push"), c.pop("_at")
+# a clip kept for less than MIN_KEEP seconds is a gap in the film: say which clips need a new take (and why), and write the list into the plan
+MIN_KEEP = float(os.environ.get("MIN_KEEP", "2.5"))
+retake = []
+for key, c in zip(state.keys(), plan["clips"]):
+    if c["keep"] < MIN_KEEP:
+        rec = state[key]; r = reviews.get(key, {}).get(str(next(t["attempt"] for t in rec["takes"] if os.path.basename(t["file"].replace("\\", "/")) == c["file"])), {})
+        retake.append({"clip": key, "kept": c["keep"], "why": (r.get("size_faults") or [{}])[0].get("kind") or ((r.get("issues") or [{}])[0].get("problem", "") or "cut early")[:80]})
+# the size of the first character at the end of one clip and the start of the next (the 12 measured frames of each take): a scene change between two sizes shows as a character that shrinks or grows
+sizes_at = []
+def series(key, c):
+    rec = state[key]; t = next(t for t in rec["takes"] if os.path.basename(t["file"].replace("\\", "/")) == c["file"]); r = reviews.get(key, {}).get(str(t["attempt"]), {})
+    sz = r.get("sizes") or {}; name = next(iter(sz), None); return (sz.get(name) or [], t["measure"]["seconds"], name)
+keys = list(state.keys())
+for i in range(len(keys) - 1):
+    (a, sa, na), (b, sb, nb) = series(keys[i], plan["clips"][i]), series(keys[i + 1], plan["clips"][i + 1])
+    if a and b and na == nb:
+        end = a[min(len(a) - 1, max(0, int(plan["clips"][i]["keep"] / sa * len(a))))]; start = b[0]
+        if end > 0.02 and start > 0.02:
+            q = start / end; sizes_at.append({"join": keys[i] + " -> " + keys[i + 1], "name": na, "ratio": round(q, 2)})
+            if q < 0.85 or q > 1.18: print("  size change at the join %s -> %s: %s is %d%% of its size" % (keys[i], keys[i + 1], na, round(q * 100)))
+plan["join_sizes"] = sizes_at
+plan["retake"] = retake
+if retake:
+    print("NEEDS A NEW TAKE (kept less than %.1f s):" % MIN_KEEP)
+    for x in retake: print("  %s  kept %.1f s  (%s)" % (x["clip"], x["kept"], x["why"]))
 json.dump(plan, open(os.path.join(folder, "plan.json"), "w"), indent=1)
 print("wrote", os.path.join(folder, "plan.json"))

@@ -340,6 +340,14 @@ test('a change of style or of the way a character faces is caught by comparing t
   assert.equal(await lookProblem(env, 'media/p/c.png', look, async () => reply({}, 500)), '', 'a judge that cannot run never blocks');
 });
 
+test('a jump counts only when the judge sees it in both of two answers', async () => {
+  const { reviewFrames } = await import('../src/takereview.js'), frames = Array.from({ length: 8 }, (_, i) => `QUJ${i}`);
+  const jump = (fr) => ({ ok: false, issues: [{ kind: 'jump', problem: 'The framing jumps closer.', frames: fr }], advice: 'x', seen: 'x' });
+  const twice = (a, b) => { let n = 0; return async () => reply({ output_text: JSON.stringify(n++ % 2 === 0 ? a : b) }); };
+  const both = await reviewFrames({ MODEL_API_KEY: 'k' }, { frames, asked: 'x', measure: { concepts: [], seconds: 7 } }, twice(jump('5'), jump('6'))); assert.equal(both.jump_until, 4.6, 'both see it: the later cut point');
+  const one = await reviewFrames({ MODEL_API_KEY: 'k' }, { frames, asked: 'x', measure: { concepts: [], seconds: 7 } }, twice(jump('5'), { ok: true, issues: [] })); assert.equal(one.jump_until, undefined, 'only one answer sees it: no cut');
+});
+
 test('a take whose camera jumps closer is good until just before the frames the judge names', async () => {
   const { jumpUntil } = await import('../src/takereview.js');
   assert.equal(jumpUntil([{ kind: 'jump', problem: 'The framing jumps closer.', frames: '5 to 8' }], 6.6), 3.4, 'frame 5 of 8 is at 3.77 s, cut 0.4 s before');

@@ -49,8 +49,8 @@ export function bestJoin(fileA, startA, endA, fileB, startB, { window = 2, step 
 // A new scene is joined with a transition (cin-p-033 to 042): a dissolve of about 0.9 s when the two pictures are alike, a dip through black of about 1.2 s when the light or the place changes a lot
 // (the mean brightness of the two frames differs by more than 30 of 255, or the pictures differ by more than 70). The sound crosses over for as long as the picture does.
 export function sceneJoin(fileA, endA, fileB, startB, plan = {}) {
-  const gA = grey(fileA, Math.max(0, endA - 0.12)), gB = grey(fileB, startB), mean = (g) => g.reduce((x, y) => x + y, 0) / (g.length || 1), dY = Math.abs(mean(gA) - mean(gB)), diff = frameDiff(gA, gB), big = gA.length > 0 && gB.length > 0 && (dY > 30 || diff > 70);
-  return { soft: true, scene: true, transition: big ? 'fadeblack' : 'dissolve', d: big ? plan.sceneDip ?? 1.2 : plan.sceneDissolve ?? 0.9, diff: Math.round(diff * 10) / 10, dY: Math.round(dY * 10) / 10, end: endA };
+  const gA = grey(fileA, Math.max(0, endA - 0.12)), gB = grey(fileB, startB), mean = (g) => g.reduce((x, y) => x + y, 0) / (g.length || 1), dY = Math.abs(mean(gA) - mean(gB)), diff = frameDiff(gA, gB), big = gA.length > 0 && gB.length > 0 && (dY > 30 || diff > (plan.sceneDipAbove ?? 15)); // pictures that differ at all: through black (a dissolve of a character at one size into the same character at another looks like it shrinks)
+  return { soft: true, scene: true, transition: big ? 'fadeblack' : 'dissolve', d: big ? plan.sceneDip ?? 1.0 : plan.sceneDissolve ?? 0.9, diff: Math.round(diff * 10) / 10, dY: Math.round(dY * 10) / 10, end: endA };
 }
 
 // The sound of the film is mixed on its own timeline, apart from the pictures (cin-p-037 to 041, wf-p-029 to 031): every clip's sound is placed where its picture starts, fades in and out with an equal-power
@@ -70,6 +70,16 @@ export function audioGraph({ clips, total, fade = 0.08, tone = true, toneDb = -4
   return { inputs, graph };
 }
 
+// How a join inside one scene is made, by how much the last frame of one clip differs from the first of the next (0 to 255, on a 32 x 32 grey copy): the same picture is a cut, a hair of a difference
+// (a frame missing, a small step) is smoothed by a 0.17 s dissolve, a clear difference is dissolved over 0.4 s, and a large one (the clip was cut early, the characters are elsewhere) goes through black,
+// because a dissolve across two different arrangements shows both at once, a ghost.
+export function joinKind(diff, plan = {}) {
+  if (diff > (plan.dipAbove ?? 20)) return { soft: true, transition: 'fadeblack', d: plan.dipJoin ?? 0.6 };
+  if (diff > (plan.dissolveAbove ?? 12)) return { soft: true, transition: 'dissolve', d: plan.dissolve ?? 0.4 };
+  if (diff > (plan.microAbove ?? 1.5)) return { soft: true, transition: 'dissolve', d: plan.micro ?? 0.17 };
+  return { soft: false };
+}
+
 export function assemble(plan, outFile) {
   const dir = mkdtempSync(join(tmpdir(), 'assemble-')), fps = plan.fps || 24, fade = plan.fade ?? 0.08, dissolve = plan.dissolve ?? 0.4, norm = [];
   const cuts = plan.clips.map((clip) => { const p = probe(clip.file); return { ...cutOf(clip, p.seconds, fps), p, clip }; }), joins = [];
@@ -79,7 +89,7 @@ export function assemble(plan, outFile) {
     if (!b) break;
     if (b.clip.continues === false && plan.sceneTransitions !== false) { joins.push(sceneJoin(a.clip.file, endA, b.clip.file, b.start, plan)); continue; } // a new scene: never a bare cut (a cut with the sound of the next scene starting is what looked odd)
     if (plan.joins === false || b.clip.continues === false) { if (b.clip.continues !== false) carry = zoomAt(a.zoom, a.length); joins.push({ soft: false }); continue; }
-    const j = bestJoin(a.clip.file, a.start, endA, b.clip.file, b.start, { zoomA: (s) => zoomAt(a.zoom, s), atA: a.zoom.at, atB: b.clip.push_at || a.zoom.at }); carry = zoomAt(a.zoom, j.end - a.start); a.length = Math.max(0.2, j.end - a.start); joins.push(j); // the clip ends where it matches the next one best
+    const j = bestJoin(a.clip.file, a.start, endA, b.clip.file, b.start, { zoomA: (s) => zoomAt(a.zoom, s), atA: a.zoom.at, atB: b.clip.push_at || a.zoom.at }); carry = zoomAt(a.zoom, j.end - a.start); a.length = Math.max(0.2, j.end - a.start); Object.assign(j, joinKind(j.diff, plan)); joins.push(j); // the clip ends where it matches the next one best
   }
   const length = (i) => Math.max(0.2, cuts[i].length);
   cuts.forEach((c, i) => {
