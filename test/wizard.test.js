@@ -198,6 +198,8 @@ test('a video model connects over MCP: list clips, read one, fetch its picture, 
   const again = (await call('get_clip', { scene: 'the-beam', clip: 1 })).structuredContent;
   assert.deepEqual([again.takes[0].seed, again.takes[0].cuts, again.retry.attempt, again.retry.try_again], [42, 1, 2, true]); assert.match(again.retry.add_to_prompt, /continuous shot/);
   assert.ok(['low', 'medium', 'high'].includes(again.risk)); assert.ok(Array.isArray(again.voices.speakers)); assert.deepEqual(again.dialogue_load.warnings, []); assert.equal(again.retry.max_attempts, { low: 2, medium: 3, high: 4 }[again.risk]);
+  await new Promise((r) => setTimeout(r, 5)); await S.attachAsset(t.db, human, t.id, { ref: R.frame('the-beam', 1, 'start'), uri: `media/${t.id}/redrawn.png`, mime: 'image/png', bytes: 1, provenance: { tool: 'muse-image' } });
+  const redrawn = (await call('get_clip', { scene: 'the-beam', clip: 1 })).structuredContent; assert.deepEqual([redrawn.retry.attempt, redrawn.retry.try_again], [1, false], 'a take made before the pictures were drawn again does not count against the tries');
 });
 test('a one-off "model was not found" from Meta is tried again, a real failure is not hidden', async () => {
   const { spark } = await import('../src/meta.js'); let n = 0;

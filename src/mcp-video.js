@@ -32,6 +32,7 @@ function clipSpec(c, pid, L, sc, n) {
   const last = n === clips.length, frame2 = (k, which) => { const f = L.data(R.frame(id, k, which)); return f && f.chosen ? L.uriOf(R.frame(id, k, which), f.chosen) : null; }, frame = (which) => frame2(n, which);
   const from = startOf(d, n), startUri = from === 'start' || from === 'own' ? frame2(n, 'start') : from === 'prev-end' ? frame2(n - 1, 'end') : null, endOk = last ? hasEnd(d) : midEnds(d), p = composeClip(sc, { ...L.film, pictures: !!startUri }, n);
   const takes = L.arts.filter((a) => a.kind === 'take' && a.data.scene === id && a.data.clip === n);
+  const picsAt = Math.max(0, ...[R.frame(id, n, 'start'), R.frame(id, n, 'end'), ...(n > 1 ? [R.frame(id, n - 1, 'end')] : [])].flatMap((r) => (L.assets[r] || []).map((a) => a.ts || 0))); // when the pictures of this clip were last drawn
   const stage = (L.assets[R.stage(id)] || []).filter((a) => a.provenance && a.provenance.role && (!a.provenance.shot || a.provenance.shot.endsWith(`-c${n}`) || n === 1));
   return {
     production: pid, scene: id, scene_name: d.name, clip: n, of: clips.length, seconds: p.seconds, aspect: L.film.look.aspect || '9:16', fps: L.film.look.fps || 24,
@@ -51,7 +52,7 @@ function clipSpec(c, pid, L, sc, n) {
     post_push: last && (d.notes || {}).post === 'push-in' ? 0.08 : null, // the scene asked for a push-in the generator cannot make: the assembly crops it in over this clip (pass it to assemble-film as "push")
     assembly: { trim_start_frames: n > 1 && cl.join !== 'cut' ? 2 : 0, cut_on_motion: true, note: 'The first frames of a continued clip are often smeared: start the edit at frame 3, and cut while something is still moving, not on a still frame.' },
     risk: clipRisk(d, n), voices: voicePlan(d, L.film), dialogue_load: dialogueLoad(d, n),
-    retry: retryAdvice(id, n, takes.filter((t) => !(t.updated < sc.updated)).map((t) => t.data), attemptBudget(clipRisk(d, n))), // takes made before the scene was last changed belong to an older plan and do not count against the tries
+    retry: retryAdvice(id, n, takes.filter((t) => !(t.updated < sc.updated) && !(t.updated < picsAt)).map((t) => t.data), attemptBudget(clipRisk(d, n))), // takes made before the scene was last changed, or before its pictures were drawn again, belong to an older plan and do not count against the tries
     next: 'Make this clip with retry.seed, then measure it (npm run measure -- <file>) and call submit_take with the video, the seed and the measures. If retry.try_again is true, add retry.add_to_prompt to the prompt and make it again with the new seed.',
   };
 }
