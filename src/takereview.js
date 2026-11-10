@@ -18,6 +18,13 @@ export async function measureSizes(env, frames, measure, f) {
   const faults = sizeFaults(series, { seconds: measure.seconds, depth: measure.depth, push: measure.push });
   return { series, faults, issues: sizeIssues(faults), good_until: goodUntil(faults) };
 }
+// Where a take's camera jumps or pushes in although it should hold still: the judge names the frames (of the 8 it saw, in time order), and the take is good until just before the first of them.
+// Returns seconds, or null. A judge counts frames loosely, so the cut is a little early and never earlier than 1.2 s.
+export function jumpUntil(issues, seconds, count = 8) {
+  const hits = (issues || []).filter((i) => i && (i.kind === 'jump' || /push|zoom|closer|framing/i.test(i.problem || '')) && /\d/.test(i.frames || '')).map((i) => Number((String(i.frames).match(/\d+/) || [])[0])).filter((n) => n >= 1 && n <= count);
+  if (!hits.length || !(seconds > 0)) return null;
+  const first = Math.min(...hits); return first <= 1 ? 1.2 : Math.max(1.2, Math.round(((first - 1) / (count - 1)) * seconds * 10 - 4) / 10);
+}
 export async function reviewFrames(env, { frames, asked, pictures = [], checklist = [], measure = null }, f) {
   try {
     const all = (frames || []).filter((x) => typeof x === 'string' && x.length < 400000), imgs = evenly(all, 8).map(toUrl);
@@ -33,7 +40,8 @@ export async function reviewFrames(env, { frames, asked, pictures = [], checklis
     for (const a of answers) if (!a.yes && checklist[a.n - 1] && issues.length < 8) issues.push({ kind: /first frame|last frame/.test(checklist[a.n - 1]) ? 'state' : /exactly|nothing appears/.test(checklist[a.n - 1]) ? 'count' : /same size/.test(checklist[a.n - 1]) ? 'size' : /background|framing/.test(checklist[a.n - 1]) ? 'jump' : /look the same/.test(checklist[a.n - 1]) ? 'identity' : 'other', problem: `${checklist[a.n - 1].replace(/^Does |^Is /, '').slice(0, 150)} — no${a.note ? `: ${a.note}` : ''}`, frames: '' });
     const sc = j.scores && typeof j.scores === 'object' ? Object.fromEntries(['quality', 'match', 'physics'].map((k) => [k, Number.isInteger(j.scores[k]) && j.scores[k] >= 1 && j.scores[k] <= 5 ? j.scores[k] : null])) : null;
     if (sized) for (const i of sized.issues) if (issues.length < 8) issues.push(i);
-    return { ok: j.ok && !issues.length, ...(sized ? { sizes: sized.series, size_faults: sized.faults, good_until: sized.good_until } : {}), scores: sc, answers, seen: String(j.seen || '').slice(0, 300), issues, advice: (j.ok && !(sized && sized.issues.length) ? '' : [String(j.advice || ''), ...(sized ? sized.issues.map((i) => `Keep every character the same size and the same proportion to the others (${i.problem}).`) : [])].filter(Boolean).join(' ').slice(0, 500)) };
+    const jumpAt = jumpUntil(issues, measure && measure.seconds), until = [sized && sized.good_until, jumpAt].filter((x) => x != null), good = until.length ? Math.min(...until) : null;
+    return { ok: j.ok && !issues.length, ...(sized ? { sizes: sized.series, size_faults: sized.faults } : {}), ...(sized || jumpAt != null ? { good_until: good } : {}), ...(jumpAt != null ? { jump_until: jumpAt } : {}), scores: sc, answers, seen: String(j.seen || '').slice(0, 300), issues, advice: (j.ok && !(sized && sized.issues.length) ? '' : [String(j.advice || ''), ...(sized ? sized.issues.map((i) => `Keep every character the same size and the same proportion to the others (${i.problem}).`) : [])].filter(Boolean).join(' ').slice(0, 500)) };
   } catch (e) { return { ok: true, skipped: true, issues: [], advice: '' }; }
 }
 

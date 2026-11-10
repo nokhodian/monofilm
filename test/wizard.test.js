@@ -310,7 +310,7 @@ test('a generator that cannot take camera moves gets a static camera in every sc
   const f = async (url, init) => { if (url.endsWith('/responses')) { const b = JSON.parse(init.body); seen.push(String(b.input)); if (/turn a story into scenes/i.test(b.instructions)) return reply(msg({ scenes: [{ name: 'The beam', seconds: 12, place: 'Cathedral scaffold', time: 'dusk', who: ['Ines'], notes: { happens: 'x', cam: 'slow push-in' } }, { name: 'The fall', seconds: 8, notes: { happens: 'y', cam: 'handheld medium' } }, { name: 'Calm', seconds: 8, notes: { happens: 'z', cam: 'static close' } }] })); } return stand()(url, init); };
   await W.readStory(t.env, t.db, human, t.id, f); await ok(t, REFS.reading); await W.draftScenes(t.env, t.db, human, t.id, f);
   const cams = []; for (const id of ['the-beam', 'the-fall', 'calm']) cams.push((await S.getArtifact(t.db, t.id, R.scene(id))).data.notes.cam);
-  assert.deepEqual(cams, ['static wide', 'static medium', 'static close']); assert.equal((await S.getArtifact(t.db, t.id, R.scene('the-beam'))).data.notes.post, 'push-in', 'a push-in the generator cannot make is kept for the assembly'); assert.ok(seen.some((x) => /cannot take camera moves: every scene's cam must be static/.test(x)));
+  assert.deepEqual(cams, ['static wide', 'static medium', 'static close']); assert.equal((await S.getArtifact(t.db, t.id, R.scene('the-beam'))).data.notes.post, 'push-in', 'a push-in the generator cannot make is kept for the assembly'); assert.ok(seen.some((x) => /cannot take camera moves: every scene's cam must be static/.test(x))); assert.ok(seen.some((x) => /moves things slowly and little: each clip is ONE simple, large, clear movement/.test(x)), 'a generator that moves little is told to plan one clear movement per clip');
 });
 
 test('a box that another character found with more confidence is not taken as this character (the search for "snail" also finds the beetle)', async () => {
@@ -338,6 +338,14 @@ test('a change of style or of the way a character faces is caught by comparing t
   assert.match(await lookProblem(env, 'media/p/c.png', look, say({ style_same: false, facing_same: true, problem: 'thick paint' })), /the style is not the film's style.*thick paint/);
   assert.match(await lookProblem(env, 'media/p/c.png', look, say({ style_same: true, facing_same: false })), /faces the other way/);
   assert.equal(await lookProblem(env, 'media/p/c.png', look, async () => reply({}, 500)), '', 'a judge that cannot run never blocks');
+});
+
+test('a take whose camera jumps closer is good until just before the frames the judge names', async () => {
+  const { jumpUntil } = await import('../src/takereview.js');
+  assert.equal(jumpUntil([{ kind: 'jump', problem: 'The framing jumps closer.', frames: '5 to 8' }], 6.6), 3.4, 'frame 5 of 8 is at 3.77 s, cut 0.4 s before');
+  assert.equal(jumpUntil([{ kind: 'jump', problem: 'x', frames: '2' }], 6.6), 1.2, 'never earlier than 1.2 s');
+  assert.equal(jumpUntil([{ kind: 'other', problem: 'Camera pushes in', frames: '6 to 8' }], 6), 3.9, 'a push the judge calls something else still counts');
+  assert.equal(jumpUntil([{ kind: 'physics', problem: 'x', frames: '3' }, { kind: 'jump', problem: 'x', frames: '' }], 6), null, 'no frames named, no cut');
 });
 
 test('SAM is asked for colour and kind, which is what finds one character and not the others', async () => {

@@ -15,7 +15,7 @@ for key, rec in state.items():
         r = rv.get(str(t["attempt"]), {})
         faults = r.get("size_faults") or []
         until = r.get("good_until")
-        return (1 if faults else 0, -(until if until is not None else 99), 0 if t["attempt"] == rec.get("best") else 1, 0 if r.get("ok") else 1, t["measure"]["hold"])
+        return (1 if (faults or until is not None) else 0, -(until if until is not None else 99), 0 if t["attempt"] == rec.get("best") else 1, 0 if r.get("ok") else 1, t["measure"]["hold"])
     take = sorted(rec["takes"], key=rank)[0]
     r = rv.get(str(take["attempt"]), {})
     seconds, hold = take["measure"]["seconds"], take["measure"]["hold"]
