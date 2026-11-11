@@ -11,12 +11,12 @@ const evenly = (list, n) => (list.length <= n ? list : Array.from({ length: n },
 const boxSize = (boxes) => { const b = (boxes || []).slice().sort((x, y) => (y.conf || 0) - (x.conf || 0))[0]; if (!b) return 0; const [x1, y1, x2, y2] = b.box; return Math.sqrt(Math.max(0, x2 - x1) * Math.max(0, y2 - y1)); };
 // Measure how big each character is in every frame (SAM), a few calls at a time. measure = { concepts: [{ name, concept }], seconds, depth, push }.
 export async function measureSizes(env, frames, measure, f) {
-  const imgs = frames.slice(0, 12).filter((x) => typeof x === 'string' && x.length < 400000).map(toUrl), series = {}; for (const c of measure.concepts) series[c.name] = new Array(imgs.length).fill(0);
+  const imgs = frames.slice(0, 12).filter((x) => typeof x === 'string' && x.length < 400000).map(toUrl), series = {}, bounds = new Array(imgs.length).fill(null); for (const c of measure.concepts) series[c.name] = new Array(imgs.length).fill(0);
   for (let k = 0; k < imgs.length; k += 3) await Promise.all(imgs.slice(k, k + 3).map(async (image, d) => { try { // a frame at a time: every character's search runs, then each box goes to the character that found it with the most confidence (the search for "snail" also finds the beetle)
-    const lists = await Promise.all(measure.concepts.map((c) => findBoxes(env, image, c, f).catch(() => []))), own = ownBoxes(lists); measure.concepts.forEach((c, n) => { series[c.name][k + d] = boxSize(own[n]); });
+    const lists = await Promise.all(measure.concepts.map((c) => findBoxes(env, image, c, f).catch(() => []))), own = ownBoxes(lists); measure.concepts.forEach((c, n) => { series[c.name][k + d] = boxSize(own[n]); }); const tops = own.map((l) => l.slice().sort((a, b) => (b.conf || 0) - (a.conf || 0))[0]).filter(Boolean); if (tops.length) bounds[k + d] = [Math.min(...tops.map((b) => b.box[0])), Math.min(...tops.map((b) => b.box[1])), Math.max(...tops.map((b) => b.box[2])), Math.max(...tops.map((b) => b.box[3]))].map((v) => Math.round(v * 100) / 100); // where the characters are: the box around all of them
   } catch (e) { /* a frame that cannot be measured is left at 0 and ignored */ } }));
   const faults = sizeFaults(series, { seconds: measure.seconds, depth: measure.depth, push: measure.push });
-  return { series, faults, issues: sizeIssues(faults), good_until: goodUntil(faults), settle: settleOf(series, measure.seconds) };
+  return { series, bounds, faults, issues: sizeIssues(faults), good_until: goodUntil(faults), settle: settleOf(series, measure.seconds) };
 }
 // Where a take's camera jumps or pushes in although it should hold still: the judge names the frames (of the 8 it saw, in time order), and the take is good until just before the first of them.
 // Returns seconds, or null. A judge counts frames loosely, so the cut is a little early and never earlier than 1.2 s.
@@ -42,7 +42,7 @@ export async function reviewFrames(env, { frames, asked, pictures = [], checklis
     if (sized) for (const i of sized.issues) if (issues.length < 8) issues.push(i);
     const jumpsOf = (x) => jumpUntil((x && Array.isArray(x.issues) ? x.issues : []).map((i) => ({ kind: i && i.kind, problem: String((i && i.problem) || ''), frames: String((i && i.frames) || '') })), measure && measure.seconds), jumpA = jumpsOf(j), jumpB = second ? jumpsOf(second) : jumpA;
     const jumpAt = jumpA != null && jumpB != null ? Math.max(jumpA, jumpB) : null, until = [sized && sized.good_until, jumpAt].filter((x) => x != null), good = until.length ? Math.min(...until) : null;
-    return { ok: j.ok && !issues.length, ...(sized ? { sizes: sized.series, size_faults: sized.faults, settle: sized.settle } : {}), ...(sized || jumpAt != null ? { good_until: good } : {}), ...(jumpAt != null ? { jump_until: jumpAt } : {}), scores: sc, answers, seen: String(j.seen || '').slice(0, 300), issues, advice: (j.ok && !(sized && sized.issues.length) ? '' : [String(j.advice || ''), ...(sized ? sized.issues.map((i) => `Keep every character the same size and the same proportion to the others (${i.problem}).`) : [])].filter(Boolean).join(' ').slice(0, 500)) };
+    return { ok: j.ok && !issues.length, ...(sized ? { sizes: sized.series, bounds: sized.bounds, size_faults: sized.faults, settle: sized.settle } : {}), ...(sized || jumpAt != null ? { good_until: good } : {}), ...(jumpAt != null ? { jump_until: jumpAt } : {}), scores: sc, answers, seen: String(j.seen || '').slice(0, 300), issues, advice: (j.ok && !(sized && sized.issues.length) ? '' : [String(j.advice || ''), ...(sized ? sized.issues.map((i) => `Keep every character the same size and the same proportion to the others (${i.problem}).`) : [])].filter(Boolean).join(' ').slice(0, 500)) };
   } catch (e) { return { ok: true, skipped: true, issues: [], advice: '' }; }
 }
 

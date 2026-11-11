@@ -89,6 +89,17 @@ for i in range(len(keys) - 1):
         if end > 0.02 and start > 0.02:
             q = start / end; sizes_at.append({"join": keys[i] + " -> " + keys[i + 1], "name": na, "ratio": round(q, 2)})
             if q < 0.85 or q > 1.18: print("  size change at the join %s -> %s: %s is %d%% of its size" % (keys[i], keys[i + 1], na, round(q * 100)))
+# a cut to a closer framing for a clip that continues another: framed on the characters (the box around them in the kept frames), as close as fits them, at most 1.45 times
+for key, c in zip(state.keys(), plan["clips"]):
+    if not c["continues"]: continue
+    t = next(t for t in state[key]["takes"] if os.path.basename(t["file"].replace("\\", "/")) == c["file"]); r = reviews.get(key, {}).get(str(t["attempt"]), {}); b = [x for x in (r.get("bounds") or []) if x]
+    secs = t["measure"]["seconds"]; n = len(r.get("bounds") or []) or 12
+    kept = [x for i, x in enumerate(r.get("bounds") or []) if x and c["trim_start_frames"] / 24 <= (i + 0.5) * secs / n <= c["keep"]] or b
+    if not kept: continue
+    x1, y1, x2, y2 = (min(v[0] for v in kept), min(v[1] for v in kept), max(v[2] for v in kept), max(v[3] for v in kept))
+    k = max(1.2, min(1.45, 1 / max(0.05, (x2 - x1) * 1.12), 1 / max(0.05, (y2 - y1) * 1.2))); cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+    clamp = lambda v: max(0.0, min(1.0, v))
+    c["cut_in"] = {"zoom": round(k - 1, 3), "at": [round(clamp((cx * k - 0.5) / (k - 1)), 3), round(clamp((cy * k - 0.5) / (k - 1)), 3)]}
 plan["join_sizes"] = sizes_at
 plan["retake"] = retake
 if retake:
