@@ -26,7 +26,8 @@ def frames_of(path, seconds, count=12):
     return out
 
 
-state = json.load(open(os.path.join(FOLDER, "state.json"))); results = {}
+state = json.load(open(os.path.join(FOLDER, "state.json")))
+results = json.load(open(os.path.join(FOLDER, "reviews.json"))) if os.path.exists(os.path.join(FOLDER, "reviews.json")) else {}  # reviewing some clips keeps the reviews of the others
 for key, rec in state.items():
     if ONLY and key not in ONLY:
         continue
@@ -37,6 +38,6 @@ for key, rec in state.items():
         r = mcp("review_take", {"production": PROD, "scene": scene, "clip": int(clip), "frames": frames_of(path, secs)})
         faults = r.get("size_faults") or []
         print(f"{key} a{take['attempt']}  ok={r.get('ok')}  good_until={r.get('good_until')}  size faults: " + ("; ".join(f"{f['kind']} {f['name']} {f['ratio']}x at {f['at']} s" for f in faults[:5]) or "none"), flush=True)
-        results.setdefault(key, {})[take["attempt"]] = {"ok": r.get("ok"), "good_until": r.get("good_until"), "size_faults": faults, "settle": r.get("settle"), "bounds": r.get("bounds"), "sizes": r.get("sizes"), "issues": r.get("issues"), "scores": r.get("scores")}
+        results.setdefault(key, {})[str(take["attempt"])] = {"ok": r.get("ok"), "good_until": r.get("good_until"), "size_faults": faults, "settle": r.get("settle"), "bounds": r.get("bounds"), "sizes": r.get("sizes"), "issues": r.get("issues"), "scores": r.get("scores")}
         json.dump(results, open(os.path.join(FOLDER, "reviews.json"), "w"), indent=1)
         print("    sizes:", {k: [round(x, 2) for x in v] for k, v in (r.get("sizes") or {}).items()}, flush=True)
