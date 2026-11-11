@@ -311,7 +311,7 @@ export async function harmonizeScene(env, db, actor, pid, { scene }, f) {
     const png = await rescaleCharacter(env, p.uri, { concept: looks[0].concept, fallback: looks[0].fallback, factor, others: looks.slice(1).map((l) => l.concept) }, f); if (!png) continue;
     const key = `${pid}/fix-${id8()}.png`; await env.MEDIA.put(key, png, { httpMetadata: { contentType: 'image/png' } });
     const asset = await S.attachAsset(db, actor, pid, { ref: p.ref, uri: `media/${key}`, mime: 'image/png', bytes: png.length, provenance: { tool: 'harmonize-scene', kind: 'image', meta: { factor: Math.round(factor * 100) / 100, from: p.uri } } }, { charged: false });
-    const cur = await row(db, pid, p.ref); await S.propose(db, AGENT, pid, { ref: p.ref, data: { ...dataOf(cur), chosen: asset.id }, parent: cur.parent || undefined, deps: (cur.deps || []).filter((y) => y !== cur.parent), auto_approve: true, rationale: `Brought to the size of the scene's biggest picture (${Math.round(factor * 100)}%).`, base_version: cur.version });
+    const cur = await row(db, pid, p.ref); await S.propose(db, actor, pid, { ref: p.ref, data: { ...dataOf(cur), chosen: asset.id }, parent: cur.parent || undefined, deps: (cur.deps || []).filter((y) => y !== cur.parent), auto_approve: true, rationale: `Brought to the size of the scene's biggest picture (${Math.round(factor * 100)}%).`, base_version: cur.version });
     changed.push({ ref: p.ref, factor: Math.round(factor * 100) / 100 });
   }
   return { scene, target: Math.round(target * 100) / 100, sizes: pics.map((p) => [p.ref, Math.round(p.size * 100) / 100]), changed };
