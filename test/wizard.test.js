@@ -200,6 +200,8 @@ test('a video model connects over MCP: list clips, read one, fetch its picture, 
   assert.ok(['low', 'medium', 'high'].includes(again.risk)); assert.ok(Array.isArray(again.voices.speakers)); assert.deepEqual(again.dialogue_load.warnings, []); assert.equal(again.retry.max_attempts, { low: 2, medium: 3, high: 4 }[again.risk]);
   await new Promise((r) => setTimeout(r, 5)); await S.attachAsset(t.db, human, t.id, { ref: R.frame('the-beam', 1, 'start'), uri: `media/${t.id}/redrawn.png`, mime: 'image/png', bytes: 1, provenance: { tool: 'muse-image' } });
   const redrawn = (await call('get_clip', { scene: 'the-beam', clip: 1 })).structuredContent; assert.deepEqual([redrawn.retry.attempt, redrawn.retry.try_again], [1, false], 'a take made before the pictures were drawn again does not count against the tries');
+  const base = redrawn.retry.max_attempts; await call('submit_take', { scene: 'the-beam', clip: 1, url: 'https://gen.test/short.mp4', seed: 7, hold: 0, review: { ok: false, good_until: 1.5, issues: [{ kind: 'size', problem: 'shrinks' }] } });
+  const short = (await call('get_clip', { scene: 'the-beam', clip: 1 })).structuredContent; assert.equal(short.retry.max_attempts, base + 1, 'one more try when every take so far is good for less than 3 s');
 });
 test('a one-off "model was not found" from Meta is tried again, a real failure is not hidden', async () => {
   const { spark } = await import('../src/meta.js'); let n = 0;
