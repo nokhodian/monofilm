@@ -19,7 +19,12 @@ def call(path, body=None):
 for slug in SCENES:
     clips = len(call(f"/artifacts/scene:{slug}")["data"]["clips"])
     for clip, which in [(1, "start")] + [(k, "end") for k in range(1, clips + 1)]:
-        r = call("/wizard/frame", {"scene": slug, "clip": clip, "which": which}); c = r.get("check", {})
+        r = None
+        for attempt in range(3):  # a step that times out or is refused is tried again
+            try: r = call("/wizard/frame", {"scene": slug, "clip": clip, "which": which}); break
+            except Exception as e: print("  retry after:", str(e)[:100], flush=True)
+        if r is None: continue
+        c = r.get("check", {})
         print(slug, clip, which, "ok" if c.get("ok") else "NOT OK", c.get("kind") or "", (c.get("problem") or c.get("seen") or r.get("error") or "")[:140], "redrew" if c.get("redrew") else "", flush=True)
         if r.get("asset"):
             ref = f"keyframe:{slug}-c{clip}-{which}"; a = call("/artifacts/" + ref); data = a["data"]; data["chosen"] = r["asset"]["id"]
