@@ -138,6 +138,7 @@ export async function rescaleCharacter(env, uri, fix, f) {
     const o = await env.MEDIA.get(String(uri).replace(/^media\//, '')); if (!o || !(fix.factor > 0)) return null;
     const full = await decodePng(new Uint8Array(await o.arrayBuffer())), img = shrink(full, Number(env.REPAIR_MAX) || 1024), bytes = img === full ? new Uint8Array(await o.arrayBuffer()) : await encodePng(img); // SAM must see the same pixels the repair works on
     const image = dataUrl(bytes, 'image/png'), found = await Promise.all([fix.concept, ...(fix.others || [])].map((concept) => samMasks(env, { image, concept }, f).catch(() => [])));
+    if (!found[0].length && fix.fallback && fix.fallback !== fix.concept) found[0] = await samMasks(env, { image, concept: fix.fallback }, f).catch(() => []); // colour and kind found nothing: the bare kind
     const hits = ownBoxes(found.map((l) => l.map((h) => ({ box: h.box, conf: h.conf, hit: h }))))[0].map((x) => x.hit).sort((a, b) => (b.conf || 0) - (a.conf || 0)); // not the box another character found with more confidence
     if (!hits.length) return null;
     const out = rescaleOnPixels(img, hits[0], Math.min(2, Math.max(0.5, fix.factor)));

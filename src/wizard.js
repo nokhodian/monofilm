@@ -2,10 +2,11 @@
 // Structure (episode, clips) is created by the human's own request and approved at once; creative work is proposed by the AI and waits for review.
 import { HttpError, bad, parseJson } from './util.js';
 import * as S from './store.js';
-import { spark, outputText, metaConfigured } from './meta.js';
+import { id8 } from './util.js';
+import { spark, outputText, metaConfigured, dataUrl, findBoxes, ownBoxes } from './meta.js';
 import { AGENT } from './agent.js';
 import { checkPicture } from './picturecheck.js';
-import { repairSized } from './rescale.js';
+import { repairSized, rescaleCharacter } from './rescale.js';
 import { registerTool, callTool } from './tools.js';
 import { REFS, R, slug, keyOf, mediumOf, beingOf, beastOf, shortLook, expandNames, plainDesc, clipStates, sizesLine, sizesOf, samConcept, cameraNote, GENERATORS, clipPlan, clipBeats, clipSpans, composeClip, NOTE_KEYS, FORMAT_DEFAULT, MAX_CLIP, sceneBounds, clampScene } from '../public/js/wizard-model.js';
 
@@ -291,6 +292,29 @@ export async function makeLineup(env, db, actor, pid, { scene }, f) {
   const expect = `Medium: ${medium}. ${chars.length} characters side by side, each whole body visible, nobody else: ${chars.join(' ')}`;
   const { r, check } = await drawChecked(env, db, actor, pid, R.scene(scene), { prompt, aspect: [16, 9], tag: 'lineup', medium, anchors: refs }, expect, f, kinds);
   return { asset: r.asset, check };
+}
+// The pictures of a scene brought to one size: the image model cannot be told to keep a size to better than about 10%, and the repair can only make a character bigger without leaving a smudge, so every picture
+// in which the first character is smaller than the biggest one in the scene (by more than 6%, at most 1.35 times) is enlarged to that size. The end of a clip is where the generator takes the character: a start
+// and an end picture of one size make a clip that holds its size.
+export async function harmonizeScene(env, db, actor, pid, { scene }, f) {
+  human(actor);
+  const sd = dataOf(await row(db, pid, R.scene(scene))), n = (sd.clips && sd.clips.length ? sd.clips : clipPlan(sd.seconds)).length, looks = [];
+  for (const w of sd.who || []) { const p = dataOf(await row(db, pid, w)); if (p && p.desc) looks.push({ name: p.name, concept: samConcept(p.desc, p.name), fallback: beastOf(p.desc) }); }
+  if (!looks.length || !env.MEDIA) return { scene, changed: [] };
+  const pics = []; for (const ref of [R.frame(scene, 1, 'start'), ...Array.from({ length: n }, (_, k) => R.frame(scene, k + 1, 'end'))]) { const kf = dataOf(await row(db, pid, ref)), a = kf && kf.chosen && await db.prepare('SELECT uri FROM assets WHERE production=? AND id=?').bind(pid, kf.chosen).first(); if (a) pics.push({ ref, uri: a.uri }); }
+  const read = async (uri) => { const o = await env.MEDIA.get(String(uri).replace(/^media\//, '')); return o ? dataUrl(await o.arrayBuffer(), (o.httpMetadata && o.httpMetadata.contentType) || 'image/png') : null; }, side = (b) => (b ? Math.sqrt((b.box[2] - b.box[0]) * (b.box[3] - b.box[1])) : 0);
+  for (const p of pics) { const img = await read(p.uri); p.size = img ? side(ownBoxes(await Promise.all(looks.map((l) => findBoxes(env, img, l, f).catch(() => [])))).map((l) => l.slice().sort((a, b) => (b.conf || 0) - (a.conf || 0))[0])[0]) : 0; }
+  const sizes = pics.map((p) => p.size).filter((v) => v > 0.02); if (sizes.length < 2) return { scene, changed: [], sizes: pics.map((p) => [p.ref, Math.round(p.size * 100) / 100]) };
+  const target = Math.min(Math.max(...sizes), Math.min(...sizes) * 1.35), changed = [];
+  for (const p of pics) {
+    if (!(p.size > 0.02) || target / p.size <= 1.06) continue; const factor = target / p.size;
+    const png = await rescaleCharacter(env, p.uri, { concept: looks[0].concept, fallback: looks[0].fallback, factor, others: looks.slice(1).map((l) => l.concept) }, f); if (!png) continue;
+    const key = `${pid}/fix-${id8()}.png`; await env.MEDIA.put(key, png, { httpMetadata: { contentType: 'image/png' } });
+    const asset = await S.attachAsset(db, actor, pid, { ref: p.ref, uri: `media/${key}`, mime: 'image/png', bytes: png.length, provenance: { tool: 'harmonize-scene', kind: 'image', meta: { factor: Math.round(factor * 100) / 100, from: p.uri } } }, { charged: false });
+    const cur = await row(db, pid, p.ref); await S.propose(db, AGENT, pid, { ref: p.ref, data: { ...dataOf(cur), chosen: asset.id }, parent: cur.parent || undefined, deps: (cur.deps || []).filter((y) => y !== cur.parent), auto_approve: true, rationale: `Brought to the size of the scene's biggest picture (${Math.round(factor * 100)}%).`, base_version: cur.version });
+    changed.push({ ref: p.ref, factor: Math.round(factor * 100) / 100 });
+  }
+  return { scene, target: Math.round(target * 100) / 100, sizes: pics.map((p) => [p.ref, Math.round(p.size * 100) / 100]), changed };
 }
 // A start or end picture. Built from the stage layout when the scene has one with a camera for this clip, and always from the film's anchor faces.
 export async function makeFrame(env, db, actor, pid, { scene, clip = 1, which, instruction = '' }, f) {
