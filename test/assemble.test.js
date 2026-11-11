@@ -86,6 +86,6 @@ test('a film with a music bed and a scene change plays sound all the way through
 
 test('a join inside a scene is a cut, a very short dissolve, a dissolve, or a dip, by how far apart the two frames are', async () => {
   const { joinKind } = await import('../scripts/assemble-film.mjs');
-  assert.deepEqual(joinKind(0.8), { soft: false }); assert.deepEqual(joinKind(4), { soft: true, transition: 'dissolve', d: 0.17 }, 'a small step, a frame missing: smoothed');
-  assert.deepEqual(joinKind(15), { soft: true, transition: 'dissolve', d: 0.4 }); assert.deepEqual(joinKind(30), { soft: false, dip: true, transition: 'fadeblack', d: 0.6 }, 'characters elsewhere: through black, not a ghost');
+  assert.deepEqual(joinKind(0.2), { soft: false }); assert.deepEqual(joinKind(0.5), { soft: true, transition: 'dissolve', d: 0.17 }, 'a small step: smoothed by a four frame dissolve'); assert.deepEqual(joinKind(1.3), { soft: false, cutIn: true, transition: 'cutin', d: 0 }, 'the boil of two takes differs: a cut to a closer framing, a new camera angle'); assert.deepEqual(joinKind(1.3, { cutIn: 0 }), { soft: true, transition: 'dissolve', d: 0.17 }, 'switched off');
+  assert.deepEqual(joinKind(15, { cutIn: 0 }), { soft: true, transition: 'dissolve', d: 0.4 }); assert.deepEqual(joinKind(30), { soft: false, dip: true, transition: 'fadeblack', d: 0.6 }, 'characters elsewhere: through black, not a ghost');
 });
