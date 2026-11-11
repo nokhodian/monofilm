@@ -10,6 +10,34 @@ state = json.load(open(os.path.join(folder, "state.json")))
 reviews = json.load(open(os.path.join(folder, "reviews.json"))) if os.path.exists(os.path.join(folder, "reviews.json")) else {}
 plan = {"size": size, "fps": 24, "clips": []}
 if os.environ.get("MUSIC"): plan["music"] = os.path.abspath(os.environ["MUSIC"])  # a music bed file: the assembly lays it under the film and ducks it under the clips' own sound
+# The takes are chosen together, not one clip at a time: a clip that is long and clean is worth little if the next clip starts with the character at another size. For every take: how long it is kept (up to 5.5 s)
+# and, at every join, how far the size of each character at the end of one take is from its size at the start of the next (a join inside a scene weighs most; a scene change goes through black).
+def first_cost(key, t):
+    r = reviews.get(key, {}).get(str(t["attempt"]), {}); rec = state[key]; secs, hold = t["measure"]["seconds"], t["measure"]["hold"]
+    keep = secs - hold + 0.3 if hold >= 1 else secs
+    if r.get("good_until") is not None: keep = min(keep, r["good_until"])
+    trim = max(2 if (key.endswith(":2") or not key.endswith(":1")) else 0, round(max(0, (r.get("settle") or 0) - 0.2) * 24)) / 24
+    return -min(keep - trim, 5.5) + (0.3 if t["attempt"] != rec.get("best") else 0) + (0.2 if not r.get("ok") else 0), keep, trim, r.get("sizes") or {}, secs
+import math
+def join_cost(keyA, a, keyB, b):
+    _, keepA, _, szA, secA = a; _, _, trimB, szB, secB = b; cont = keyB.endswith(":2") or not keyB.endswith(":1"); total = 0.0
+    for name in szA:
+        if name in szB and szA[name] and szB[name]:
+            va = szA[name][min(len(szA[name]) - 1, int(keepA / secA * len(szA[name])))]; vb = szB[name][min(len(szB[name]) - 1, int(trimB / secB * len(szB[name])))]
+            if va > 0.02 and vb > 0.02: total += abs(math.log(vb / va))
+    return total * (8.0 if cont else 1.5)
+keys = list(state.keys()); cand = [[(t, first_cost(k, t)) for t in state[k]["takes"]] for k in keys]
+dp = []  # dp[i][j] = (the lowest cost of the clips up to i when clip i uses its take j, the take of clip i-1 that gives it)
+for i, k in enumerate(keys):
+    row = []
+    for t, fc in cand[i]:
+        if i == 0: row.append((fc[0], None)); continue
+        cost, prev = min((dp[i - 1][q][0] + join_cost(keys[i - 1], cand[i - 1][q][1], k, fc), q) for q in range(len(cand[i - 1])))
+        row.append((cost + fc[0], prev))
+    dp.append(row)
+j = min(range(len(dp[-1])), key=lambda x: dp[-1][x][0]); chosen = {}
+for i in range(len(keys) - 1, -1, -1):
+    chosen[keys[i]] = cand[i][j][0]; j = dp[i][j][1] if dp[i][j][1] is not None else 0
 for key, rec in state.items():
     rv = reviews.get(key, {})
     def rank(t):
@@ -17,7 +45,7 @@ for key, rec in state.items():
         faults = r.get("size_faults") or []
         until = r.get("good_until")
         return (1 if (faults or until is not None) else 0, -(until if until is not None else 99), 0 if t["attempt"] == rec.get("best") else 1, 0 if r.get("ok") else 1, t["measure"]["hold"])
-    take = sorted(rec["takes"], key=rank)[0]
+    take = chosen[key]
     r = rv.get(str(take["attempt"]), {})
     seconds, hold = take["measure"]["seconds"], take["measure"]["hold"]
     keep = seconds - hold + 0.3 if hold >= 1 else seconds
