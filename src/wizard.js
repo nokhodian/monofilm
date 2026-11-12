@@ -222,7 +222,7 @@ async function drawChecked(env, db, actor, pid, ref, input, expect, f, kinds = [
   ({ r, check } = tried.reduce((a, b) => (bad(b.check) < bad(a.check) ? b : a)));
   // a size the image model would not correct is repaired on the picture itself: the character is cut out, rescaled about its feet and the gap filled (src/rescale.js)
   let rescaled = 0; for (let i = 0; i < 2 && !check.ok && !check.skipped && check.kind === 'size' && check.sizeFix && !late(); i++) { const fixed = await repairSized(env, db, actor, pid, ref, r.asset.uri, check, (u) => checkPicture(env, u, expect, f, refs, kinds, sizes), f); if (!fixed) break; r = { ...r, asset: fixed.asset }; check = fixed.check; rescaled++; }
-  return { r, check: { rescaled, ok: check.ok, major: !!check.major, beings: check.beings || [], ...(check.sizeReport ? { sizeReport: check.sizeReport } : {}), kinds: kinds.map((k) => k.kind), ...(check.beingsError ? { beingsError: check.beingsError } : {}), seen: check.seen || '', problem: check.problem || '', redrew, skipped: !!check.skipped } };
+  return { r, check: { rescaled, ok: check.ok, kind: check.kind || '', major: !!check.major, beings: check.beings || [], ...(check.sizeReport ? { sizeReport: check.sizeReport } : {}), kinds: kinds.map((k) => k.kind), ...(check.beingsError ? { beingsError: check.beingsError } : {}), seen: check.seen || '', problem: check.problem || '', redrew, skipped: !!check.skipped } };
 }
 async function paint(env, db, actor, pid, ref, input, f) {
   if (!metaConfigured(env)) throw new HttpError(503, 'MODEL_API_KEY is not set, so Muse Image is off.');
