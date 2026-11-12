@@ -9,6 +9,8 @@ size = sys.argv[2] if len(sys.argv) > 2 else "1280x720"
 state = json.load(open(os.path.join(folder, "state.json")))
 reviews = json.load(open(os.path.join(folder, "reviews.json"))) if os.path.exists(os.path.join(folder, "reviews.json")) else {}
 plan = {"size": size, "fps": 24, "clips": []}
+# how the generator's frames are shown: clay and handmade films keep every real frame twice (stop motion is shot on twos); a photographic film gets the missing frames made by interpolation (PACE=twos or interpolate)
+plan["paceMode"] = os.environ.get("PACE", "interpolate")
 if os.environ.get("MUSIC"): plan["music"] = os.path.abspath(os.environ["MUSIC"])  # a music bed file: the assembly lays it under the film and ducks it under the clips' own sound
 # The takes are chosen together, not one clip at a time: a clip that is long and clean is worth little if the next clip starts with the character at another size. For every take: how long it is kept (up to 5.5 s)
 # and, at every join, how far the size of each character at the end of one take is from its size at the start of the next (a join inside a scene weighs most; a scene change goes through black).
@@ -102,6 +104,10 @@ for key, c in zip(state.keys(), plan["clips"]):
     c["cut_in"] = {"zoom": round(k - 1, 3), "at": [round(clamp((cx * k - 0.5) / (k - 1)), 3), round(clamp((cy * k - 0.5) / (k - 1)), 3)]}
 plan["join_sizes"] = sizes_at
 plan["retake"] = retake
+planned = sum(max(0.0, t["measure"]["seconds"]) for t in [state[k]["takes"][0] for k in state])
+achieved = sum(c["keep"] - c["trim_start_frames"] / 24 for c in plan["clips"])
+print("film length: %.1f s kept of %.1f s generated (%d clips)" % (achieved, planned, len(plan["clips"])))
+if retake: print("make again: ONLY=%s ./scripts/generators/minimax-h3-comfyui/run.sh" % ",".join(x["clip"] for x in retake))
 if retake:
     print("NEEDS A NEW TAKE (kept less than %.1f s):" % MIN_KEEP)
     for x in retake: print("  %s  kept %.1f s  (%s)" % (x["clip"], x["kept"], x["why"]))
