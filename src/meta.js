@@ -14,6 +14,7 @@ async function call(env, path, init, f = fetch) {
     // META_BASE points tests and local development at a stand-in server
     const res = await f((env.META_BASE || META) + path, { ...init, headers: { authorization: `Bearer ${env.MODEL_API_KEY}`, ...(init.headers || {}) } });
     if ((res.status === 429 || res.status === 503 || res.status === 500) && i < 3) { await new Promise((s) => setTimeout(s, 700 * (i + 1))); continue; } // Meta asks for backoff on these
+    if ((res.status === 502 || res.status === 504 || res.status === 524) && i < 2) { await new Promise((r) => setTimeout(r, 1500 * (i + 1))); continue; } // a gateway timeout on Meta's side (524 seen on 12 Nov 2026 while drafting scenes): the same call usually works the second time
     const text = await res.text(), body = parseJson(text, { raw: text });
     if (res.status === 404 && i < 3 && /model was not found/i.test(text)) { await new Promise((r) => setTimeout(r, 700 * (i + 1))); continue; } // Meta sometimes answers this for a model that exists (seen once on 7 Nov 2026), and the same call works a moment later
     if (!res.ok) throw new HttpError(res.status === 400 ? 400 : 502, `Meta API ${res.status}: ${(body.error && (body.error.message || body.error.code)) || text.slice(0, 200)}`);
