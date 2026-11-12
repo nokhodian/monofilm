@@ -17,8 +17,9 @@ const human = (actor) => { if (actor.kind !== 'human') throw new HttpError(403, 
 const text = (v, n = 600) => String(v ?? '').slice(0, n);
 
 // ---- asking Muse Spark for structured work ----
-export async function askJson(env, system, user, f) {
-  const r = await spark(env, { instructions: `${system}\nReply with one JSON object and nothing else. Plain, simple English in every field except dialogue.`, input: user }, f);
+// effort: how long the model thinks before it answers (Meta's default is high; a long structured answer such as the scenes of a film took more than the 100 seconds Meta's gateway allows: error 524)
+export async function askJson(env, system, user, f, effort) {
+  const r = await spark(env, { instructions: `${system}\nReply with one JSON object and nothing else. Plain, simple English in every field except dialogue.`, input: user, effort }, f);
   const t = outputText(r), m = /\{[\s\S]*\}/.exec(t), o = m && parseJson(m[0], null);
   if (!o || typeof o !== 'object') throw new HttpError(502, 'the AI did not answer in the expected form. Try again.');
   return o;
@@ -120,7 +121,7 @@ export async function draftScenes(env, db, actor, pid, f) {
   await must(db, pid, REFS.episode, 'the episode');
   const [people, places] = await Promise.all([castOf(db, pid), placesOf(db, pid)]);
   const prompt = `Story:\n${text(sd.text, 8000)}\n\nBeats: ${(bd.beats || []).map((b) => b.text).join(' | ')}\nPeople: ${people.map((p) => `${p.data.name} (${p.data.role})`).join('; ')}\nPlaces: ${places.map((p) => p.data.name).join('; ')}\nFilm length: ${fmt.seconds} seconds. Every scene is between ${sceneBounds(fmt)[0]} and ${sceneBounds(fmt)[1]} seconds long. Spoken language: ${fmt.speech}. Each scene ends up as clips of at most ${MAX_CLIP} seconds.${(GENERATORS[fmt.generator] || {}).static_camera ? ' The video generator cannot take camera moves: every scene\'s cam must be static.' : ''}${(GENERATORS[fmt.generator] || {}).weak_motion ? ' The video generator moves things slowly and little: each clip is ONE simple, large, clear movement (a character takes a few steps, turns, sits, lifts an arm), never a slow glide or a subtle change; two states of a clip must differ by something you can see at a glance.' : ''}`;
-  const o = metaConfigured(env) ? await askJson(env, SCENES_SYSTEM, prompt, f) : { scenes: localScenes(bd, fmt) };
+  const o = metaConfigured(env) ? await askJson(env, SCENES_SYSTEM, prompt, f, 'low') : { scenes: localScenes(bd, fmt) };
   const list = (o.scenes || []).slice(0, 12); if (!list.length) throw new HttpError(502, 'the AI made no scenes. Try again.');
   if ((GENERATORS[fmt.generator] || {}).static_camera) for (const s of list) { const c = String((s.notes || {}).cam || ''); if (!/\b(static|still|locked|fixed)\b/i.test(c)) s.notes = { ...(s.notes || {}), cam: `static ${(c.match(/\b(wide|medium-wide|medium|close)\b/i) || ['wide'])[0].toLowerCase()}`, ...(/\b(push|zoom in|closer|dolly in)/i.test(c) ? { post: 'push-in' } : {}) }; } // a generator that reshapes the scene on a camera move gets a still camera in every scene, so the pictures and the clips agree
   const drafted = list.map((s, i) => sceneFrom(s, i, people, places, fmt)), review = await reviewContinuity(env, drafted, f), made = [], used = new Set();

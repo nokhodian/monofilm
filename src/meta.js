@@ -73,8 +73,8 @@ export async function transcribe(env, wav, { language } = {}, f) {
 }
 
 // ---- Muse Spark: one step of a tool-using conversation (Responses API) ----
-export async function spark(env, { input, tools, previous, instructions, model = modelOf(env, 'spark') }, f) {
-  return call(env, '/responses', json({ model, input, tools, instructions, ...(previous ? { previous_response_id: previous } : {}), parallel_tool_calls: true }), f);
+export async function spark(env, { input, tools, previous, instructions, model = modelOf(env, 'spark'), effort }, f) {
+  return call(env, '/responses', json({ model, input, tools, instructions, ...(effort ? { reasoning: { effort } } : {}), ...(previous ? { previous_response_id: previous } : {}), parallel_tool_calls: true }), f);
 }
 
 // The models this key can use right now (GET /v1/models), for the studio's admin.
