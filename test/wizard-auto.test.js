@@ -20,6 +20,11 @@ test('what the AI made is approved first, in one move, but only the wizard\'s ow
   const a = plan(mk([story, bible, look, { ...cast('ines'), status: 'proposed' }, { ...place('lab'), status: 'proposed' }, { ref: 'canon.world:world', kind: 'canon.world', status: 'proposed', data: {} }, { ref: 'reference:m-1', kind: 'reference', status: 'proposed', data: {} }]));
   assert.deepEqual([a.type, a.refs], ['approve', [R.cast('ines'), R.place('lab')]]);
 });
+test('a narrator is a voice: it gets no face and is not counted', () => {
+  const base = [story, bible, look];
+  assert.deepEqual(plan(mk([...base, cast('narrator', { offscreen: true }), cast('ines')])), { type: 'face', id: 'ines', name: 'INES', cost: 1 }, 'the narrator is skipped');
+  assert.equal(plan(mk([...base, cast('narrator', { offscreen: true })])).type, 'scenes', 'only a narrator in the cast: on to the places and scenes');
+});
 test('faces, then main faces, then places, then scenes, in that order, one at a time', () => {
   const base = [story, bible, look];
   assert.deepEqual(plan(mk([...base, cast('ines'), cast('orca')])), { type: 'face', id: 'ines', name: 'INES', cost: 1 });
