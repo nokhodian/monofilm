@@ -3,7 +3,7 @@
 // each clip's sound fades in and out for a short moment so a join does not click (aud-p-020); the loudness is set once at the end (aud-p-019); and every join is made to match: a clip ends
 // at the frame (in its last 2 seconds) that looks most like the next clip's first frame, and a join that still differs is dissolved over 0.4 s instead of jumping.
 //   node scripts/assemble-film.mjs plan.json film.mp4
-//   (the sound is mixed apart from the pictures: audioGraph; plan.music = a music bed file, plan.musicDb -18, plan.clipDb, plan.roomTone, plan.lead 0.5 s of L-cut at a new scene)
+//   (the sound is mixed apart from the pictures: audioGraph; plan.music = a music bed file, plan.musicDb -18, plan.clipDb, plan.roomTone, plan.lead 0.5 s of L-cut at a new scene; plan.nativeAudio false drops the generator's own sound; plan.voice = [{file, at, db}] a narration laid over the film at `at` seconds)
 //   plan.json: { "size": "1280x720", "fps": 24, "fade": 0.08, "loudness": true,
 //                "clips": [ { "file": "a.mp4", "hold": 1.4, "continues": false, "push": 0.04 }, { "file": "b.mp4", "continues": true, "trim_start_frames": 2, "push_from": 0.04, "push": 0.08, "push_at": [0.4, 0.5] } ] }
 // hold = seconds the clip stands still at its end (npm run measure -- clip.mp4 prints it); keep = seconds to keep, instead of hold.
@@ -56,7 +56,7 @@ export function sceneJoin(fileA, endA, fileB, startB, plan = {}) {
 // The sound of the film is mixed on its own timeline, apart from the pictures (cin-p-037 to 041, wf-p-029 to 031): every clip's sound is placed where its picture starts, fades in and out with an equal-power
 // curve over the same time as the picture dissolve, and at a new scene the sound of the scene before lingers `lead` seconds under the new picture (an L-cut: the sound after the cut point of a clip exists, only
 // the frozen end of the picture is trimmed). Under all of it lies a room tone (a join is never silent) and, when the plan has one, a music bed that ducks under the clips' own sound.
-export function audioGraph({ clips, total, fade = 0.08, tone = true, toneDb = -46, music = null, musicDb = -18, clipDb = 0 }) {
+export function audioGraph({ clips, total, fade = 0.08, tone = true, toneDb = -46, music = null, musicDb = -18, clipDb = 0, voice = [] }) {
   const inputs = [], parts = [], used = [];
   clips.forEach((c, i) => {
     if (!c.audio) return; const k = used.length; inputs.push('-ss', String(c.start), '-t', String(c.dur.toFixed(3)), '-i', c.file);
@@ -64,8 +64,12 @@ export function audioGraph({ clips, total, fade = 0.08, tone = true, toneDb = -4
     parts.push(`[${k}:a]aresample=48000,aformat=channel_layouts=stereo,volume=${clipDb}dB,afade=t=in:st=0:d=${fi.toFixed(3)}:curve=qsin,afade=t=out:st=${(c.dur - fo).toFixed(3)}:d=${fo.toFixed(3)}:curve=qsin,adelay=${ms}|${ms}[c${i}]`); used.push(`[c${i}]`);
   });
   const n = used.length, body = used.length ? `${used.join('')}amix=inputs=${used.length}:normalize=0:duration=longest,apad=whole_dur=${total.toFixed(3)}[clips]` : `anullsrc=r=48000:cl=stereo,atrim=0:${total.toFixed(3)}[clips]`, mix = ['[clips]'], extra = [];
+  if (voice.length) { // a narration made apart from the generator (a person or a voice tool): each file starts at `at` seconds; the bed ducks under it
+    const names = voice.map((v, i) => { const k = used.length + i, ms = Math.round((v.at || 0) * 1000); inputs.push('-i', v.file); extra.push(`[${k}:a]aresample=48000,aformat=channel_layouts=stereo,volume=${v.db ?? 0}dB,adelay=${ms}|${ms}[vo${i}]`); return `[vo${i}]`; });
+    extra.push(`${names.join('')}amix=inputs=${names.length}:normalize=0:duration=longest,apad=whole_dur=${total.toFixed(3)}[voice]`); mix.push('[voice]');
+  }
   if (tone) { extra.push(`anoisesrc=c=brown:r=48000:a=0.5:d=${total.toFixed(3)},lowpass=f=500,volume=${toneDb}dB,aformat=channel_layouts=stereo[tone]`); mix.push('[tone]'); }
-  if (music) { const k = n; inputs.push('-stream_loop', '-1', '-i', music); extra.push(`[${k}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:${total.toFixed(3)},volume=${musicDb}dB,afade=t=in:st=0:d=1.5,afade=t=out:st=${Math.max(0, total - 2).toFixed(3)}:d=2[bed]`, '[clips]asplit[clips1][clips2]', '[bed][clips2]sidechaincompress=threshold=0.04:ratio=5:attack=20:release=300[ducked]'); mix[0] = '[clips1]'; mix.push('[ducked]'); }
+  if (music) { const k = used.length + voice.length; inputs.push('-stream_loop', '-1', '-i', music); extra.push(`[${k}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:${total.toFixed(3)},volume=${musicDb}dB,afade=t=in:st=0:d=1.5,afade=t=out:st=${Math.max(0, total - 2).toFixed(3)}:d=2[bed]`, (voice.length ? '[clips][voice]amix=inputs=2:normalize=0,asplit=2[clips1][clips2]' : '[clips]asplit[clips1][clips2]'), '[bed][clips2]sidechaincompress=threshold=0.04:ratio=5:attack=20:release=300[ducked]'); mix[0] = '[clips1]'; if (voice.length) mix.splice(mix.indexOf('[voice]'), 1); mix.push('[ducked]'); }
   const graph = [...parts, body, ...extra, `${mix.join('')}amix=inputs=${mix.length}:normalize=0:duration=longest,atrim=0:${total.toFixed(3)}[mix]`].join(';');
   return { inputs, graph };
 }
@@ -136,8 +140,8 @@ function assembleIn(plan, outFile, dir) {
   });
   const list = join(dir, 'list.txt'); writeFileSync(list, parts.map((x) => `file '${x}'`).join('\n'));
   const joined = join(dir, 'joined.mp4'); execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', joined]);
-  const lead = plan.lead ?? 0.5; let at = 0; const timeline = cuts.map((c, i) => { const j = joins[i], k = joins[i - 1], t = at, avail = Math.max(0.2, c.p.seconds - c.start), extra = j && j.scene ? Math.min(lead, Math.max(0, avail - length(i))) : 0; at += length(i) - (dj[i] || 0); return { file: c.clip.file, start: c.start, dur: length(i) + extra, audio: c.p.audio, at: t, fadeIn: k && k.soft ? dj[i - 1] : k && k.dip ? halves[i - 1].next : undefined, fadeOut: j && j.soft ? dj[i] + extra : j && j.dip ? halves[i].prev + extra : undefined }; });
-  const mixed = join(dir, 'mix.wav'), ag = audioGraph({ clips: timeline, total: probe(joined).seconds, fade, tone: plan.roomTone !== false, music: plan.music || null, musicDb: plan.musicDb ?? -18, clipDb: plan.clipDb ?? (plan.music ? -6 : 0) });
+  const lead = plan.lead ?? 0.5; let at = 0; const timeline = cuts.map((c, i) => { const j = joins[i], k = joins[i - 1], t = at, avail = Math.max(0.2, c.p.seconds - c.start), extra = j && j.scene ? Math.min(lead, Math.max(0, avail - length(i))) : 0; at += length(i) - (dj[i] || 0); return { file: c.clip.file, start: c.start, dur: length(i) + extra, audio: c.p.audio && plan.nativeAudio !== false, at: t, fadeIn: k && k.soft ? dj[i - 1] : k && k.dip ? halves[i - 1].next : undefined, fadeOut: j && j.soft ? dj[i] + extra : j && j.dip ? halves[i].prev + extra : undefined }; });
+  const mixed = join(dir, 'mix.wav'), ag = audioGraph({ clips: timeline, total: probe(joined).seconds, fade, tone: plan.roomTone !== false, music: plan.music || null, musicDb: plan.musicDb ?? -18, clipDb: plan.clipDb ?? (plan.music ? -6 : 0), voice: plan.voice || [] });
   execFileSync('ffmpeg', ['-v', 'error', '-y', ...ag.inputs, '-filter_complex', ag.graph, '-map', '[mix]', '-ar', '48000', '-ac', '2', mixed]);
   const total = probe(joined).seconds, fin = plan.fadeIn ?? 0.6, fout = plan.fadeOut ?? 1.2, af = [fin > 0 && `afade=t=in:st=0:d=${fin}`, fout > 0 && `afade=t=out:st=${Math.max(0, total - fout - 0.3).toFixed(3)}:d=${fout + 0.3}`, plan.loudness !== false && 'loudnorm=I=-16:TP=-1.5:LRA=11'].filter(Boolean).join(','), vf = [fin > 0 && `fade=t=in:st=0:d=${fin}`, fout > 0 && `fade=t=out:st=${Math.max(0, total - fout).toFixed(3)}:d=${fout}`].filter(Boolean).join(','); // the film fades in from black and out to black; the sound fades out a little longer than the picture
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', joined, '-i', mixed, '-map', '0:v', '-map', '1:a', ...(vf ? ['-vf', vf, '-c:v', 'libx264', '-crf', '18', '-preset', 'medium', '-pix_fmt', 'yuv420p'] : ['-c:v', 'copy']), ...(af ? ['-af', af, '-c:a', 'aac', '-ar', '48000'] : ['-c:a', 'aac', '-ar', '48000']), '-shortest', outFile]);
@@ -147,6 +151,6 @@ function assembleIn(plan, outFile, dir) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [planFile, out] = process.argv.slice(2);
   if (!planFile || !out) { console.error('Usage: node scripts/assemble-film.mjs plan.json film.mp4'); process.exit(2); }
-  const plan = JSON.parse(readFileSync(planFile, 'utf8')); plan.clips = plan.clips.map((c) => ({ ...c, file: resolve(planFile, '..', c.file) })); if (plan.music) plan.music = resolve(planFile, '..', plan.music);
+  const plan = JSON.parse(readFileSync(planFile, 'utf8')); plan.clips = plan.clips.map((c) => ({ ...c, file: resolve(planFile, '..', c.file) })); if (plan.music) plan.music = resolve(planFile, '..', plan.music); if (plan.voice) plan.voice = plan.voice.map((v) => ({ ...v, file: resolve(planFile, '..', v.file) }));
   console.log(JSON.stringify(assemble(plan, resolve(out))));
 }

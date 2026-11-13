@@ -1,7 +1,7 @@
 // The film assembler: pure cutting rules, and a real run on small synthetic clips when ffmpeg is there.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -81,11 +81,22 @@ test('a film with a music bed and a scene change plays sound all the way through
   const bed = join(dir, 'bed.wav'); execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=110:duration=2', bed]);
   const out = join(dir, 'f.mp4'); assemble({ size: '320x180', fps: 24, music: bed, clips: [{ file: mk('a.mp4', '0x808080', 300), keep: 3 }, { file: mk('b.mp4', '0x909090', 500), continues: false, keep: 3 }] }, out);
   const probeA = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', out], { encoding: 'utf8' }); assert.match(probeA, /audio/);
-  const sil = execFileSync('ffmpeg', ['-hide_banner', '-i', out, '-af', 'silencedetect=n=-60dB:d=0.3', '-f', 'null', '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).toString(); assert.equal((sil.match(/silence_start/g) || []).length, 0, 'no silence of 0.3 s anywhere');
+  const sil = spawnSync('ffmpeg', ['-hide_banner', '-i', out, '-af', 'silencedetect=n=-60dB:d=0.3', '-f', 'null', '-'], { encoding: 'utf8' }).stderr; assert.equal((sil.match(/silence_start/g) || []).length, 0, 'no silence of 0.3 s anywhere');
 });
 
 test('a join inside a scene is a cut, a very short dissolve, a dissolve, or a dip, by how far apart the two frames are', async () => {
   const { joinKind } = await import('../scripts/assemble-film.mjs');
   assert.deepEqual(joinKind(0.2), { soft: false }); assert.deepEqual(joinKind(0.5), { soft: true, transition: 'dissolve', d: 0.17 }, 'a small step: smoothed by a four frame dissolve'); assert.deepEqual(joinKind(1.3), { soft: false, cutIn: true, transition: 'cutin', d: 0 }, 'the boil of two takes differs: a cut to a closer framing, a new camera angle'); assert.deepEqual(joinKind(1.3, { cutIn: 0 }), { soft: true, transition: 'dissolve', d: 0.17 }, 'switched off');
   assert.deepEqual(joinKind(15, { cutIn: 0 }), { soft: true, transition: 'dissolve', d: 0.4 }); assert.deepEqual(joinKind(30), { soft: false, dip: true, transition: 'fadeblack', d: 0.6 }, 'characters elsewhere: through black, not a ghost');
+});
+
+test('a narration made apart from the generator is laid over the film at its time, the generator\'s own sound can be dropped, and the music bed ducks under the voice', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'voice-')), clip = join(dir, 'a.mp4'), voice = join(dir, 'v.wav'), bed = join(dir, 'b.wav'), out = join(dir, 'f.mp4');
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=0x808080:s=320x180:r=24:d=5', '-f', 'lavfi', '-i', 'sine=frequency=900:duration=5', '-shortest', '-pix_fmt', 'yuv420p', clip]);
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=300:duration=2', voice]); execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=110:duration=3', bed]);
+  const g = audioGraph({ clips: [{ file: clip, start: 0, dur: 5, audio: true, at: 0 }], total: 5, voice: [{ file: voice, at: 1.5, db: -3 }], music: bed });
+  assert.match(g.graph, /adelay=1500\|1500/); assert.match(g.graph, /sidechaincompress/); assert.deepEqual(g.inputs.filter((x) => x === '-i').length, 3);
+  assemble({ size: '320x180', fps: 24, nativeAudio: false, voice: [{ file: voice, at: 1.5, db: -3 }], music: bed, clips: [{ file: clip }] }, out);
+  const level = (ss) => Number((/mean_volume: (-?[\d.]+)/.exec(spawnSync('ffmpeg', ['-hide_banner', '-ss', String(ss), '-t', '1', '-i', out, '-af', 'volumedetect', '-f', 'null', '-'], { encoding: 'utf8' }).stderr) || [])[1]), voiced = level(2), after = level(3.8);
+  assert.ok(voiced > after + 6, `the voice is clearly louder than what is left after it (${voiced} dB against ${after} dB)`);
 });
