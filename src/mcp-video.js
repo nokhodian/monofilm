@@ -21,7 +21,7 @@ async function load(c, pid) {
   const by = Object.fromEntries(arts.map((a) => [a.ref, a])), data = (ref) => (by[ref] ? by[ref].data : null);
   const uriOf = (ref, id) => { const x = (assets[ref] || []).find((a) => a.id === id); return x ? x.uri : null; };
   const fmt = (data(REFS.story) || {}).format || {}, look = data(REFS.look) || {};
-  const cast = Object.fromEntries(arts.filter((a) => a.kind === 'canon.cast').map((a) => [a.ref, { name: a.data.name, desc: a.data.desc || '' }])), voices = Object.fromEntries(arts.filter((a) => a.kind === 'canon.voice').map((a) => [String(a.data.name || '').toUpperCase(), a.data.desc || ''])), film = { look, speech: fmt.speech || '', captions: fmt.captions || [], cast, voices };
+  const cast = Object.fromEntries(arts.filter((a) => a.kind === 'canon.cast').map((a) => [a.ref, { name: a.data.name, desc: a.data.desc || '', offscreen: !!a.data.offscreen }])), voices = Object.fromEntries(arts.filter((a) => a.kind === 'canon.voice').map((a) => [String(a.data.name || '').toUpperCase(), a.data.desc || ''])), film = { look, speech: fmt.speech || '', captions: fmt.captions || [], cast, voices };
   return { arts, assets, by, data, uriOf, film };
 }
 const sceneList = (L, only) => L.arts.filter((a) => a.kind === 'scene' && (!only || keyOf(a.ref) === only)).sort((a, b) => (a.data.n || 0) - (b.data.n || 0));
@@ -37,7 +37,7 @@ function clipSpec(c, pid, L, sc, n) {
   const counted = takes.filter((t) => !(t.updated < sc.updated) && !(t.updated < picsAt));
   return {
     production: pid, scene: id, scene_name: d.name, clip: n, of: clips.length, seconds: p.seconds, aspect: L.film.look.aspect || '9:16', fps: L.film.look.fps || 24,
-    prompt: p.prompt, negative_prompt: p.negative, spoken_language: L.film.speech || null,
+    prompt: p.prompt, negative_prompt: p.negative, voice_over: p.voice_over, // the narrator's lines for this clip: not in the prompt, made as a separate voice pass spoken_language: L.film.speech || null,
     timing: p.timing, // the end picture is the last frame only: land on it on the final frame, never hold it still
     begins: n === 1 ? 'start' : cl.join === 'cut' ? 'cut' : 'continues',
     start_picture: startUri ? pic(c, pid, startUri) : null,

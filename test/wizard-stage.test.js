@@ -176,3 +176,12 @@ test('a character that climbs or walks toward or away may change size; one that 
   const mixed = { seconds: 12, clips: [{ seconds: 6 }, { seconds: 6 }], notes: { happens: 'x' }, moves: ['Pip lifts a leg.', 'Pip scurries up the path while Moss glides slowly forward, shell sliding behind. Pip starts up the path with Moss behind.'] };
   assert.deepEqual(depthMovers(mixed, 2, [{ name: 'Pip', kind: 'beetle' }, { name: 'Moss', kind: 'snail' }]), { Pip: true, Moss: false }, 'Moss is named in a clause about Pip and does not become a climber');
 });
+
+test('a narrator\'s line is not given to the video generator (it would babble it), but is handed over as a voice-over', async () => {
+  const { composeClip, audioPolicy, isVoiceOver } = await import('../public/js/wizard-model.js');
+  const scene = { data: { who: ['canon.cast:a'], notes: { happens: 'A rider charges.', cam: 'static wide', sound: 'hooves' }, seconds: 6, clips: [{ seconds: 6, join: null }], transcript: [{ who: 'NARRATOR', text: 'دَشتِ نَبَرد', sec: 4 }, { who: 'SOHRAB', text: 'Father!', sec: 2 }] } };
+  const film = { look: { look: 'miniature', aspect: '16:9' }, speech: 'Persian', cast: { 'canon.cast:a': { name: 'Sohrab', desc: 'a young warrior' } } }, c = composeClip(scene, film, 1);
+  assert.doesNotMatch(c.prompt, /دَشتِ نَبَرد/); assert.match(c.prompt, /SOHRAB says/); assert.deepEqual(c.voice_over, [{ who: 'NARRATOR', text: 'دَشتِ نَبَرد' }]);
+  const only = { ...scene, data: { ...scene.data, transcript: [scene.data.transcript[0]] } }; assert.equal(audioPolicy(only.data, 1, film), 'ambient', 'a clip with only a narrator is ambient, characters keep their mouths closed'); assert.doesNotMatch(composeClip(only, film, 1).prompt, /Dialogue:/);
+  assert.equal(isVoiceOver('Kaveh', { x: { name: 'Kaveh', offscreen: true } }), true); assert.equal(isVoiceOver('Kaveh', {}), false);
+});

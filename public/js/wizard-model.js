@@ -134,7 +134,10 @@ export function slotsOf(id, d) {
   return out;
 }
 // Sound policy for a clip, so a silent clip is asked for as silent (generators invent speech and music otherwise).
-export function audioPolicy(d, n) { return linesOfClip(d, n).length ? 'dialogue' : String((d.notes || {}).sound || '').trim() ? 'ambient' : 'silent'; }
+// A narrator or voice-over is not spoken by anyone in the picture: a video generator that is given such a line makes its characters or the air babble it (in Persian, as noise that is not Persian). Those lines
+// are left out of the clip's words and made as a separate voice pass.
+export const isVoiceOver = (who, cast) => /^(narrator|voice[- ]?over|off[- ]?screen|راوی)$/i.test(String(who || '').trim()) || Object.values(cast || {}).some((c) => c && c.offscreen && String(c.name || '').toUpperCase() === String(who || '').trim().toUpperCase());
+export function audioPolicy(d, n, film = {}) { return linesOfClip(d, n).filter((l) => !isVoiceOver(l.who, film.cast)).length ? 'dialogue' : String((d.notes || {}).sound || '').trim() ? 'ambient' : 'silent'; }
 const AUDIO_TEXT = { dialogue: 'Audio: only the spoken lines above, over quiet room sound.', ambient: 'Audio: only the ambient sound described above. Every character keeps their mouth closed.', silent: 'Audio: only quiet room tone. Every character keeps their mouth closed.' }; // concrete sound and a closed mouth, not a list of bans (a ban names the thing and generators add it)
 
 // A generator cuts when the camera line lists several shots ("close on hands, then her face"). A clip gets only the first move.
@@ -179,7 +182,7 @@ export function forGenerator(clip, id) {
 export function composeClip(scene, film, clipIndex = 1) {
   const d = scene.data || {}, n = d.notes || {}, spans = clipSpans(d), c = spans[clipIndex - 1] || spans[0], k = c.n;
   const look = film.look || {}, never = [...new Set([...(String(n.never || '').split(/[.;\n]/).map((s) => s.trim()).filter(Boolean)), ...(Array.isArray(look.forbidden) ? look.forbidden : String(look.forbidden || '').split(',').map((s) => s.trim()).filter(Boolean)).map((t) => `no ${t}`)])];
-  const lines = linesOfClip(d, k), beats = clipBeats(d), endPic = k === spans.length ? hasEnd(d) : midEnds(d), policy = audioPolicy(d, k), cast = film.cast || {};
+  const cast = film.cast || {}, allLines = linesOfClip(d, k), lines = allLines.filter((l) => !isVoiceOver(l.who, cast)), beats = clipBeats(d), endPic = k === spans.length ? hasEnd(d) : midEnds(d), policy = audioPolicy(d, k, film);
   const who = (d.who || []).map((r) => cast[r]).filter((p) => p && p.desc);
   const parts = [beats[k - 1] || (spans.length > 1 ? 'Carry on calmly from the clip before.' : n.happens), movesOf(d)[k - 1] && `How it moves: ${movesOf(d)[k - 1]}`, k > 1 && beats[k - 2] ? `The clip before ended on: ${beats[k - 2]} Do not repeat it.` : '', n.mood && `Mood and pace: ${n.mood}`, n.cam && `Camera: ${gentleCamera(n.cam)}, one continuous shot`, n.sound && `Sound: ${n.sound}`,
     PHYSICS, sizesLine(d),
@@ -192,7 +195,7 @@ export function composeClip(scene, film, clipIndex = 1) {
   const st = clipStates(d), pr = propsInClip(d, k);
   if (st) parts.splice(parts.findIndex((x) => /^Look: /.test(x || '')), 0, `It begins like this: ${st[k - 1]}\nIt ends like this, and nothing further happens: ${st[k]}`);
   if (pr.length) parts.splice(parts.findIndex((x) => /^Look: /.test(x || '')), 0, `Things in this scene (always look exactly like this, never bigger or smaller, never a different colour): ${pr.map((p) => `${p.name}: ${p.look}${p.count ? ` (exactly ${p.count})` : ''}`).join('; ')}`);
-  return { prompt: parts.filter(Boolean).join('\n'), negative: never.join('. '), seconds: c.seconds, join: c.join, clips: spans.length, beat: beats[k - 1] || '', audio: policy, timing: timingLine(c.seconds, endPic) };
+  return { voice_over: allLines.filter((l) => isVoiceOver(l.who, cast)).map((l) => ({ who: l.who, text: l.text })), prompt: parts.filter(Boolean).join('\n'), negative: never.join('. '), seconds: c.seconds, join: c.join, clips: spans.length, beat: beats[k - 1] || '', audio: policy, timing: timingLine(c.seconds, endPic) };
 }
 // Generators tend to reach the end picture early and then hold it still, or to pile on extra events. This asks for the whole length to be used, with the end picture reached on the last frame.
 export const timingLine = (seconds, endPicture) => (endPicture
