@@ -27,11 +27,11 @@ export function cutOf(clip, seconds, fps = 24) {
 export const zoomOf = (clip, length, from) => { const f0 = clip.push_from ?? 0; return { from: from ?? f0, slope: clip.push > 0 ? (clip.push - f0) / length : 0, at: clip.push_at || [0.5, 0.5] }; };
 export const zoomAt = (z, s) => Math.max(0, z.from + z.slope * s);
 // (crop's iw is the size of the first frame only, so its x and y are written out from the zoom, not from iw-ow.) The zoom is drawn from a 2x lanczos copy and scaled down again, so the 2-pixel steps of the scaler are half pixels in the picture and a 720p source is not softened by a second resampling.
-export function filterOf({ size = '1280x720', fps = 24 }, fade, length, zoom = null) {
+export function filterOf({ size = '1280x720', fps = 24 }, fade, length, zoom = null, ext = 0) {
   const [w, h] = size.split('x'), f = Math.min(fade, length / 4), moves = zoom && (zoom.from > 0 || zoom.slope > 0), [fx, fy] = zoom?.at || [0.5, 0.5];
   const z = moves ? `(${zoom.from.toFixed(5)}+${zoom.slope.toFixed(6)}*t)` : '', k = `(1+${z})`, big = (n) => `trunc(${n}*2*${k}/2)*2`;
   const push = moves ? `,scale=${w * 2}:${h * 2}:flags=lanczos,scale=w='${big(w)}':h='${big(h)}':eval=frame:flags=bicubic,crop=${w * 2}:${h * 2}:'${w * 2}*${z}*${fx}':'${h * 2}*${z}*${fy}',scale=${w}:${h}:flags=lanczos` : '';
-  return { v: `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps}${push},format=yuv420p`, a: `aresample=48000,aformat=channel_layouts=stereo,afade=t=in:st=0:d=${f},afade=t=out:st=${Math.max(0, length - f).toFixed(3)}:d=${f}` };
+  return { v: `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps}${ext > 0 ? `,tpad=stop_mode=clone:stop_duration=${ext}` : ''}${push},format=yuv420p`, a: `aresample=48000,aformat=channel_layouts=stereo,${ext > 0 ? `apad=pad_dur=${ext},` : ''}afade=t=in:st=0:d=${f},afade=t=out:st=${Math.max(0, length - f).toFixed(3)}:d=${f}` };
 }
 
 const probe = (file) => { const out = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type', '-of', 'json', file], { encoding: 'utf8' })); return { seconds: Number(out.format.duration), audio: (out.streams || []).some((s) => s.codec_type === 'audio') }; };
@@ -111,19 +111,20 @@ export function assemble(plan, outFile) {
 function assembleIn(plan, outFile, dir) {
   const fps = plan.fps || 24, fade = plan.fade ?? 0.08, dissolve = plan.dissolve ?? 0.4, norm = [];
   if (plan.smooth !== false) plan.clips = plan.clips.map((clip, i) => { const c = cadence(clip.file, { from: (clip.trim_start_frames ?? (clip.continues ? 2 : 0)) / (plan.fps || 24), to: clip.keep }); return c && c.paired ? { ...clip, file: smoothClip(clip.file, join(dir, `smooth-${i}.mp4`), c.keep, plan.paceMode || 'twos'), smoothed: true } : clip; }); // clips that move at 12 fps are brought to a true 24
-  const cuts = plan.clips.map((clip) => { const p = probe(clip.file); return { ...cutOf(clip, p.seconds, fps), p, clip }; }), joins = [];
+  plan.clips = plan.clips.map((c) => (c.extend > 0 && c.push == null ? { ...c, push_from: c.push_from ?? 0, push: 0.08 } : c));
+  const cuts = plan.clips.map((clip) => { const p = probe(clip.file); return { ...cutOf(clip, p.seconds, fps), p, clip, ext: Math.max(0, Math.min(8, Number(clip.extend) || 0)) }; }), joins = []; // ext: seconds the last picture is held (a slow push-in goes on over it) so a picture lasts as long as its narration
   let carry; // the zoom the clip before ended on, for a clip that continues it
   for (let i = 0; i < cuts.length; i++) {
-    const a = cuts[i], b = cuts[i + 1], endA = a.start + a.length; a.zoom = zoomOf(a.clip, a.length, carry); carry = undefined;
+    const a = cuts[i], b = cuts[i + 1], endA = a.start + a.length; a.zoom = zoomOf(a.clip, a.length + a.ext, carry); carry = undefined;
     if (!b) break;
     if (b.clip.continues === false && plan.sceneTransitions !== false) { joins.push(sceneJoin(a.clip.file, endA, b.clip.file, b.start, plan)); continue; } // a new scene: never a bare cut (a cut with the sound of the next scene starting is what looked odd)
     if (plan.joins === false || b.clip.continues === false) { if (b.clip.continues !== false) carry = zoomAt(a.zoom, a.length); joins.push({ soft: false }); continue; }
-    const j = bestJoin(a.clip.file, a.start, endA, b.clip.file, b.start, { zoomA: (s) => zoomAt(a.zoom, s), atA: a.zoom.at, atB: b.clip.push_at || a.zoom.at }); carry = zoomAt(a.zoom, j.end - a.start); a.length = Math.max(0.2, j.end - a.start); Object.assign(j, joinKind(j.diff, plan)); if (j.cutIn) { const z = b.clip.cut_in ? b.clip.cut_in.zoom : plan.cutInZoom ?? 0.3; b.clip = { ...b.clip, push_from: z, push: z, push_at: b.clip.push_at || (b.clip.cut_in && b.clip.cut_in.at) || plan.cutInAt || [0.3, 0.5] }; carry = undefined; } /* the next clip is shown closer from its first frame */ if (!j.soft && !j.cutIn && j.diff < 0.6) { b.start = Math.round((b.start + 1 / fps) * 1000) / 1000; b.length = Math.max(0.2, b.length - 1 / fps); } /* the first frame of the next clip is the frame the clip before ended on: shown twice, it is a stall before the step */ joins.push(j); // the clip ends where it matches the next one best
+    const j = bestJoin(a.clip.file, a.start, endA, b.clip.file, b.start, { zoomA: (s) => zoomAt(a.zoom, s), atA: a.zoom.at, atB: b.clip.push_at || a.zoom.at }); carry = zoomAt(a.zoom, j.end - a.start); if (!a.ext) a.length = Math.max(0.2, j.end - a.start); Object.assign(j, joinKind(j.diff, plan)); if (j.cutIn) { const z = b.clip.cut_in ? b.clip.cut_in.zoom : plan.cutInZoom ?? 0.3; b.clip = { ...b.clip, push_from: z, push: z + (b.clip.extend ? 0.08 : 0), push_at: b.clip.push_at || (b.clip.cut_in && b.clip.cut_in.at) || plan.cutInAt || [0.3, 0.5] }; carry = undefined; } /* the next clip is shown closer from its first frame */ if (!j.soft && !j.cutIn && j.diff < 0.6) { b.start = Math.round((b.start + 1 / fps) * 1000) / 1000; b.length = Math.max(0.2, b.length - 1 / fps); } /* the first frame of the next clip is the frame the clip before ended on: shown twice, it is a stall before the step */ joins.push(j); // the clip ends where it matches the next one best
   }
-  const onFrames = (x) => Math.round(x * fps) / fps, length = (i) => Math.max(0.2, onFrames(cuts[i].length)); // every length is a whole number of frames, so a join never repeats or loses a frame to rounding
+  const onFrames = (x) => Math.round(x * fps) / fps, length = (i) => Math.max(0.2, onFrames(cuts[i].length + cuts[i].ext)); // every length is a whole number of frames, so a join never repeats or loses a frame to rounding
   cuts.forEach((c, i) => {
-    const f = filterOf(plan, fade, length(i), c.zoom), out = join(dir, `part-${String(i).padStart(3, '0')}.mp4`);
-    const input = ['-ss', String(c.start), '-t', String(length(i)), '-i', c.clip.file, ...(c.p.audio ? [] : ['-f', 'lavfi', '-t', String(length(i)), '-i', 'anullsrc=r=48000:cl=stereo']), '-map', '0:v', '-map', c.p.audio ? '0:a' : '1:a'];
+    const f = filterOf(plan, fade, length(i), c.zoom, c.ext), out = join(dir, `part-${String(i).padStart(3, '0')}.mp4`);
+    const input = ['-ss', String(c.start), '-t', String(length(i) - c.ext), '-i', c.clip.file, ...(c.p.audio ? [] : ['-f', 'lavfi', '-t', String(length(i)), '-i', 'anullsrc=r=48000:cl=stereo']), '-map', '0:v', '-map', c.p.audio ? '0:a' : '1:a'];
     execFileSync('ffmpeg', ['-v', 'error', '-y', ...input, '-vf', f.v, '-af', f.a, '-c:v', 'libx264', '-crf', '18', '-preset', 'medium', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-shortest', out]); norm.push(out);
   });
   const dj = joins.map((j, i) => (j.soft ? onFrames(Math.min(j.d ?? dissolve, length(i) / 3, length(i + 1) / 3)) : 0)); // each dissolve takes as much from the end of one clip as from the start of the next
@@ -141,7 +142,8 @@ function assembleIn(plan, outFile, dir) {
   const list = join(dir, 'list.txt'); writeFileSync(list, parts.map((x) => `file '${x}'`).join('\n'));
   const joined = join(dir, 'joined.mp4'); execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', joined]);
   const lead = plan.lead ?? 0.5; let at = 0; const timeline = cuts.map((c, i) => { const j = joins[i], k = joins[i - 1], t = at, avail = Math.max(0.2, c.p.seconds - c.start), extra = j && j.scene ? Math.min(lead, Math.max(0, avail - length(i))) : 0; at += length(i) - (dj[i] || 0); return { file: c.clip.file, start: c.start, dur: length(i) + extra, audio: c.p.audio && plan.nativeAudio !== false, at: t, fadeIn: k && k.soft ? dj[i - 1] : k && k.dip ? halves[i - 1].next : undefined, fadeOut: j && j.soft ? dj[i] + extra : j && j.dip ? halves[i].prev + extra : undefined }; });
-  const mixed = join(dir, 'mix.wav'), ag = audioGraph({ clips: timeline, total: probe(joined).seconds, fade, tone: plan.roomTone !== false, music: plan.music || null, musicDb: plan.musicDb ?? -18, clipDb: plan.clipDb ?? (plan.music ? -6 : 0), voice: plan.voice || [] });
+  const voices = (plan.voice || []).map((v) => { if (v.scene == null) return v; const i = plan.clips.findIndex((c) => c.scene === v.scene); return { ...v, at: i < 0 ? 0 : timeline[i].at + (v.offset ?? 0.4) }; }); // a narration can say which scene it opens: it starts where that scene's first picture starts
+  const mixed = join(dir, 'mix.wav'), ag = audioGraph({ clips: timeline, total: probe(joined).seconds, fade, tone: plan.roomTone !== false, music: plan.music || null, musicDb: plan.musicDb ?? -18, clipDb: plan.clipDb ?? (plan.music ? -6 : 0), voice: voices });
   execFileSync('ffmpeg', ['-v', 'error', '-y', ...ag.inputs, '-filter_complex', ag.graph, '-map', '[mix]', '-ar', '48000', '-ac', '2', mixed]);
   const total = probe(joined).seconds, fin = plan.fadeIn ?? 0.6, fout = plan.fadeOut ?? 1.2, af = [fin > 0 && `afade=t=in:st=0:d=${fin}`, fout > 0 && `afade=t=out:st=${Math.max(0, total - fout - 0.3).toFixed(3)}:d=${fout + 0.3}`, plan.loudness !== false && 'loudnorm=I=-16:TP=-1.5:LRA=11'].filter(Boolean).join(','), vf = [fin > 0 && `fade=t=in:st=0:d=${fin}`, fout > 0 && `fade=t=out:st=${Math.max(0, total - fout).toFixed(3)}:d=${fout}`].filter(Boolean).join(','); // the film fades in from black and out to black; the sound fades out a little longer than the picture
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', joined, '-i', mixed, '-map', '0:v', '-map', '1:a', ...(vf ? ['-vf', vf, '-c:v', 'libx264', '-crf', '18', '-preset', 'medium', '-pix_fmt', 'yuv420p'] : ['-c:v', 'copy']), ...(af ? ['-af', af, '-c:a', 'aac', '-ar', '48000'] : ['-c:a', 'aac', '-ar', '48000']), '-shortest', outFile]);
@@ -151,6 +153,6 @@ function assembleIn(plan, outFile, dir) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [planFile, out] = process.argv.slice(2);
   if (!planFile || !out) { console.error('Usage: node scripts/assemble-film.mjs plan.json film.mp4'); process.exit(2); }
-  const plan = JSON.parse(readFileSync(planFile, 'utf8')); plan.clips = plan.clips.map((c) => ({ ...c, file: resolve(planFile, '..', c.file) })); if (plan.music) plan.music = resolve(planFile, '..', plan.music); if (plan.voice) plan.voice = plan.voice.map((v) => ({ ...v, file: resolve(planFile, '..', v.file) }));
+  const plan = JSON.parse(readFileSync(planFile, 'utf8')); plan.clips = plan.clips.map((c) => ({ ...c, file: resolve(planFile, '..', c.file) })); if (plan.music) plan.music = resolve(planFile, '..', plan.music); if (plan.voice) plan.voice = plan.voice.map((v) => ({ ...v, file: resolve(planFile, '..', v.file) })); // a narration file is read from the plan's folder
   console.log(JSON.stringify(assemble(plan, resolve(out))));
 }

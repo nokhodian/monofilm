@@ -71,6 +71,7 @@ for chain in chains:
             if at: c["push_at"] = at
         done += c["keep"]
 for c in plan["clips"]: c.pop("_push"), c.pop("_at")
+for key, c in zip(state.keys(), plan["clips"]): c["scene"] = key.split(":")[0]
 # a clip kept for less than MIN_KEEP seconds is a gap in the film: say which clips need a new take (and why), and write the list into the plan
 MIN_KEEP = float(os.environ.get("MIN_KEEP", "2.5"))
 retake = []
@@ -111,5 +112,18 @@ if retake: print("make again: ONLY=%s ./scripts/generators/minimax-h3-comfyui/ru
 if retake:
     print("NEEDS A NEW TAKE (kept less than %.1f s):" % MIN_KEEP)
     for x in retake: print("  %s  kept %.1f s  (%s)" % (x["clip"], x["kept"], x["why"]))
+# A narration made apart (NARRATION=<folder>/narration.json from scripts/narration-edge.py): each scene's narration opens its scene, and a scene whose pictures are shorter than its narration holds
+# its last pictures (a slow push-in goes on over the held picture) for the missing seconds, at most 4 s per clip.
+if os.environ.get("NARRATION"):
+    nar = json.load(open(os.environ["NARRATION"])); plan["voice"] = []; MARGIN = float(os.environ.get("NARRATION_MARGIN", "1.2"))
+    for n in nar:
+        slug = n["ref"].split(":", 1)[1]; idx = [i for i, c in enumerate(plan["clips"]) if c["scene"] == slug]
+        if not idx: continue
+        have = sum(plan["clips"][i]["keep"] - plan["clips"][i]["trim_start_frames"] / 24 for i in idx); need = n["seconds"] + MARGIN - have
+        for i in reversed(idx):
+            if need <= 0.05: break
+            add = min(4.0, need); plan["clips"][i]["extend"] = round(add, 2); need -= add
+        plan["voice"].append({"file": n["file"], "scene": slug, "offset": 0.4, "db": 0})
+        print("narration of %s: %.1f s over %.1f s of pictures%s" % (slug, n["seconds"], have, "" if need <= 0.05 else "  (still %.1f s short)" % need))
 json.dump(plan, open(os.path.join(folder, "plan.json"), "w"), indent=1)
 print("wrote", os.path.join(folder, "plan.json"))
