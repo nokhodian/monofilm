@@ -10,7 +10,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Where a clip starts and how long it is kept. Pure, so it can be tested without ffmpeg.
@@ -104,7 +104,7 @@ export function smoothClip(file, out, keep = 0, mode = 'twos') {
 
 // The working files (every clip brought to one format, the pieces, the smoothed clips) are hundreds of megabytes: they are removed when the film is made, or when it fails.
 export function assemble(plan, outFile) {
-  const dir = mkdtempSync(join(tmpdir(), 'assemble-'));
+  const dir = mkdtempSync(join(dirname(resolve(outFile)), '.assemble-')); // beside the film, not in /tmp: a film of a minute needs a gigabyte of working files and the temp disk is small and shared
   try { return assembleIn(plan, outFile, dir); } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
