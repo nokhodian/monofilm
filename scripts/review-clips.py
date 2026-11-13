@@ -18,11 +18,12 @@ def mcp(tool, args):
 
 
 def frames_of(path, seconds, count=12):
-    out, tmp = [], tempfile.mkdtemp()
-    for i in range(count):
-        t = max(0.05, (i + 0.5) * seconds / count - 0.1); jpg = os.path.join(tmp, f"f{i}.jpg")
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.2f}", "-i", path, "-frames:v", "1", "-vf", "scale=384:-1", "-q:v", "4", jpg], check=True)
-        out.append(base64.b64encode(open(jpg, "rb").read()).decode())
+    out = []
+    with tempfile.TemporaryDirectory() as tmp:  # removed when the frames are read (an earlier version left every folder behind and filled the temp disk)
+        for i in range(count):
+            t = max(0.05, (i + 0.5) * seconds / count - 0.1); jpg = os.path.join(tmp, f"f{i}.jpg")
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.2f}", "-i", path, "-frames:v", "1", "-vf", "scale=384:-1", "-q:v", "4", jpg], check=True)
+            out.append(base64.b64encode(open(jpg, "rb").read()).decode())
     return out
 
 
