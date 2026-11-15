@@ -269,6 +269,36 @@ export async function makeView(env, db, actor, pid, { id, kind = 'body', instruc
   await merge(db, pid, cur.ref, (fresh) => ({ ...fresh, views: [...(fresh.views || []).filter((v) => v.kind !== kind), { id: r.asset.id, kind, check }] }), `Made the ${kind} view.`);
   return { asset: r.asset, kind, check };
 }
+// An anchor set made outside the studio (a face, a body, a side view, other sheets) becomes the cast item's pictures, so the film is drawn from it.
+export async function importReference(env, db, actor, pid, { id, name, role = '', desc = '', offscreen = false, images = [] }) {
+  human(actor);
+  if (!env.MEDIA) throw new HttpError(503, 'no media store');
+  const cid = slug(id || name); if (!cid || !text(name, 60)) throw bad('a name is needed');
+  if (!Array.isArray(images) || !images.length || images.length > 12) throw bad('send 1 to 12 images');
+  const kinds = ['face', 'body', 'profile', 'sheet'], saved = [];
+  for (const im of images) {
+    if (!kinds.includes(im.kind)) throw bad(`image kind must be one of ${kinds.join(', ')}`);
+    const bin = Uint8Array.from(atob(String(im.data || '').replace(/^data:[^,]*,/, '')), (c) => c.charCodeAt(0));
+    if (!bin.length || bin.length > 12e6) throw bad('each image must be under 12 MB');
+    const mime = /^image\/(png|jpeg|webp)$/.test(im.mime || '') ? im.mime : 'image/png', key = `${pid}/ref-${id8()}.${mime.split('/')[1] === 'jpeg' ? 'jpg' : mime.split('/')[1]}`;
+    await env.MEDIA.put(key, bin, { httpMetadata: { contentType: mime } });
+    saved.push({ kind: im.kind, key, mime, bytes: bin.length, label: text(im.label || '', 80) });
+  }
+  const ref = R.cast(cid), cur = await row(db, pid, ref);
+  if (cur && cur.status === 'locked') throw new HttpError(409, `${name} is locked`);
+  const base = dataOf(cur) || {};
+  await S.propose(db, AGENT, pid, { ref, data: { ...base, name: text(name, 60), role: text(role, 120) || base.role || '', desc: text(desc, 400) || base.desc || '', invented: false, offscreen: !!offscreen, candidates: base.candidates || [], anchor: base.anchor || null, views: base.views || [], refs: base.refs || [] }, rationale: 'Imported anchor set', ...(cur ? { base_version: cur.version } : {}) });
+  const out = { id: cid, face: null, views: [], refs: [] };
+  for (const s of saved) {
+    const a = await S.attachAsset(db, actor, pid, { ref, uri: `media/${s.key}`, mime: s.mime, bytes: s.bytes, provenance: { tool: 'import', label: s.label, kind: s.kind } }, { charged: true });
+    if (s.kind === 'face') out.face = a.id; else if (s.kind === 'sheet') out.refs.push(a.id); else out.views.push({ id: a.id, kind: s.kind });
+  }
+  await merge(db, pid, ref, (fresh) => ({ ...fresh,
+    ...(out.face ? { candidates: [...(fresh.candidates || []).filter((c) => c.letter !== 'A'), { id: out.face, letter: 'A', check: { kind: 'import', ok: true } }], anchor: out.face } : {}),
+    views: [...(fresh.views || []).filter((v) => !out.views.some((n) => n.kind === v.kind)), ...out.views.map((v) => ({ ...v, check: { kind: 'import', ok: true } }))],
+    refs: [...(fresh.refs || []), ...out.refs] }), 'Imported the anchor set.');
+  return out;
+}
 export async function makePlate(env, db, actor, pid, { id, instruction = '' }, f) {
   human(actor);
   const cur = await must(db, pid, R.place(id), `place ${id}`), d = dataOf(cur);

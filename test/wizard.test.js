@@ -424,3 +424,16 @@ test('the clip review measures every character in every frame with SAM and repor
   assert.match(r.issues.find((i) => i.kind === 'size').problem, /Moss shrinks to/); assert.match(r.advice, /Keep every character the same size and the same proportion/);
   assert.equal(calls, 24, 'every frame, every character');
 });
+
+test('an anchor set made outside the studio is imported as the cast item\'s face and views', async () => {
+  const t = await setup(), b64 = PNG.toString('base64');
+  const r = await W.importReference(t.env, t.db, human, t.id, { name: 'Rostam', role: 'hero', desc: 'A lean giant in bronze scale armour', images: [{ kind: 'face', data: b64 }, { kind: 'body', data: b64 }, { kind: 'profile', data: b64 }, { kind: 'sheet', data: b64, label: 'turnaround' }] });
+  const d = (await S.getArtifact(t.db, t.id, R.cast('rostam'))).data;
+  assert.equal(d.anchor, r.face); assert.equal(d.candidates.length, 1); assert.deepEqual(d.views.map((v) => v.kind).sort(), ['body', 'profile']); assert.equal(d.refs.length, 1);
+  assert.equal(t.R2.m.size, 4);
+  await W.importReference(t.env, t.db, human, t.id, { name: 'Rostam', images: [{ kind: 'body', data: b64 }] });
+  const d2 = (await S.getArtifact(t.db, t.id, R.cast('rostam'))).data;
+  assert.equal(d2.views.length, 2, 'a new body view replaces the old one'); assert.equal(d2.anchor, r.face); assert.equal(d2.desc, d.desc);
+  await assert.rejects(() => W.importReference(t.env, t.db, agent, t.id, { name: 'X', images: [{ kind: 'face', data: b64 }] }), /only a human/);
+  await assert.rejects(() => W.importReference(t.env, t.db, human, t.id, { name: 'X', images: [{ kind: 'nope', data: b64 }] }), /kind/);
+});
