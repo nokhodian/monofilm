@@ -14,7 +14,10 @@ KEY = os.environ["MONOFILM_KEY"]
 CLIPS, PICS = os.path.join(HERE, "clips"), os.path.join(HERE, "pics")
 STATE = os.path.join(HERE, "state.json")
 os.makedirs(CLIPS, exist_ok=True); os.makedirs(PICS, exist_ok=True)
-W, H = 1024, 576
+def size_of(aspect):  # the picture size of the clip: a vertical film is drawn vertical, not cropped from a wide clip
+    try: a, b = (int(x) for x in str(aspect).split(":"))
+    except ValueError: a, b = 16, 9
+    return (576, 1024) if a < b else (1024, 576)
 state = json.load(open(STATE)) if os.path.exists(STATE) else {}
 
 def mcp(tool, args):
@@ -81,6 +84,7 @@ def cut_start(sc, n, d):
 
 def render(sc, n, d, attempt, prompt, seed, prev_file):
     dst = os.path.join(CLIPS, f"{sc}_{n}_a{attempt}.mp4")
+    W, H = size_of(d.get("aspect"))
     g = h3_graph(prompt, "x", W, H, d["seconds"], seed, prefix=f"{PROD}/{sc}_{n}_a{attempt}")
     cut = cut_start(sc, n, d)
     if cut:

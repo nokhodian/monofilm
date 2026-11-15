@@ -437,3 +437,12 @@ test('an anchor set made outside the studio is imported as the cast item\'s face
   await assert.rejects(() => W.importReference(t.env, t.db, agent, t.id, { name: 'X', images: [{ kind: 'face', data: b64 }] }), /only a human/);
   await assert.rejects(() => W.importReference(t.env, t.db, human, t.id, { name: 'X', images: [{ kind: 'nope', data: b64 }] }), /kind/);
 });
+
+test('a re-read keeps an imported person under the same id even when the name is spelled differently', async () => {
+  const t = await setup(), b64 = PNG.toString('base64');
+  await W.importReference(t.env, t.db, human, t.id, { id: 'ines-x', name: "Ines' Cloak", images: [{ kind: 'face', data: b64 }] });
+  const people = READ.people.slice(); READ.people = [{ name: 'Ines Cloak', role: 'widow', desc: 'A woman' }];
+  try { await W.readStory(t.env, t.db, human, t.id, stand()); } finally { READ.people = people; }
+  const refs = (await S.listArtifacts(t.db, t.id, { kind: 'canon.cast' })).map((a) => a.ref);
+  assert.deepEqual(refs, [R.cast('ines-x')]);
+});

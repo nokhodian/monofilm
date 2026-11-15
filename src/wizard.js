@@ -60,8 +60,9 @@ export async function readStory(env, db, actor, pid, f) {
   const made = [];
   const put = async (ref, data, why, extra) => { const cur = await row(db, pid, ref); if (keep(cur, data) === null) return; await S.propose(db, AGENT, pid, { ref, data: keep(cur, data), rationale: why, ...extra }); made.push(ref); };
   await put(REFS.reading, { title: text(o.title, 80), summary: text(o.summary, 600), tone: (o.tone || []).slice(0, 5).map((x) => text(x, 30)), period: text(o.period, 80), language: text(o.language || fmt.speech, 40), beats: (o.beats || []).slice(0, 10).map((b, i) => ({ id: `b${i + 1}`, text: text(b.text || b, 240) })), sentences, questions, invented: (o.invented || []).slice(0, 8).map((x) => text(x, 160)) }, 'My reading of your story. Please correct anything I got wrong.');
+  const known = (await S.listArtifacts(db, pid, { kind: 'canon.cast' })).map((a) => ({ id: keyOf(a.ref), norm: String((a.data && a.data.name) || '').toLowerCase().replace(/[^a-z0-9]/g, '') })); // a person already in the cast (imported with pictures) keeps its id, however the reader spells the name
   for (const p of (o.people || []).slice(0, 8)) {
-    const id = slug(p.name), cur = dataOf(await row(db, pid, R.cast(id))) || {};
+    const norm = String(p.name || '').toLowerCase().replace(/[^a-z0-9]/g, ''), id = (norm && (known.find((k) => k.norm === norm) || {}).id) || slug(p.name), cur = dataOf(await row(db, pid, R.cast(id))) || {};
     await put(R.cast(id), { ...cur, name: text(p.name, 60), role: text(p.role, 120), desc: text(p.desc, 400), invented: !!p.invented, offscreen: !!p.offscreen || /\b(narrator|voice[- ]?over|off[- ]?screen)\b/i.test(String(p.role || '') + ' ' + String(p.name || '')), candidates: cur.candidates || [], anchor: cur.anchor || null }, `A person I found in your story${p.invented ? '. The story does not name them, so I made them up.' : '.'}`);
     await put(R.voice(id), { ...(dataOf(await row(db, pid, R.voice(id))) || {}), name: text(p.name, 60), desc: text(p.voice || '', 200), speed: 50, energy: 40 }, `How ${text(p.name, 40)} might sound.`);
   }
